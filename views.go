@@ -1,0 +1,214 @@
+//go:build windows
+
+package main
+
+import (
+	"bytes"
+	_ "embed"
+	"image/png"
+	"time"
+
+	"github.com/egoist/mygo/ui"
+)
+
+//go:embed assets/tray.png
+var trayPNG []byte
+
+//go:embed assets/avatar.png
+var avatarPNG []byte
+
+// lucide 的 languages / x / copy 图标
+var (
+	iconChevron = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`))
+	iconClose   = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`))
+)
+
+// 点阵版「文 A」：各 5×5；A 在文的右边、往下错开 3 格（aOffX/aOffY），拼成 10×8
+var (
+	glyphWen = []string{
+		"..#..",
+		"#####",
+		".#.#.",
+		"..#..",
+		"##.##",
+	}
+	glyphA = []string{
+		"..#..",
+		".#.#.",
+		"#...#",
+		"#####",
+		"#...#",
+	}
+)
+
+// drawDotMatrix 按物理像素画点阵：每格是整数个像素、点之间至少空 1 像素，
+// 不然缩放以后点会糊成线。box 是可用区域（DIP），点阵在里面居中。
+const aOffX, aOffY = 5, 3
+
+func drawDotMatrix(p *ui.Painter, box ui.Rect, color ui.Color) {
+	s := p.Scale()
+	if s <= 0 {
+		s = 1
+	}
+	gw, gh := aOffX+len(glyphA[0]), aOffY+len(glyphA)
+	g := max(gw, gh)
+	cell := int(min(box.W, box.H) * s / float32(g)) // 每格物理像素
+	cell = max(cell, 2)
+	gap := max(1, cell/3)
+	dot := cell - gap
+	ox := float32(int((box.X+box.W/2)*s+0.5) - cell*gw/2)
+	oy := float32(int((box.Y+box.H/2)*s+0.5) - cell*gh/2)
+	radius := float32(0)
+	if dot >= 3 {
+		radius = float32(dot) / 2 / s
+	}
+	put := func(rows []string, cx, cy int) {
+		for y, row := range rows {
+			for x, ch := range row {
+				if ch != '#' {
+					continue
+				}
+				px := ox + float32((cx+x)*cell)
+				py := oy + float32((cy+y)*cell)
+				p.Fill(ui.Rect{X: px / s, Y: py / s, W: float32(dot) / s, H: float32(dot) / s}, color, radius)
+			}
+		}
+	}
+	put(glyphWen, 0, 0)
+	put(glyphA, aOffX, aOffY)
+}
+
+func loadAvatar() *ui.Bitmap {
+	img, err := png.Decode(bytes.NewReader(avatarPNG))
+	if err != nil {
+		return nil
+	}
+	return ui.NewBitmap(img)
+}
+
+// ---------- 浮动按钮 ----------
+
+// buttonColors 划词按钮配色：深色主题纯黑底白字，浅色主题白底黑字，不用主题蓝
+func buttonColors(t *ui.Theme) (bg, fg, hover ui.Color) {
+	if t.Dark {
+		return ui.RGBA(0, 0, 0, 1), ui.RGBA(255, 255, 255, 1), ui.RGBA(38, 38, 38, 1)
+	}
+	return ui.RGBA(255, 255, 255, 1), ui.RGBA(0, 0, 0, 1), ui.RGBA(235, 235, 235, 1)
+}
+
+func (a *App) buttonView(c *ui.Context) {
+	t := c.Theme()
+	bg, fg, hoverBg := buttonColors(t)
+	b := ui.ButtonBase(c).Fill().Center().
+		Background(bg).Border(1, t.Border).Cursor(ui.CursorPointer).Label("翻译").Tooltip("翻译")
+	if a.btnBusy.Load() {
+		b.Cursor(ui.CursorDefault).Label("翻译中").Tooltip("翻译中…")
+		b.Children(func() { ui.Spinner(c).FontSize(18).TextColor(fg) })
+		return
+	}
+	hovered := b.Hovered()
+	a.btnHover.Store(hovered)
+	if hovered {
+		b.Background(hoverBg)
+	}
+	if b.Children(func() {
+		accent := fg
+		ui.Box(c).Size(26, 26).Draw(func(p *ui.Painter, r ui.Rect) { drawDotMatrix(p, r, accent) })
+	}).Clicked() {
+		a.onButtonClick()
+	}
+}
+
+// ---------- 译文卡片 ----------
+
+func (a *App) popupView(c *ui.Context) {
+	t := c.Theme()
+	p := &a.pop
+	const pad, headH, gap, footH = 12, 22, 8, 32
+	textW := float32(p.w - 2*pad - 10) // 给滚动条留一点
+
+	body := p.text
+	if p.status == statusLoading {
+		body = ""
+	}
+	bodyH := float32(20)
+	if p.status != statusLoading {
+		_, mh := c.MeasureText(textW, ui.Span{Text: body, Size: 14})
+		bodyH = min(mh+2, bodyMaxH)
+	}
+	want := pad + headH + gap + int(bodyH+0.5) + pad
+	if p.status == statusDone {
+		want += gap + footH
+	}
+	if want != p.h && a.popVisible.Load() {
+		p.h = want
+		w, anchor := p.w, p.anchor
+		go a.resizePopup(w, want, anchor)
+	}
+
+	ui.Column(c).Fill().Padding(pad, 14).Gap(gap).Background(t.Background).Border(1, t.Border).Children(func() {
+		ui.Row(c).Height(headH).Gap(6).Children(func() {
+			if a.avatar != nil {
+				ui.Image(c, a.avatar).Size(18, 18).Radius(9).Clip()
+			}
+			ui.Text(c, p.header).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
+			if !p.toast {
+				x := ui.ButtonBase(c).Size(22, 22).Radius(6).Cursor(ui.CursorPointer).Label("关闭")
+				if x.Hovered() {
+					x.Background(t.SurfaceHover)
+				}
+				if x.Children(func() { ui.Icon(c, iconClose).FontSize(14).TextColor(t.TextMuted) }).Clicked() {
+					a.hidePopupNow()
+				}
+			}
+		})
+		switch p.status {
+		case statusLoading:
+			ui.Row(c).Height(20).Gap(8).Children(func() {
+				ui.Spinner(c).FontSize(14)
+				ui.Text(c, "翻译中…").FontSize(14).TextColor(t.TextMuted)
+			})
+		default:
+			color := t.Text
+			if p.status == statusError {
+				color = t.Danger
+			}
+			ui.Scroll(c).Height(bodyH).Children(func() {
+				ui.Text(c, body).FontSize(14).TextColor(color).Width(textW)
+			})
+		}
+		if p.status == statusDone {
+			ui.Row(c).Height(footH).Gap(8).Children(func() {
+				ui.Spacer(c)
+				label := "复制"
+				if p.copied {
+					label = "已复制"
+				}
+				if ui.Button(c, label).Clicked() {
+					text := p.text
+					theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
+					p.copied = true
+				}
+				if !p.terminal && ui.PrimaryButton(c, "替换").Clicked() {
+					text := p.text
+					a.hidePopupNow()
+					theWorker.paste(text)
+				}
+			})
+		}
+	})
+}
+
+// ---------- 演示模式：画出按钮和一张示例卡片，用来检查渲染 ----------
+
+func (a *App) runDemo() {
+	pt := POINT{300, 260}
+	a.showButton(pt, a.btnGen.Add(1))
+	a.showPopup(popupState{
+		status: statusDone,
+		header: "中文 → English",
+		text:   "Could you take a look at why this plugin doesn't take effect after startup? There's nothing in the logs.\n\nSecond paragraph: the meeting is at 3 p.m. tomorrow.",
+		anchor: POINT{pt.X, pt.Y + 70},
+	})
+	time.AfterFunc(8*time.Second, a.quit)
+}

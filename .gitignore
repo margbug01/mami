@@ -1,0 +1,6 @@
+build/
+*.exe
+*.log
+config.json
+config.json.bak-*
+*.test
