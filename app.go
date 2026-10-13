@@ -134,9 +134,9 @@ func (a *App) floatingWindow(title string, w, h, minW, minH int, view func(c *ui
 
 func (a *App) createWindows() {
 	var h uintptr
-	a.btnWin, h = a.floatingWindow("huaci-button", btnW, btnH, btnW, btnH, a.buttonView)
+	a.btnWin, h = a.floatingWindow("mami-button", btnW, btnH, btnW, btnH, a.buttonView)
 	a.btnHwnd.Store(h)
-	a.popWin, h = a.floatingWindow("huaci-popup", popW, 120, toastW, 40, a.popupView)
+	a.popWin, h = a.floatingWindow("mami-popup", popW, 120, toastW, 40, a.popupView)
 	a.popHwnd.Store(h)
 }
 

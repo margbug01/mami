@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="resources/icon.png" width="96" alt="Huaci">
+<img src="resources/icon.png" width="96" alt="Mami">
 
-# Huaci · 划词翻译
+# Mami · 划词翻译
 
 **Select text in any input box, click a tiny button, get the translation — or press `Alt+T` to translate and replace in place.**
 
 A lightweight Windows tray app written in Go with [MyGo](https://github.com/egoist/mygo). Works with any OpenAI-compatible API.
 
-[中文说明](README_zh.md) · [Download](https://github.com/margbug01/huaci/releases/latest)
+[中文说明](README_zh.md) · [Download](https://github.com/margbug01/mami/releases/latest)
 
 <img src="docs/card.png" width="420" alt="Translation card">
 
@@ -16,7 +16,7 @@ A lightweight Windows tray app written in Go with [MyGo](https://github.com/egoi
 
 ## Why
 
-I write a lot of prompts in Chinese and send them in English. Copy → open a translator → paste → copy → paste back gets old fast. Huaci lives in the tray and does it where you're typing: Alma, ChatGPT, a browser textarea, WeChat, Notepad.
+I write a lot of prompts in Chinese and send them in English. Copy → open a translator → paste → copy → paste back gets old fast. Mami lives in the tray and does it where you're typing: Alma, ChatGPT, a browser textarea, WeChat, Notepad.
 
 ## Features
 
@@ -33,7 +33,7 @@ I write a lot of prompts in Chinese and send them in English. Copy → open a tr
 
 ## Install
 
-Grab `Huaci Setup x.y.z amd64.exe` (installer) or `Huaci.exe` (portable) from [Releases](https://github.com/margbug01/huaci/releases/latest). Windows 10/11, x64.
+Grab `Mami Setup x.y.z amd64.exe` (installer) or `Mami.exe` (portable) from [Releases](https://github.com/margbug01/mami/releases/latest). Windows 10/11, x64.
 
 On first launch the settings window opens. Out of the box it points at bilibili's **free** Index-Translate-35B endpoint (no key needed) so you can try it immediately — note that free endpoint gets overloaded at peak hours and may return 504.
 
@@ -69,12 +69,12 @@ Translation models will happily *execute* a multi-line prompt instead of transla
 
 Direction is automatic: text containing Chinese → your "Chinese to" language (English by default); everything else → your "others to" language (Simplified Chinese by default).
 
-Config lives in `%AppData%\Huaci\config.json`, logs in `%AppData%\Huaci\logs\huaci.log`. Your API key stays in that file and is only sent to the endpoint you configured.
+Config lives in `%AppData%\Mami\config.json`, logs in `%AppData%\Mami\logs\mami.log`. Your API key stays in that file and is only sent to the endpoint you configured.
 
 ## Known limitations
 
-- **WeChat 4.x** (Qt) exposes nothing to Windows accessibility, so Huaci can't tell its input box from the chat history. With 「认不出输入框的程序也弹」 on, selecting a chat message also shows the button. Turn it off and use `Alt+T` if that bothers you.
-- Apps that don't support `Ctrl+C` (games, remote desktop) can't be read. Elevated apps need Huaci running elevated too.
+- **WeChat 4.x** (Qt) exposes nothing to Windows accessibility, so Mami can't tell its input box from the chat history. With 「认不出输入框的程序也弹」 on, selecting a chat message also shows the button. Turn it off and use `Alt+T` if that bothers you.
+- Apps that don't support `Ctrl+C` (games, remote desktop) can't be read. Elevated apps need Mami running elevated too.
 - In terminals there is no in-place replace — pasting doesn't remove the selected text.
 - Only tested on Windows 11 at 125% scaling, single monitor.
 
@@ -84,10 +84,10 @@ Requires Go 1.27.1+ (`GOTOOLCHAIN=auto` downloads it).
 
 ```bash
 go test ./...
-go tool mygo build      # → build/windows-amd64/Huaci.exe + NSIS installer
+go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS installer
 ```
 
-`Huaci.exe -demo` draws the button and a sample card for a quick UI check.
+`Mami.exe -demo` draws the button and a sample card for a quick UI check.
 
 ### How it's put together
 

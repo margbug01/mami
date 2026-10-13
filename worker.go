@@ -36,13 +36,13 @@ func startWorker() (*worker, error) {
 			CbSize:        uint32(unsafe.Sizeof(WNDCLASSEXW{})),
 			LpfnWndProc:   syscall.NewCallback(workerProc),
 			HInstance:     inst,
-			LpszClassName: u16("HuaciWorker"),
+			LpszClassName: u16("MamiWorker"),
 		}
 		if r, _, e := pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
 			ready <- fmt.Errorf("RegisterClassEx: %v", e)
 			return
 		}
-		h, _, e := pCreateWindowExW.Call(0, uintptr(unsafe.Pointer(u16("HuaciWorker"))), 0, 0, 0, 0, 0, 0, HWND_MESSAGE, 0, inst, 0)
+		h, _, e := pCreateWindowExW.Call(0, uintptr(unsafe.Pointer(u16("MamiWorker"))), 0, 0, 0, 0, 0, 0, HWND_MESSAGE, 0, inst, 0)
 		if h == 0 {
 			ready <- fmt.Errorf("CreateWindowEx: %v", e)
 			return

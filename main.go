@@ -21,16 +21,16 @@ func main() {
 	demo := flag.Bool("demo", false, "只画出按钮和一张示例卡片，8 秒后退出（不挂钩子、不注册快捷键）")
 	flag.Parse()
 
-	mygo.App.SetName("Huaci")
+	mygo.App.SetName("Mami")
 	if !*demo && !mygo.App.RequestSingleInstanceLock() {
 		return // 已经在跑了，那边会打开设置窗口
 	}
 
 	a := &App{pid: uint32(os.Getpid())}
-	// HUACI_CONFIG 让测试用自己的配置，不碰真实的
-	if p := os.Getenv("HUACI_CONFIG"); p != "" {
+	// MAMI_CONFIG 让测试用自己的配置，不碰真实的
+	if p := os.Getenv("MAMI_CONFIG"); p != "" {
 		a.cfgPath = p
-		a.logPath = filepath.Join(filepath.Dir(p), "huaci.log")
+		a.logPath = filepath.Join(filepath.Dir(p), "mami.log")
 	} else {
 		dir, err := mygo.App.Path(mygo.PathUserData)
 		if err != nil {
@@ -41,7 +41,7 @@ func main() {
 		if err != nil {
 			logDir = dir
 		}
-		a.logPath = filepath.Join(logDir, "huaci.log")
+		a.logPath = filepath.Join(logDir, "mami.log")
 	}
 	if f := openLog(a.logPath); f != nil {
 		log.SetOutput(f)
@@ -50,6 +50,9 @@ func main() {
 		log.SetOutput(io.Discard)
 	}
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+	if os.Getenv("MAMI_CONFIG") == "" {
+		migrateFromHuaci(filepath.Dir(a.cfgPath))
+	}
 
 	cfg, created, cfgErr := loadConfig(a.cfgPath)
 	if err := a.setConfig(cfg); err != nil {

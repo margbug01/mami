@@ -1,4 +1,4 @@
-module huaci
+module mami
 
 go 1.27.1
 

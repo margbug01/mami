@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="resources/icon.png" width="96" alt="Huaci">
+<img src="resources/icon.png" width="96" alt="Mami">
 
-# Huaci · 划词翻译
+# Mami · 划词翻译
 
 **在输入框里选中文字，点一下小按钮出译文；或者按 `Alt+T` 原地翻译替换。**
 
 Windows 托盘小工具，Go + [MyGo](https://github.com/egoist/mygo) 写的，接任何 OpenAI 兼容接口。
 
-[English](README.md) · [下载](https://github.com/margbug01/huaci/releases/latest)
+[English](README.md) · [下载](https://github.com/margbug01/mami/releases/latest)
 
 <img src="docs/card.png" width="420" alt="翻译卡片">
 
@@ -16,7 +16,7 @@ Windows 托盘小工具，Go + [MyGo](https://github.com/egoist/mygo) 写的，�
 
 ## 为什么做这个
 
-平时用中文写提示词、发出去要英文。复制 → 打开翻译 → 粘贴 → 复制 → 贴回来，来回几次就烦了。Huaci 待在托盘里，在你打字的地方直接翻：Alma、ChatGPT、网页输入框、微信、记事本都行。
+平时用中文写提示词、发出去要英文。复制 → 打开翻译 → 粘贴 → 复制 → 贴回来，来回几次就烦了。Mami 待在托盘里，在你打字的地方直接翻：Alma、ChatGPT、网页输入框、微信、记事本都行。
 
 ## 功能
 
@@ -33,7 +33,7 @@ Windows 托盘小工具，Go + [MyGo](https://github.com/egoist/mygo) 写的，�
 
 ## 安装
 
-去 [Releases](https://github.com/margbug01/huaci/releases/latest) 下载 `Huaci Setup x.y.z amd64.exe`（安装版）或 `Huaci.exe`（绿色版）。支持 Windows 10/11 x64。
+去 [Releases](https://github.com/margbug01/mami/releases/latest) 下载 `Mami Setup x.y.z amd64.exe`（安装版）或 `Mami.exe`（绿色版）。支持 Windows 10/11 x64。
 
 第一次打开会弹设置窗口。默认填的是 B 站**免费**的 Index-Translate-35B 接口，不用 key 就能先试；不过免费接口晚上高峰容易 504，长期用建议换下面的付费接口。
 
@@ -69,12 +69,12 @@ Windows 托盘小工具，Go + [MyGo](https://github.com/egoist/mygo) 写的，�
 
 方向自动判断：含汉字的翻成「中文翻成」那个语言（默认英语），其他翻成「其他翻成」那个语言（默认简体中文）。
 
-配置在 `%AppData%\Huaci\config.json`，日志在 `%AppData%\Huaci\logs\huaci.log`。API Key 只存在这个文件里，只发给你填的接口。
+配置在 `%AppData%\Mami\config.json`，日志在 `%AppData%\Mami\logs\mami.log`。API Key 只存在这个文件里，只发给你填的接口。
 
 ## 已知限制
 
 - **微信 4.x**（Qt 自绘）不向系统暴露任何输入框信息，分不清输入框和聊天记录。「认不出输入框的程序也弹」开着时，在聊天记录里划词也会弹；介意的话关掉它，微信里用 `Alt+T`。
-- 不支持 `Ctrl+C` 的地方（游戏、远程桌面）取不到字；管理员权限运行的程序，Huaci 也得用管理员权限运行。
+- 不支持 `Ctrl+C` 的地方（游戏、远程桌面）取不到字；管理员权限运行的程序，Mami 也得用管理员权限运行。
 - 终端里不能原地替换：粘贴不会删掉选中的字。
 - 只在 Windows 11、125% 缩放、单显示器上测过。
 
@@ -84,10 +84,10 @@ Windows 托盘小工具，Go + [MyGo](https://github.com/egoist/mygo) 写的，�
 
 ```bash
 go test ./...
-go tool mygo build      # → build/windows-amd64/Huaci.exe + NSIS 安装包
+go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS 安装包
 ```
 
-`Huaci.exe -demo` 会画出按钮和一张示例卡片，用来看界面。
+`Mami.exe -demo` 会画出按钮和一张示例卡片，用来看界面。
 
 ### 代码结构
 

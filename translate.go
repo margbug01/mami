@@ -165,7 +165,7 @@ func (t *Translator) Translate(ctx context.Context, text, target string) (string
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Huaci/2.0")
+	req.Header.Set("User-Agent", "Mami/2.1")
 	if k := strings.TrimSpace(t.cfg.APIKey); k != "" { // B 站免费接口不要 key，空着就不发
 		req.Header.Set("Authorization", "Bearer "+k)
 	}

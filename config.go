@@ -95,7 +95,7 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 		}
 	}
 	if strings.TrimSpace(cfg.APIKey) == "" {
-		for _, k := range []string{"HUACI_API_KEY", "OPENAI_API_KEY"} {
+		for _, k := range []string{"MAMI_API_KEY", "OPENAI_API_KEY"} {
 			if v := os.Getenv(k); v != "" {
 				cfg.APIKey = v
 				break

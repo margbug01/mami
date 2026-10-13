@@ -140,11 +140,11 @@ func TestConfigRoundTrip(t *testing.T) {
 	}
 }
 
-// HUACI_LIVE_KEY=sk-... go test -run Live -v  走真实的 DeepSeek
+// MAMI_LIVE_KEY=sk-... go test -run Live -v  走真实的 DeepSeek
 func TestLiveDeepSeek(t *testing.T) {
-	key := os.Getenv("HUACI_LIVE_KEY")
+	key := os.Getenv("MAMI_LIVE_KEY")
 	if key == "" {
-		t.Skip("HUACI_LIVE_KEY not set")
+		t.Skip("MAMI_LIVE_KEY not set")
 	}
 	cfg := defaultConfig()
 	cfg.APIKey = key

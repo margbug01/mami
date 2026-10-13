@@ -62,11 +62,11 @@ func TestLangSelectScrollsToLast(t *testing.T) {
 	}
 }
 
-// HUACI_SNAP=dir 时，把设置页打开下拉框的样子存成 PNG（真实窗口尺寸）
+// MAMI_SNAP=dir 时，把设置页打开下拉框的样子存成 PNG（真实窗口尺寸）
 func TestSnapSettingsDropdown(t *testing.T) {
-	dir := os.Getenv("HUACI_SNAP")
+	dir := os.Getenv("MAMI_SNAP")
 	if dir == "" {
-		t.Skip("HUACI_SNAP not set")
+		t.Skip("MAMI_SNAP not set")
 	}
 	a := &App{avatar: loadAvatar()}
 	a.set = settingsState{draft: defaultConfig()}
@@ -86,9 +86,9 @@ func TestSnapSettingsDropdown(t *testing.T) {
 }
 
 func TestSnapButton(t *testing.T) {
-	dir := os.Getenv("HUACI_SNAP")
+	dir := os.Getenv("MAMI_SNAP")
 	if dir == "" {
-		t.Skip("HUACI_SNAP not set")
+		t.Skip("MAMI_SNAP not set")
 	}
 	a := &App{}
 	for _, dark := range []bool{true, false} {
