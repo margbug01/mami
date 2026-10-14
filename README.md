@@ -100,7 +100,7 @@ Translation models will happily *execute* a multi-line prompt instead of transla
 
 Direction is automatic. Text containing Chinese goes to your **Chinese to** language (English by default); everything else goes to **Others to** (Simplified Chinese by default).
 
-Settings has six pages: **API**, **Translation**, **Shortcuts**, **Selection button**, **General** and **History** (interface language, theme, start at login). Language and theme changes preview live and apply when you press Save.
+Settings has six pages: **API**, **Translation**, **Shortcuts**, **Selection button**, **General** (interface language, theme, start at login, translation history) and **History** (heatmap and stats). Language and theme changes preview live and apply when you press Save.
 
 Config lives in `%AppData%\Mami\config.json`, translation history (if turned on) in `%AppData%\Mami\history\YYYY-MM-DD.jsonl`, logs in `%AppData%\Mami\logs\mami.log`. Your API key is stored there encrypted with Windows DPAPI (only your Windows account on this PC can decrypt it; keys saved by older versions are encrypted on the next start) and is only sent to the endpoint you configured.
 
