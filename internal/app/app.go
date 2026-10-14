@@ -113,6 +113,7 @@ func (a *App) floatingWindow(title string, w, h, minW, minH int, view func(c *ui
 		MinHeight:         minH,
 		Hidden:            true,
 		Frameless:         true,
+		DisableShadow:     true,
 		AlwaysOnTop:       true,
 		SkipTaskbar:       true,
 		DisableResize:     true,
