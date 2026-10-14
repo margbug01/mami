@@ -1,7 +1,7 @@
-package main
+package app
 
 import (
-	"mami/i18n"
+	"mami/internal/i18n"
 )
 
 // sysLocale 是系统语言（如 "ja-JP"），启动时由 main 填；测试里留空

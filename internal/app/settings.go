@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package app
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"mami/i18n"
+	"mami/internal/i18n"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"

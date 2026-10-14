@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"os"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"mami/i18n"
+	"mami/internal/i18n"
 )
 
 // 源码里每个 T("中文") 都得在词典里有译文，否则切语言会漏翻。

@@ -119,15 +119,17 @@ go test ./...
 go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS installer
 ```
 
-`Mami.exe -demo` draws the button and a sample card for a quick UI check. The screenshots in `docs/` are rendered off-screen: `MAMI_DOCS=docs go test -run TestSnapDocs`.
+`Mami.exe -demo` draws the button and a sample card for a quick UI check. The screenshots in `docs/` are rendered off-screen: `MAMI_DOCS=$PWD/docs go test ./internal/app -run TestSnapDocs`.
 
 ### How it's put together
+
+`main.go` is a thin entry point. The code lives in `internal/app/` (the files below) and `internal/i18n/` (interface translations).
 
 | File | Role |
 |---|---|
 | `main.go` / `app.go` | Startup, tray, hotkeys, button and card placement, translate flow |
 | `views.go` / `settings.go` | MyGo views: button (pixel-snapped dot matrix), card, settings |
-| `i18n/` | Interface translations, one dictionary per language. Write `T("中文")` in code and add the other languages; a test fails if one is missing |
+| `internal/i18n/` | Interface translations, one dictionary per language. Write `T("中文")` in code and add the other languages; a test fails if one is missing |
 | `hook.go` | Low-level mouse and keyboard hooks on a dedicated OS thread |
 | `uia.go` | UI Automation via raw COM vtables: is the focus editable, where is the selection, terminal selection text |
 | `worker.go` / `clipboard.go` | Message-only window that owns the clipboard and sends `Ctrl+C` / `Ctrl+V` |

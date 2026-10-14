@@ -119,15 +119,17 @@ go test ./...
 go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS 安装包
 ```
 
-`Mami.exe -demo` 会画出按钮和一张示例卡片，用来看界面。`docs/` 里的截图是离屏渲染出来的：`MAMI_DOCS=docs go test -run TestSnapDocs`。
+`Mami.exe -demo` 会画出按钮和一张示例卡片，用来看界面。`docs/` 里的截图是离屏渲染出来的：`MAMI_DOCS=$PWD/docs go test ./internal/app -run TestSnapDocs`。
 
 ### 代码结构
+
+根目录的 `main.go` 只是入口，代码在 `internal/app/`（下表的文件）和 `internal/i18n/`（界面翻译）。
 
 | 文件 | 作用 |
 |---|---|
 | `main.go` / `app.go` | 启动、托盘、快捷键、按钮和卡片定位、翻译流程 |
 | `views.go` / `settings.go` | MyGo 界面：按钮（按物理像素对齐的点阵）、卡片、设置 |
-| `i18n/` | 界面翻译，每种语言一份词典。代码里写 `T("中文")`，再把其他语言补进词典；漏了测试会失败 |
+| `internal/i18n/` | 界面翻译，每种语言一份词典。代码里写 `T("中文")`，再把其他语言补进词典；漏了测试会失败 |
 | `hook.go` | 低级鼠标 + 键盘钩子，单独一条 OS 线程 |
 | `uia.go` | 原生 COM 调 UI Automation：焦点是不是输入框、选区在哪、终端选区文字 |
 | `worker.go` / `clipboard.go` | 消息窗口线程：持有剪贴板、模拟 `Ctrl+C` / `Ctrl+V` |

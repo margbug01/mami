@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package app
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
-	"mami/i18n"
+	"mami/internal/i18n"
 )
 
 func pickLang(t *testing.T, start, choose string) string {
