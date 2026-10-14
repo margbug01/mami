@@ -211,21 +211,26 @@ func waitModifiersUp(timeout time.Duration) {
 }
 
 // grabSelection 用模拟 Ctrl+C 取当前选中的文字，取完把剪贴板原样还回去。
-func grabSelection(owner uintptr, selectAllIfEmpty bool) string {
+func grabSelection(owner uintptr, selectAllIfEmpty bool) (text string, selectedAll bool) {
 	snap, _ := snapshotClipboard(owner)
 	changed := false
-	text := ""
 
 	seq := clipSeq()
 	start := time.Now()
-	sendCtrl('C')
-	if waitClipChange(seq, 600*time.Millisecond) {
-		changed = true
-		text = getClipboardText(owner)
+	if selectAllIfEmpty && selectionKnownEmpty() {
+		// 输入框明确没选中：Ctrl+C 不会改剪贴板，等它就是白等 600ms，直接走下面的全选
+		log.Printf("grab: nothing selected (uia, %v), select all", time.Since(start).Round(time.Millisecond))
+	} else {
+		sendCtrl('C')
+		if waitClipChange(seq, 600*time.Millisecond) {
+			changed = true
+			text = getClipboardText(owner)
+		}
+		log.Printf("grab: ctrl+c changed=%v after %v, %d chars, seq %d→%d", changed, time.Since(start).Round(time.Millisecond), len([]rune(text)), seq, clipSeq())
 	}
-	log.Printf("grab: ctrl+c changed=%v after %v, %d chars, seq %d→%d", changed, time.Since(start).Round(time.Millisecond), len([]rune(text)), seq, clipSeq())
 	if strings.TrimSpace(text) == "" && selectAllIfEmpty {
 		sendCtrl('A')
+		selectedAll = true
 		pumpSleep(40 * time.Millisecond)
 		seq = clipSeq()
 		sendCtrl('C')
@@ -237,5 +242,10 @@ func grabSelection(owner uintptr, selectAllIfEmpty bool) string {
 	if changed {
 		restoreClipboard(owner, snap)
 	}
-	return text
+	return text, selectedAll
+}
+
+// collapseSelection 按一下右方向键：全选留下的选区收到末尾，光标回到文字最后
+func collapseSelection() {
+	sendKeys(KEYBDINPUT{WVk: 0x27}, KEYBDINPUT{WVk: 0x27, DwFlags: KEYEVENTF_KEYUP}) // VK_RIGHT
 }

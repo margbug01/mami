@@ -117,6 +117,44 @@ func selectedTextUIA() string {
 	}
 }
 
+// uiaEmptyReqs 问焦点输入框里是不是明确什么都没选（Alt+T 没选中时直接全选，不白等 Ctrl+C）
+var uiaEmptyReqs = make(chan chan bool, 4)
+
+// selectionKnownEmpty 焦点是带 TextPattern 的输入框，而且选区明确是空的。问不出、超时都返回 false，照旧先试 Ctrl+C
+func selectionKnownEmpty() bool {
+	reply := make(chan bool, 1)
+	select {
+	case uiaEmptyReqs <- reply:
+	default:
+		return false
+	}
+	select {
+	case v := <-reply:
+		return v
+	case <-time.After(200 * time.Millisecond):
+		return false
+	}
+}
+
+// focusedSelectionEmpty 在 UIA 线程上；网页正文（Document）不算输入框
+func focusedSelectionEmpty(auto uintptr) bool {
+	var el uintptr
+	if hr := comCall(auto, 8, uintptr(unsafe.Pointer(&el))); hr != 0 || el == 0 { // GetFocusedElement
+		return false
+	}
+	defer comRelease(el)
+	ct := uiaProp(el, uiaControlTypeProperty)
+	textPat := uiaProp(el, uiaIsTextPatternAvailable).boolean()
+	st := selUnknown
+	if textPat && !(ct.VT == vtI4 && int32(ct.Val) == uiaDocumentControlType) {
+		st, _, _ = uiaSelection(el)
+	}
+	if st != selEmpty {
+		log.Printf("uia: selection not known empty (controlType=%d textPattern=%v state=%d)", int32(ct.Val), textPat, st)
+	}
+	return st == selEmpty
+}
+
 // focusedSelectionText 在 UIA 线程上：焦点元素 TextPattern 的全部选区拼起来
 func focusedSelectionText(auto uintptr) string {
 	var el uintptr
@@ -175,6 +213,8 @@ func startUIA() error {
 				req.reply <- focusIsEditable(auto, req.fg, req.pt)
 			case reply := <-uiaTextReqs:
 				reply <- focusedSelectionText(auto)
+			case reply := <-uiaEmptyReqs:
+				reply <- focusedSelectionEmpty(auto)
 			}
 		}
 	}()

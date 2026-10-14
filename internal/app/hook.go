@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
@@ -76,9 +77,39 @@ const (
 	ourKeyTag    = 0x48554143 // "HUAC"：sendKeys 发的按键带这个标记
 )
 
+// 卡片开着时拦 Enter / Esc：cardKeyMode 0=不拦 1=只拦 Esc 2=Enter 和 Esc 都拦；
+// 只在焦点还在原来那个窗口（cardKeyFg）、没按着修饰键时拦，Shift+Enter 换行之类照常
+var (
+	cardKeyMode atomic.Int32
+	cardKeyFg   atomic.Uintptr
+	cardKeyFn   func(vk uint32)
+)
+
+const (
+	vkReturn = 0x0D
+	vkEscape = 0x1B
+)
+
+func cardWantsKey(vk uint32) bool {
+	mode := cardKeyMode.Load()
+	if mode == 0 || cardKeyFn == nil || (vk != vkEscape && (vk != vkReturn || mode < 2)) {
+		return false
+	}
+	for _, m := range []uintptr{0x10, 0x11, 0x12, 0x5B, 0x5C} {
+		if keyDown(m) {
+			return false
+		}
+	}
+	return foreground() == cardKeyFg.Load()
+}
+
 func kbdProc(nCode, wp, lp uintptr) uintptr {
 	if int32(nCode) == 0 && (wp == wmKeyDown || wp == wmSysKeyDown) {
 		k := (*kbdLLHook)(unsafe.Pointer(lp))
+		if wp == wmKeyDown && k.ExtraInfo != ourKeyTag && cardWantsKey(k.VkCode) {
+			go cardKeyFn(k.VkCode)
+			return 1 // 吞掉：别让 Enter 把没翻译的原文发出去
+		}
 		if k.ExtraInfo != ourKeyTag && !isModifierVK(k.VkCode) {
 			select {
 			case mouseEvents <- mouseEvent{kind: keyPress, time: k.Time}:
@@ -109,9 +140,10 @@ func cursorIsIBeam() bool {
 
 // startHook 在独立线程上挂低级鼠标钩子：钩子回调超时系统会直接摘掉它，
 // 所以它所在的线程除了收消息什么都不干。
-func startHook(isOurs func(POINT) bool) error {
+func startHook(isOurs func(POINT) bool, onCardKey func(vk uint32)) error {
 	ibeamCursor, _, _ = pLoadCursorW.Call(0, IDC_IBEAM)
 	isOursFn = isOurs
+	cardKeyFn = onCardKey
 	ready := make(chan error)
 	go func() {
 		runtime.LockOSThread()

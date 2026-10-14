@@ -97,7 +97,7 @@ func Run() {
 		} else {
 			a.uiaOK = true
 		}
-		if err := startHook(a.isOurs); err != nil {
+		if err := startHook(a.isOurs, a.onCardKey); err != nil {
 			log.Println(err)
 			probs = append(probs, T("鼠标钩子挂载失败，只能用快捷键"))
 		}

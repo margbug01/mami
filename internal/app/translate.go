@@ -206,7 +206,7 @@ func (t *Translator) TranslateStream(ctx context.Context, text, target string, o
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mami/2.4")
+	req.Header.Set("User-Agent", "Mami/2.5")
 	req.Header.Set("Accept", "text/event-stream, application/json")
 	if k := strings.TrimSpace(t.cfg.APIKey); k != "" { // B 站免费接口不要 key，空着就不发
 		req.Header.Set("Authorization", "Bearer "+k)

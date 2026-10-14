@@ -168,6 +168,17 @@ func (a *App) popupView(c *ui.Context) {
 		go a.resizePopup(w, want, anchor)
 	}
 
+	// 告诉键盘钩子现在 Enter / Esc 归卡片管
+	mode := int32(0)
+	if a.popVisible.Load() && !p.toast {
+		mode = 1
+		if p.status == statusDone && !p.terminal {
+			mode = 2
+		}
+	}
+	cardKeyFg.Store(p.fg)
+	cardKeyMode.Store(mode)
+
 	ui.Column(c).Fill().Padding(pad, 14).Gap(gap).Background(t.Background).Border(1, t.Border).Radius(cornerR).Children(func() {
 		ui.Row(c).Height(headH).Gap(6).Children(func() {
 			if a.avatar != nil {
@@ -183,8 +194,7 @@ func (a *App) popupView(c *ui.Context) {
 					x.Background(t.SurfaceHover)
 				}
 				if x.Children(func() { ui.Icon(c, iconClose).FontSize(14).TextColor(t.TextMuted) }).Clicked() {
-					a.noteDismiss("close")
-					a.hidePopupNow()
+					a.closeCard()
 				}
 			}
 		})
@@ -216,12 +226,8 @@ func (a *App) popupView(c *ui.Context) {
 					p.copied, p.acted = true, true
 					a.recordAction(p.histID, "copy")
 				}
-				if !p.terminal && accentButton(c, T("替换")).Clicked() {
-					text := p.text
-					p.acted = true
-					a.recordAction(p.histID, "replace")
-					a.hidePopupNow()
-					theWorker.paste(text)
+				if !p.terminal && accentButton(c, T("替换")+" ↵").Clicked() {
+					a.replaceFromCard()
 				}
 			})
 		}

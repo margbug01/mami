@@ -46,7 +46,10 @@ type popupState struct {
 	terminal bool   // 来自终端：卡片只给「复制」
 	histID   string // 翻译记录里这一条的 id；没开记录时为空
 	acted    bool   // 复制/替换/关闭过，关掉卡片时不再记 dismiss
-	w, h     int    // 当前窗口内容尺寸，view 量出新高度时会改
+	// selectedAll 是 Mami 自己全选的（快捷键时没选中）：关掉卡片要把选区收回去，
+	// 不然整段字一直选着，下一个按键就全没了
+	selectedAll bool
+	w, h        int // 当前窗口内容尺寸，view 量出新高度时会改
 }
 
 type App struct {
@@ -383,6 +386,7 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 	term := isTerminal(fg)
 	wantReplace := replace
 	var text string
+	var selectedAll bool
 	if term {
 		// 终端：没选中时 Ctrl+C 是中断信号，Ctrl+A 各 TUI 意思也不一样，所以一个键都不发，
 		// 直接经 UIA 读终端自己的选区；替换也做不到（粘贴不会删掉选中的字），只给卡片
@@ -390,10 +394,10 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 		replace = false
 		log.Printf("grab (terminal, uia): %d chars", len([]rune(text)))
 	} else {
-		text = grabSelection(owner, fromHotkey && cfg.SelectAllIfEmpty)
+		text, selectedAll = grabSelection(owner, fromHotkey && cfg.SelectAllIfEmpty)
 	}
 	id := a.reqSeq.Add(1)
-	st := popupState{reqID: id, replace: replace, fg: fg, anchor: anchor, toast: replace, terminal: term}
+	st := popupState{reqID: id, replace: replace, fg: fg, anchor: anchor, toast: replace, terminal: term, selectedAll: selectedAll}
 	if cfg.History && !term { // 终端里选的多半是命令输出，不记
 		st.histID = historyID(time.Now(), id)
 	}
@@ -586,6 +590,7 @@ func (a *App) placePopup(anchor POINT) {
 }
 
 func (a *App) hidePopup() {
+	cardKeyMode.Store(0)
 	a.popBusy.Store(false)
 	if a.popVisible.Swap(false) {
 		a.popWin.Update(func() {
@@ -605,8 +610,46 @@ func (a *App) noteDismiss(action string) {
 	}
 }
 
+// closeCard / replaceFromCard 在主线程上：卡片的 X / 替换按钮和 Esc / Enter 共用
+func (a *App) closeCard() {
+	p := &a.pop
+	if p.selectedAll && foreground() == p.fg {
+		theWorker.do(func(uintptr) { collapseSelection() })
+	}
+	a.noteDismiss("close")
+	a.hidePopupNow()
+}
+
+func (a *App) replaceFromCard() {
+	p := &a.pop
+	if p.status != statusDone || p.terminal {
+		return
+	}
+	text := p.text
+	p.acted = true
+	a.recordAction(p.histID, "replace")
+	a.hidePopupNow()
+	theWorker.paste(text)
+}
+
+// onCardKey 在键盘钩子起的 goroutine 里调用：卡片开着时按的 Enter / Esc
+func (a *App) onCardKey(vk uint32) {
+	a.popWin.Update(func() {
+		if !a.popVisible.Load() || a.pop.toast {
+			return
+		}
+		switch vk {
+		case vkEscape:
+			a.closeCard()
+		case vkReturn:
+			a.replaceFromCard()
+		}
+	})
+}
+
 // hidePopupNow 在主线程（view / Update 回调）里用，不能再套 Update
 func (a *App) hidePopupNow() {
+	cardKeyMode.Store(0)
 	a.popBusy.Store(false)
 	if a.popVisible.Swap(false) {
 		a.noteDismiss("dismiss")
