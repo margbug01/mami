@@ -21,6 +21,10 @@ var iconPNG []byte
 
 // Run 是程序入口：读配置、挂钩子、开托盘，一直跑到退出
 func Run() {
+	if len(os.Args) > 1 && os.Args[1] == updateFlag { // 更新助手：不开界面、不抢单实例锁
+		runUpdateHelper(os.Args[2:])
+		return
+	}
 	demo := flag.Bool("demo", false, "只画出按钮和一张示例卡片，8 秒后退出（不挂钩子、不注册快捷键）")
 	flag.Parse()
 
@@ -103,6 +107,8 @@ func Run() {
 		}
 		go a.mouseLoop()
 		go a.pruneLoop()
+		go a.updateLoop()
+		go cleanupUpdate()
 		switch {
 		case cfgErr != nil:
 			a.openSettings()

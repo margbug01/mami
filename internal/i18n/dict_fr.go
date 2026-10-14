@@ -120,4 +120,22 @@ var dictFR = map[string]string{
 	"少":                  "Moins",
 	"多":                  "Plus",
 	"%s:00–%s:59 · %d 次": "%s:00–%s:59 · %d",
+
+	// 更新
+	"更新到 %s":        "Mettre à jour vers %s",
+	"开发版":           "Version de développement",
+	"当前版本 %s":       "Version actuelle %s",
+	"正在下载 %s… %d%%": "Téléchargement de %s… %d%%",
+	"正在检查…":         "Vérification…",
+	"有新版本 %s（当前 %s），更新后会自动重启": "La version %s est disponible (vous avez %s). Mami redémarre après la mise à jour",
+	"已是最新版（%s）":               "À jour (%s)",
+	"更新":                      "Mises à jour",
+	"检查更新":                    "Rechercher des mises à jour",
+	"%s 里没有可下载的安装文件":          "%s ne contient pas d'installateur à télécharger",
+	"检查失败：":                   "Échec de la vérification : ",
+	"开发版没有版本号，不能自动更新":         "Les versions de développement n'ont pas de numéro de version et ne peuvent pas se mettre à jour",
+	"更新失败：":                   "Échec de la mise à jour : ",
+	"下载失败：HTTP %d":            "Échec du téléchargement : HTTP %d",
+	"下载不完整（%d / %d 字节）":       "Téléchargement incomplet (%d / %d octets)",
+	"文件校验没通过，可能下载被篡改了":        "Somme de contrôle incorrecte ; le téléchargement a peut-être été modifié",
 }

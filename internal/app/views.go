@@ -23,35 +23,36 @@ var (
 	iconClose   = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`))
 )
 
-// 点阵版「文 A」：各 5×5；A 在文的右边、往下错开 3 格（aOffX/aOffY），拼成 10×8
+// 点阵版「文 A」：文 5×6、A 3×5，都做成瘦长的；A 在文右边空一列、往下错开 3 格（aOffX/aOffY），拼成 9×8
 var (
 	glyphWen = []string{
 		"..#..",
 		"#####",
 		".#.#.",
+		".#.#.",
 		"..#..",
 		"##.##",
 	}
 	glyphA = []string{
-		"..#..",
-		".#.#.",
-		"#...#",
-		"#####",
-		"#...#",
+		".#.",
+		"#.#",
+		"#.#",
+		"###",
+		"#.#",
 	}
 )
 
 // drawDotMatrix 按物理像素画点阵：每格是整数个像素、点之间至少空 1 像素，
 // 不然缩放以后点会糊成线。box 是可用区域（DIP），点阵在里面居中。
-const aOffX, aOffY = 5, 3
+const aOffX, aOffY = 6, 3
 
 func drawDotMatrix(p *ui.Painter, box ui.Rect, color ui.Color) {
 	s := p.Scale()
 	if s <= 0 {
 		s = 1
 	}
-	gw, gh := aOffX+len(glyphA[0]), aOffY+len(glyphA)
-	g := max(gw, gh)
+	gw, gh := max(len(glyphWen[0]), aOffX+len(glyphA[0])), max(len(glyphWen), aOffY+len(glyphA))
+	g := max(gw, gh, 10)                            // 每格大小按 10 格算：图案变窄只是变窄，不会把点放大
 	cell := int(min(box.W, box.H) * s / float32(g)) // 每格物理像素
 	cell = max(cell, 2)
 	gap := max(1, cell/3)

@@ -168,4 +168,22 @@ var Dict = map[string][2]string{
 	"少":                  {"Less", "少"},
 	"多":                  {"More", "多"},
 	"%s:00–%s:59 · %d 次": {"%s:00–%s:59 · %d", "%s:00–%s:59 · %d 回"},
+
+	// 更新
+	"更新到 %s":        {"Update to %s", "%s に更新"},
+	"开发版":           {"Dev build", "開発版"},
+	"当前版本 %s":       {"Current version %s", "現在のバージョン %s"},
+	"正在下载 %s… %d%%": {"Downloading %s… %d%%", "%s をダウンロード中… %d%%"},
+	"正在检查…":         {"Checking…", "確認中…"},
+	"有新版本 %s（当前 %s），更新后会自动重启": {"Version %s is available (you have %s). Mami restarts after updating", "新しいバージョン %s があります（現在 %s）。更新後に自動で再起動します"},
+	"已是最新版（%s）":               {"Up to date (%s)", "最新版です（%s）"},
+	"更新":                      {"Updates", "アップデート"},
+	"检查更新":                    {"Check for updates", "更新を確認"},
+	"%s 里没有可下载的安装文件":          {"%s has no installer to download", "%s にダウンロードできるインストーラーがありません"},
+	"检查失败：":                   {"Check failed: ", "確認に失敗しました："},
+	"开发版没有版本号，不能自动更新":         {"Dev builds have no version number and can't update themselves", "開発版にはバージョン番号がないため自動更新できません"},
+	"更新失败：":                   {"Update failed: ", "更新に失敗しました："},
+	"下载失败：HTTP %d":            {"Download failed: HTTP %d", "ダウンロードに失敗しました：HTTP %d"},
+	"下载不完整（%d / %d 字节）":       {"Download incomplete (%d / %d bytes)", "ダウンロードが不完全です（%d / %d バイト）"},
+	"文件校验没通过，可能下载被篡改了":        {"Checksum mismatch; the download may have been tampered with", "ファイルの検証に失敗しました。改ざんされた可能性があります"},
 }

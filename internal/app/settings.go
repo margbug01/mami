@@ -580,6 +580,7 @@ func (a *App) pageGeneral(c *ui.Context, d *Config) {
 	})
 	switchRow(c, T("开机自启"), T("登录 Windows 后在托盘里自动运行"), &a.set.openAtLogin)
 	ui.Divider(c)
+	a.updateRow(c)
 	switchRow(c, T("保存翻译记录"), T("原文、发给模型的提示词和译文按天存成文件，之后可以交给 AI 分析哪里没翻好"), &d.History)
 	ui.Divider(c)
 	if !d.History {
@@ -596,6 +597,45 @@ func (a *App) pageGeneral(c *ui.Context, d *Config) {
 			a.openHistory()
 		}
 	})
+}
+
+// updateRow 「更新」一行：说明里是当前版本/检查结果/下载进度，右边按钮查更新或装新版
+func (a *App) updateRow(c *ui.Context) {
+	checking, checked, latest, errMsg, busy, progress := a.upd.snapshot()
+	cur := mygo.App.Version()
+	if cur == "" {
+		cur = T("开发版")
+	}
+	desc := fmt.Sprintf(T("当前版本 %s"), cur)
+	switch {
+	case busy:
+		desc = fmt.Sprintf(T("正在下载 %s… %d%%"), latest.version, int(progress*100))
+	case errMsg != "":
+		desc = errMsg
+	case checking:
+		desc = T("正在检查…")
+	case latest != nil:
+		desc = fmt.Sprintf(T("有新版本 %s（当前 %s），更新后会自动重启"), latest.version, cur)
+	case checked:
+		desc = fmt.Sprintf(T("已是最新版（%s）"), cur)
+	}
+	// 不用 settingRow：它给控件固定 280 宽，按钮会被拉成长条；这里按钮按文字宽度、靠右
+	ui.Row(c).Gap(16).Padding(12, 0).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).Gap(3).Children(func() {
+			ui.Text(c, T("更新")).FontSize(14)
+			ui.Text(c, desc).FontSize(12).TextColor(c.Theme().TextMuted)
+		})
+		if latest != nil {
+			if accentButton(c, fmt.Sprintf(T("更新到 %s"), latest.version)).Disabled(busy).Clicked() {
+				a.startUpdate()
+			}
+			return
+		}
+		if textButton(c, T("检查更新")).Disabled(checking).Clicked() {
+			go a.checkUpdate(true)
+		}
+	})
+	ui.Divider(c)
 }
 
 // extraPromptBox 额外要求输入框：默认按内容自动长短，右下角的把手可以拖着调高度，点一下把手恢复自动

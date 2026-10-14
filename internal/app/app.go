@@ -70,6 +70,7 @@ type App struct {
 
 	pop        popupState // 主线程
 	popVisible atomic.Bool
+	upd        updateState
 	popBusy    atomic.Bool // 卡片正在等译文：点别处不关，免得结果被丢掉
 	reqSeq     atomic.Int64
 	quietID    atomic.Int64 // 静默翻译中的请求号，0 表示没有
@@ -703,7 +704,12 @@ func (a *App) createTray() {
 	a.tray.OnClick(a.openSettings)
 	a.tray.OnRightClick(func() {
 		cfg, _ := a.config()
-		menu := mygo.NewMenu([]*mygo.MenuItem{
+		var items []*mygo.MenuItem
+		if _, _, latest, _, busy, _ := a.upd.snapshot(); latest != nil {
+			items = append(items, &mygo.MenuItem{Label: fmt.Sprintf(T("更新到 %s"), latest.version), Disabled: busy,
+				Click: func(*mygo.MenuItem, *mygo.Window) { a.startUpdate() }}, mygo.Separator())
+		}
+		menu := mygo.NewMenu(append(items, []*mygo.MenuItem{
 			{Label: T("设置…"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
 			{Label: T("划词后显示翻译按钮"), Type: mygo.MenuItemCheckbox, Checked: cfg.ShowButton, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
 				a.toggleButton(item.Checked)
@@ -712,7 +718,7 @@ func (a *App) createTray() {
 			{Label: T("打开翻译记录"), Disabled: !cfg.History, Click: func(*mygo.MenuItem, *mygo.Window) { a.openHistory() }},
 			mygo.Separator(),
 			{Label: T("退出"), Click: func(*mygo.MenuItem, *mygo.Window) { a.quit() }},
-		})
+		}...))
 		a.tray.SetMenu(menu)
 		defer a.tray.SetMenu(nil)
 		a.tray.PopUpMenu()

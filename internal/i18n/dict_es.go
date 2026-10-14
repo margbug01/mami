@@ -120,4 +120,22 @@ var dictES = map[string]string{
 	"少":                  "Menos",
 	"多":                  "Más",
 	"%s:00–%s:59 · %d 次": "%s:00–%s:59 · %d",
+
+	// 更新
+	"更新到 %s":        "Actualizar a %s",
+	"开发版":           "Versión de desarrollo",
+	"当前版本 %s":       "Versión actual %s",
+	"正在下载 %s… %d%%": "Descargando %s… %d%%",
+	"正在检查…":         "Comprobando…",
+	"有新版本 %s（当前 %s），更新后会自动重启": "Hay una versión nueva %s (tienes %s). Mami se reinicia al actualizar",
+	"已是最新版（%s）":               "Actualizado (%s)",
+	"更新":                      "Actualizaciones",
+	"检查更新":                    "Buscar actualizaciones",
+	"%s 里没有可下载的安装文件":          "%s no tiene instalador para descargar",
+	"检查失败：":                   "Error al comprobar: ",
+	"开发版没有版本号，不能自动更新":         "Las versiones de desarrollo no tienen número de versión y no se pueden actualizar solas",
+	"更新失败：":                   "Error al actualizar: ",
+	"下载失败：HTTP %d":            "Error de descarga: HTTP %d",
+	"下载不完整（%d / %d 字节）":       "Descarga incompleta (%d / %d bytes)",
+	"文件校验没通过，可能下载被篡改了":        "La suma de verificación no coincide; puede que la descarga se haya manipulado",
 }

@@ -120,4 +120,22 @@ var dictDE = map[string]string{
 	"少":                  "Weniger",
 	"多":                  "Mehr",
 	"%s:00–%s:59 · %d 次": "%s:00–%s:59 · %d",
+
+	// 更新
+	"更新到 %s":        "Auf %s aktualisieren",
+	"开发版":           "Entwicklerversion",
+	"当前版本 %s":       "Aktuelle Version %s",
+	"正在下载 %s… %d%%": "%s wird heruntergeladen… %d%%",
+	"正在检查…":         "Wird geprüft…",
+	"有新版本 %s（当前 %s），更新后会自动重启": "Version %s ist verfügbar (installiert: %s). Mami startet danach neu",
+	"已是最新版（%s）":               "Auf dem neuesten Stand (%s)",
+	"更新":                      "Updates",
+	"检查更新":                    "Nach Updates suchen",
+	"%s 里没有可下载的安装文件":          "%s enthält keinen Installer zum Herunterladen",
+	"检查失败：":                   "Prüfung fehlgeschlagen: ",
+	"开发版没有版本号，不能自动更新":         "Entwicklerversionen haben keine Versionsnummer und können sich nicht selbst aktualisieren",
+	"更新失败：":                   "Update fehlgeschlagen: ",
+	"下载失败：HTTP %d":            "Download fehlgeschlagen: HTTP %d",
+	"下载不完整（%d / %d 字节）":       "Download unvollständig (%d / %d Bytes)",
+	"文件校验没通过，可能下载被篡改了":        "Prüfsumme stimmt nicht; der Download wurde möglicherweise manipuliert",
 }

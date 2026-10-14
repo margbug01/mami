@@ -40,6 +40,7 @@ I write a lot of prompts in Chinese and send them in English. Copy, open a trans
 - **Safe in terminals.** In Windows Terminal it sends *no* keystrokes (a stray `Ctrl+C` would kill your running program) and reads the selection through UI Automation. The card shows Copy only.
 - **Model-aware prompts.** Dedicated formats for translation models such as Tencent **Hy-MT2** and bilibili **Index-Translate**, and a generic system prompt for everything else (DeepSeek, GPT, Qwen…).
 - **20 target languages**, extra instructions and glossary, proxy, per-app exclusions, start at login.
+- **One-click updates.** Mami checks GitHub Releases once a day; when there's a new version, "Update to x.y.z" appears in the tray menu and under Settings → General. It downloads the release, checks its SHA-256, installs it in place and restarts.
 - **Light and dark themes**, following Windows or set by hand. The interface is set in [MiSans](https://hyperos.mi.com/font) (a subset is built in).
 - **9 interface languages**: 简体中文, 繁體中文, English, 日本語, 한국어, Español, Français, Deutsch, Русский.
 
