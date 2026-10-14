@@ -322,19 +322,5 @@ func isTerminal(fg uintptr) bool {
 // roundCorners 把窗口裁成圆角矩形（半径 10 DIP）。窗口区域之外的像素系统不画，
 // 也就没有投影；窗口大小变了要重新裁。
 func roundCorners(h uintptr) {
-	var r RECT
-	pGetWindowRect.Call(h, uintptr(unsafe.Pointer(&r)))
-	w, ht := r.w(), r.h()
-	if w <= 0 || ht <= 0 {
-		return
-	}
-	dpi, _, _ := pGetDpiForWindow.Call(h)
-	if dpi == 0 {
-		dpi = 96
-	}
-	d := int32(dpi) * 20 / 96 // 圆角直径（物理像素）
-	rgn, _, _ := pCreateRoundRectRgn.Call(0, 0, uintptr(w+1), uintptr(ht+1), uintptr(d), uintptr(d))
-	if rgn != 0 {
-		pSetWindowRgn.Call(h, rgn, 1) // 成功后区域归系统所有
-	}
+	pSetWindowRgn.Call(h, 0, 1) // 不裁区域：裁出来的边缘没有抗锯齿，还会切断 1px 边框
 }
