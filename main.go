@@ -71,6 +71,8 @@ func main() {
 		if _, err := startWorker(); err != nil {
 			log.Fatal("worker: ", err)
 		}
+		sysLocale = mygo.App.Locale()
+		setLang(resolveLang(cfg.Language, sysLocale))
 		a.createWindows()
 		log.Printf("start: model=%s base=%s hotkey=%s config=%s", cfg.Model, cfg.BaseURL, cfg.Hotkey, a.cfgPath)
 		if *demo {
@@ -89,16 +91,16 @@ func main() {
 		}
 		if err := startHook(a.isOurs); err != nil {
 			log.Println(err)
-			probs = append(probs, "鼠标钩子挂载失败，只能用快捷键")
+			probs = append(probs, T("鼠标钩子挂载失败，只能用快捷键"))
 		}
 		go a.mouseLoop()
 		switch {
 		case cfgErr != nil:
 			a.openSettings()
-			a.set.status, a.set.statusErr = "配置文件没读成功，保存会覆盖它："+cfgErr.Error(), true
+			a.set.status, a.set.statusErr = T("配置文件没读成功，保存会覆盖它：")+cfgErr.Error(), true
 		case created:
 			a.openSettings()
-			a.set.status = "默认用 B 站免费的 Index-Translate-35B，不用 Key；换别的接口再填"
+			a.set.status = T("默认用 B 站免费的 Index-Translate-35B，不用 Key；换别的接口再填")
 		case len(probs) > 0:
 			a.openSettings()
 			a.set.status, a.set.statusErr = strings.Join(probs, "；"), true

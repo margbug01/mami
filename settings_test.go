@@ -69,8 +69,8 @@ func TestSnapSettingsDropdown(t *testing.T) {
 		t.Skip("MAMI_SNAP not set")
 	}
 	a := &App{avatar: loadAvatar()}
-	a.set = settingsState{draft: defaultConfig()}
-	tt := ui.NewTester(a.settingsView, 560, 700)
+	a.set = settingsState{draft: defaultConfig(), page: pageTrans}
+	tt := ui.NewTester(a.settingsView, 700, 480)
 	tt.SetDark(true)
 	for i, open := range []string{"英语 English", "简体中文"} {
 		if err := tt.Click(open); err != nil {
@@ -117,4 +117,159 @@ func TestActionSelect(t *testing.T) {
 	if v != actionReplace {
 		t.Errorf("got %q", v)
 	}
+}
+
+// MAMI_SNAP=dir 时，把设置页四个分页（深色）存成 PNG
+func TestSnapSettingsPages(t *testing.T) {
+	dir := os.Getenv("MAMI_SNAP")
+	if dir == "" {
+		t.Skip("MAMI_SNAP not set")
+	}
+	for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen} {
+		a := &App{avatar: loadAvatar()}
+		a.set = settingsState{draft: defaultConfig(), page: page, testMsg: "连接正常（1.4s）：你好，世界 → Hello, world"}
+		tt := ui.NewTester(a.settingsView, 700, 480)
+		tt.SetDark(true)
+		tt.Frame()
+		f, _ := os.Create(filepath.Join(dir, "page-"+page+".png"))
+		png.Encode(f, tt.Image())
+		f.Close()
+	}
+}
+
+func TestButtonActionsTranslated(t *testing.T) {
+	for _, o := range buttonActions {
+		if e, ok := i18nDict[o.label]; !ok || e[0] == "" || e[1] == "" {
+			t.Errorf("%q 没有译文", o.label)
+		}
+	}
+}
+
+// MAMI_SNAP=dir 时，存英文浅色、日文深色的设置页
+func TestSnapSettingsI18n(t *testing.T) {
+	dir := os.Getenv("MAMI_SNAP")
+	if dir == "" {
+		t.Skip("MAMI_SNAP not set")
+	}
+	defer setLang(langZH)
+	for _, c := range []struct {
+		lang, theme, page string
+		dark              bool
+	}{
+		{"en", "light", pageTrans, false}, {"ja", "dark", pageBtn, true}, {"ja", "auto", pageGen, true},
+		{"en", "light", pageGen, false}, {"ja", "dark", pageConn, true}, {"en", "dark", pageKeys, true},
+		{"zh-TW", "dark", pageBtn, true}, {"ko", "dark", pageBtn, true}, {"es", "light", pageBtn, false},
+		{"fr", "dark", pageTrans, true}, {"de", "dark", pageBtn, true}, {"ru", "dark", pageBtn, true},
+	} {
+		a := &App{avatar: loadAvatar()}
+		draft := defaultConfig()
+		draft.Language, draft.Theme = c.lang, c.theme
+		draft.ExtraPrompt = "Translate for an AI prompt: be precise, keep structure, placeholders like {name} untouched, do not translate code or file paths."
+		a.set = settingsState{draft: draft, page: c.page}
+		tt := ui.NewTester(a.settingsView, 700, 480)
+		tt.SetDark(c.dark)
+		tt.Frame()
+		f, _ := os.Create(filepath.Join(dir, "i18n-"+c.lang+"-"+c.theme+"-"+c.page+".png"))
+		png.Encode(f, tt.Image())
+		f.Close()
+	}
+}
+
+// 额外要求框：默认随内容长短；拖右下角把手手动调；点一下恢复自动
+func TestExtraPromptResize(t *testing.T) {
+	a := &App{avatar: loadAvatar()}
+	a.set = settingsState{draft: defaultConfig(), page: pageTrans}
+	tt := ui.NewTester(a.settingsView, 700, 480)
+	tt.Frame()
+	if a.set.extraManual {
+		t.Fatal("没动把手就不该进手动模式")
+	}
+	grab := func(dy float32) (float32, bool) {
+		for y := float32(345); y < 372; y += 2 {
+			tt.Move(658, y)
+			tt.Frame()
+			tt.Press(658, y)
+			tt.Frame()
+			tt.Move(658, y+dy/2)
+			tt.Frame()
+			tt.Move(658, y+dy)
+			tt.Frame()
+			tt.Release(658, y+dy)
+			tt.Frame()
+			if a.set.extraManual {
+				return y, true
+			}
+		}
+		return 0, false
+	}
+	y, ok := grab(40)
+	if !ok {
+		t.Fatalf("拖不动把手（texts %q）", tt.Texts())
+	}
+	grown := a.set.extraH
+	if grown < 100 {
+		t.Errorf("往下拖 40 后高度只有 %v", grown)
+	}
+	tt.Frame()
+	tt.Move(658, y+40)
+	tt.Frame()
+	tt.ClickAt(658, y+40)
+	tt.Frame()
+	if a.set.extraManual {
+		t.Errorf("点一下把手没有恢复自动")
+	}
+}
+
+// MAMI_DOCS=dir 时，生成 README / 主页用的截图（2 倍清晰度）：卡片和设置页的深色、浅色、日文版
+func TestSnapDocs(t *testing.T) {
+	dir := os.Getenv("MAMI_DOCS")
+	if dir == "" {
+		t.Skip("MAMI_DOCS not set")
+	}
+	defer setLang(langZH)
+	save := func(name string, tt *ui.Tester) {
+		tt.Frame()
+		f, err := os.Create(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		png.Encode(f, tt.Image())
+		f.Close()
+	}
+	prompt := "这是写给 AI 的提示词，译文要指令明确、没有歧义，语气自然直接。\n代码、命令、文件路径、URL、模型名不翻译。"
+	for _, d := range []struct {
+		suffix string
+		dark   bool
+		theme  string
+	}{{"", true, "dark"}, {"-light", false, "light"}} {
+		setLang(langZH)
+		a := &App{avatar: loadAvatar()}
+		cfg := defaultConfig()
+		cfg.Theme = d.theme
+		a.cfg = cfg
+		a.pop = popupState{status: statusDone, header: "中文 → English", w: 380, h: 172,
+			text: "Could you take a look at why this plugin doesn't take effect after startup? There's nothing in the logs.\n\nSecond paragraph: the meeting is at 3 p.m. tomorrow."}
+		tt := ui.NewTester(a.popupView, 380, 172)
+		tt.SetDark(d.dark)
+		tt.SetScale(2)
+		save("card"+d.suffix+".png", tt)
+
+		cfg.ExtraPrompt = prompt
+		cfg.BaseURL, cfg.Model = "https://tokenhub.tencentmaas.com/v1", "hy-mt2-pro"
+		a2 := &App{avatar: loadAvatar()}
+		a2.set = settingsState{draft: cfg, page: pageTrans}
+		tt = ui.NewTester(a2.settingsView, 700, 480)
+		tt.SetDark(d.dark)
+		tt.SetScale(2)
+		save("settings"+d.suffix+".png", tt)
+	}
+	// 日文深色，选择按钮页
+	cfg := defaultConfig()
+	cfg.Language, cfg.Theme = "ja", "dark"
+	a := &App{avatar: loadAvatar()}
+	a.set = settingsState{draft: cfg, page: pageBtn}
+	tt := ui.NewTester(a.settingsView, 700, 480)
+	tt.SetDark(true)
+	tt.SetScale(2)
+	save("settings-ja.png", tt)
 }

@@ -25,7 +25,7 @@ func newTranslator(cfg Config) (*Translator, error) {
 	if p := strings.TrimSpace(cfg.Proxy); p != "" {
 		u, err := url.Parse(p)
 		if err != nil {
-			return nil, fmt.Errorf("proxy 地址不对：%w", err)
+			return nil, fmt.Errorf(T("proxy 地址不对：%w"), err)
 		}
 		tr.Proxy = http.ProxyURL(u)
 	}
@@ -135,7 +135,7 @@ func cleanOutput(s string) string {
 
 func (t *Translator) Translate(ctx context.Context, text, target string) (string, error) {
 	if strings.TrimSpace(t.cfg.APIKey) == "" && !isIndexTranslate(t.cfg.Model) {
-		return "", errors.New("还没填 API Key：托盘图标右键 → 设置")
+		return "", errors.New(T("还没填 API Key：托盘图标右键 → 设置"))
 	}
 	body := map[string]any{
 		"model": t.cfg.Model,
@@ -172,7 +172,7 @@ func (t *Translator) Translate(ctx context.Context, text, target string) (string
 
 	resp, err := t.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("请求失败：%w", err)
+		return "", fmt.Errorf(T("请求失败：%w"), err)
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -201,12 +201,12 @@ func (t *Translator) Translate(ctx context.Context, text, target string) (string
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(data, &out); err != nil || len(out.Choices) == 0 {
-		return "", errors.New("接口返回的不是 chat/completions 格式")
+		return "", errors.New(T("接口返回的不是 chat/completions 格式"))
 	}
 	content := contentText(out.Choices[0].Message.Content)
 	res := cleanOutput(content)
 	if res == "" {
-		return "", errors.New("模型返回了空内容")
+		return "", errors.New(T("模型返回了空内容"))
 	}
 	return res, nil
 }
@@ -247,7 +247,7 @@ func pickTarget(text string, cfg Config) (target, header string) {
 		}
 	}
 	if han > 0 && kana == 0 && hangul == 0 {
-		return cfg.TargetForChinese, "中文 → " + cfg.TargetForChinese
+		return cfg.TargetForChinese, T("中文 → ") + cfg.TargetForChinese
 	}
-	return cfg.TargetForOther, "自动检测 → " + cfg.TargetForOther
+	return cfg.TargetForOther, T("自动检测 → ") + cfg.TargetForOther
 }

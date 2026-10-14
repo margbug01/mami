@@ -30,6 +30,8 @@ type Config struct {
 	Temperature      *float64 `json:"temperature"`
 	ExtraPrompt      string   `json:"extra_prompt"`
 	ExcludeProcesses []string `json:"exclude_processes"`
+	Language         string   `json:"language"` // 界面语言：auto / zh / en / ja
+	Theme            string   `json:"theme"`    // 外观：auto / light / dark
 }
 
 func defaultConfig() Config {
@@ -50,6 +52,8 @@ func defaultConfig() Config {
 		MaxChars:         6000,
 		TimeoutSec:       30,
 		ExcludeProcesses: []string{},
+		Language:         "auto",
+		Theme:            "auto",
 	}
 }
 
@@ -61,6 +65,16 @@ const (
 )
 
 func (c *Config) normalize() {
+	switch c.Language {
+	case "zh", "zh-TW", "en", "ja", "ko", "es", "fr", "de", "ru":
+	default:
+		c.Language = "auto"
+	}
+	switch c.Theme {
+	case "light", "dark":
+	default:
+		c.Theme = "auto"
+	}
 	switch c.ButtonAction {
 	case actionCard, actionResult, actionReplace:
 	default:
@@ -91,7 +105,7 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 	} else {
 		b = bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")) // 记事本可能存成带 BOM
 		if err := json.Unmarshal(b, &cfg); err != nil {
-			return cfg, false, fmt.Errorf("%s 格式不对：%w", filepath.Base(path), err)
+			return cfg, false, fmt.Errorf(T("%s 格式不对：%w"), filepath.Base(path), err)
 		}
 	}
 	if strings.TrimSpace(cfg.APIKey) == "" {

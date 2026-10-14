@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -20,6 +21,14 @@ type settingsState struct {
 	status      string
 	statusErr   bool
 	testing     bool
+	page        string
+	extraH      float32 // 额外要求输入框的高度（手动拖过之后才用）
+	extraManual bool
+	gripMoved   bool // 这次按住把手时拖动过
+	advanced    bool
+	compat      bool
+	testMsg     string
+	testErr     bool
 }
 
 func (a *App) openSettings() {
@@ -34,12 +43,13 @@ func (a *App) openSettings() {
 	if a.setWin == nil {
 		reset()
 		a.setWin = mygo.NewWindow(mygo.WindowOptions{
-			Title:           "划词翻译 · 设置",
-			Width:           560,
-			Height:          700,
-			MinWidth:        480,
+			Title:           "Mami · Settings",
+			Width:           700,
+			Height:          480,
+			MinWidth:        640,
 			MinHeight:       420,
 			DisableMaximize: true,
+			Frameless:       true,
 			Content:         ui.View(a.settingsView),
 		})
 		a.setWin.SetIcon(iconPNG)
@@ -47,6 +57,8 @@ func (a *App) openSettings() {
 			if !a.quitting {
 				e.PreventDefault()
 				a.setWin.Hide()
+				saved, _ := a.config()
+				setLang(resolveLang(saved.Language, sysLocale)) // 没保存的语言预览收回
 			}
 		})
 	} else if !a.setWin.IsVisible() {
@@ -60,91 +72,170 @@ func (a *App) settingsView(c *ui.Context) {
 	t := c.Theme()
 	s := &a.set
 	d := &s.draft
+	setLang(resolveLang(d.Language, sysLocale)) // 在设置里改了立刻预览，保存才算数
+	applyTheme(c, d.Theme)
+	t = c.Theme()
 	ui.Column(c).Fill().Children(func() {
-		ui.Scroll(c).Grow(1).Children(func() {
-			ui.Column(c).Padding(20, 24).Gap(18).Children(func() {
-				ui.Row(c).Gap(12).Children(func() {
-					if a.avatar != nil {
-						ui.Image(c, a.avatar).Size(40, 40).Radius(20).Clip()
+		a.titleBar(c)
+		ui.Divider(c)
+		ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
+			ui.Column(c).Width(sidebarW).Children(func() {
+				ui.Sidebar(c, &s.page, func() {
+					ui.Box(c).Height(8)
+					ui.SidebarItem(c, pageConn, iconConn, T("接口"))
+					ui.SidebarItem(c, pageTrans, iconTrans, T("翻译"))
+					ui.SidebarItem(c, pageKeys, iconKeys, T("快捷键"))
+					ui.SidebarItem(c, pageBtn, iconBtn, T("划词按钮"))
+					ui.SidebarItem(c, pageGen, iconGen, T("通用"))
+				}).Grow(1)
+			})
+			ui.Scroll(c).Grow(1).Children(func() {
+				ui.Column(c).Padding(8, 24, 16, 24).Children(func() {
+					switch s.page {
+					case pageTrans:
+						a.pageTranslate(c, d)
+					case pageKeys:
+						a.pageHotkeys(c, d)
+					case pageBtn:
+						a.pageButton(c, d)
+					case pageGen:
+						a.pageGeneral(c, d)
+					default:
+						a.pageConnection(c, d)
 					}
-					ui.Column(c).Gap(2).Children(func() {
-						ui.Text(c, "划词翻译").FontSize(18).Bold()
-						ui.Text(c, "选中文字点「翻译」，或按快捷键原地替换。").FontSize(12).TextColor(t.TextMuted)
-					})
-				})
-
-				section(c, "接口（OpenAI 兼容）", func() {
-					ui.Form(c, func() {
-						ui.Field(c, "接口地址", func() {
-							ui.TextInput(c, &d.BaseURL).Placeholder("https://api.deepseek.com/v1")
-						}).Description("会自动拼上 /chat/completions")
-						ui.Field(c, "API Key", func() {
-							ui.TextInput(c, &d.APIKey).Password().Placeholder("sk-…（B 站免费接口留空）")
-						})
-						ui.Field(c, "模型", func() { ui.TextInput(c, &d.Model).Placeholder("deepseek-flash") })
-						ui.Field(c, "代理", func() {
-							ui.TextInput(c, &d.Proxy).Placeholder("留空直连，例如 http://127.0.0.1:7890")
-						}).Description("Go 不读系统代理，要走 Clash 得填这里")
-					})
-				})
-
-				section(c, "翻译", func() {
-					ui.Form(c, func() {
-						ui.Field(c, "中文翻成", func() { langSelect(c, &d.TargetForChinese) }).
-							Description("选中的文字里有汉字时，翻成这个语言")
-						ui.Field(c, "其他翻成", func() { langSelect(c, &d.TargetForOther) }).
-							Description("不含汉字的文字（英文、日文等）翻成这个语言")
-						ui.Field(c, "额外要求", func() {
-							ui.TextArea(c, &d.ExtraPrompt).Height(64).Placeholder("比如：技术文档风格，术语保留英文")
-						})
-					})
-				})
-
-				section(c, "快捷键", func() {
-					ui.Form(c, func() {
-						ui.Field(c, "原地替换", func() { ui.TextInput(c, &d.Hotkey).Placeholder("Alt+T") })
-						ui.Field(c, "只弹卡片", func() { ui.TextInput(c, &d.PopupHotkey).Placeholder("Alt+Shift+T") }).
-							Description("写法如 Ctrl+Shift+Y、Alt+F2，留空表示不用")
-					})
-				})
-
-				section(c, "划词按钮", func() {
-					ui.Column(c).Gap(14).Children(func() {
-						switchRow(c, "划词后显示翻译按钮", "选中文字后旁边弹出一个小图标，点它出译文。关掉就只能用快捷键", &d.ShowButton)
-						switchRow(c, "只在输入框里弹", "网页正文、文档里划词不弹；关掉就是哪里划词都弹", &d.OnlyInInputs)
-						switchRow(c, "认不出输入框的程序也弹", "微信这类程序不告诉系统哪里是输入框，开着能用但聊天记录里划词也会弹；关掉就只能用快捷键", &d.ShowInBlindApps)
-						switchRow(c, "只认文本光标", "按下鼠标时光标是 I 形才算划词，拖窗口、拖文件不会误弹", &d.RequireIBeam)
-						switchRow(c, "快捷键没选中就全选", "按 Alt+T 时没选中文字，先全选整个输入框再翻译", &d.SelectAllIfEmpty)
-					})
-					ui.Form(c, func() {
-						ui.Field(c, "点翻译按钮后", func() { actionSelect(c, &d.ButtonAction) }).
-							Description("不想看到「翻译中…」就选后两个；直接替换出错时仍会弹卡片说明原因")
-						ui.Field(c, "不弹按钮的程序", func() {
-							ui.TextInput(c, &s.exclude).Placeholder("game.exe, WindowsTerminal.exe")
-						}).Description("填进程名，逗号分隔")
-					})
-				})
-
-				section(c, "其他", func() {
-					switchRow(c, "开机自启", "登录 Windows 后在托盘里自动运行", &s.openAtLogin)
 				})
 			})
 		})
 		ui.Divider(c)
-		ui.Row(c).Padding(12, 24).Gap(8).Children(func() {
+		ui.Row(c).Padding(10, 24).Gap(8).Children(func() {
 			color := t.TextMuted
 			if s.statusErr {
 				color = t.Danger
 			}
 			ui.Text(c, s.status).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-			if ui.Button(c, "测试连接").Disabled(s.testing).Clicked() {
-				a.testDraft()
-			}
-			if ui.PrimaryButton(c, "保存").Clicked() {
+			if ui.PrimaryButton(c, T("保存")).Clicked() {
 				a.saveDraft()
 			}
 		})
 	})
+}
+
+const (
+	pageConn  = "conn"
+	pageTrans = "trans"
+	pageKeys  = "keys"
+	pageBtn   = "btn"
+	pageGen   = "gen"
+)
+
+// settingRow 一行设置：左边名字+一句说明，右边控件，行与行之间一条细线
+func settingRow(c *ui.Context, title, desc string, ctl func()) {
+	t := c.Theme()
+	ui.Row(c).Gap(16).Padding(12, 0).Children(func() {
+		ui.Column(c).Grow(1).Gap(3).Children(func() {
+			ui.Text(c, title).FontSize(14)
+			if desc != "" {
+				ui.Text(c, desc).FontSize(12).TextColor(t.TextMuted)
+			}
+		})
+		ui.Box(c).Width(controlW).Children(ctl)
+	})
+	ui.Divider(c)
+}
+
+// controlW 右侧控件的宽度
+const controlW = 280
+
+func pageTitle(c *ui.Context, title string) {
+	ui.Text(c, title).FontSize(16).Bold().Padding(10, 0, 4, 0)
+}
+
+func (a *App) pageConnection(c *ui.Context, d *Config) {
+	s := &a.set
+	t := c.Theme()
+	pageTitle(c, T("接口（OpenAI 兼容）"))
+	settingRow(c, T("接口地址"), T("会自动拼上 /chat/completions"), func() {
+		ui.TextInput(c, &d.BaseURL).Placeholder("https://api.deepseek.com/v1")
+	})
+	settingRow(c, "API Key", T("免费接口留空"), func() {
+		ui.TextInput(c, &d.APIKey).Password().Placeholder("sk-…")
+	})
+	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.Model).Placeholder("deepseek-flash") })
+	ui.Row(c).Gap(12).Padding(12, 0).Children(func() {
+		color := t.TextMuted
+		if s.testErr {
+			color = t.Danger
+		}
+		ui.Text(c, s.testMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+		if ui.Button(c, T("测试连接")).Disabled(s.testing).Clicked() {
+			a.testDraft()
+		}
+	})
+	ui.Row(c).Padding(8, 0).Children(func() {
+		if ui.Button(c, s.advancedLabel()).Clicked() {
+			s.advanced = !s.advanced
+		}
+	})
+	if s.advanced {
+		settingRow(c, T("代理"), T("Go 不读系统代理，要走 Clash 得填这里"), func() {
+			ui.TextInput(c, &d.Proxy).Placeholder("http://127.0.0.1:7890")
+		})
+	}
+}
+
+func (a *App) pageTranslate(c *ui.Context, d *Config) {
+	pageTitle(c, T("翻译"))
+	settingRow(c, T("中文翻成"), T("选中的文字里有汉字时"), func() { langSelect(c, &d.TargetForChinese) })
+	settingRow(c, T("其他翻成"), T("不含汉字的文字（英文、日文等）"), func() { langSelect(c, &d.TargetForOther) })
+	ui.Column(c).Gap(6).Padding(12, 0).Children(func() {
+		ui.Text(c, T("额外要求")).FontSize(14)
+		ui.Text(c, T("追加给模型的话，比如风格、术语处理")).FontSize(12).TextColor(c.Theme().TextMuted)
+		a.extraPromptBox(c, d)
+	})
+}
+
+func (a *App) pageHotkeys(c *ui.Context, d *Config) {
+	pageTitle(c, T("快捷键"))
+	settingRow(c, T("原地替换"), T("写法如 Ctrl+Shift+Y、Alt+F2"), func() { ui.TextInput(c, &d.Hotkey).Placeholder("Alt+T") })
+	settingRow(c, T("只弹卡片"), T("留空表示不用"), func() { ui.TextInput(c, &d.PopupHotkey).Placeholder("Alt+Shift+T") })
+	switchRow(c, T("快捷键没选中就全选"), T("按 Alt+T 时没选中文字，先全选整个输入框再翻译"), &d.SelectAllIfEmpty)
+}
+
+func (a *App) pageButton(c *ui.Context, d *Config) {
+	s := &a.set
+	pageTitle(c, T("划词按钮"))
+	switchRow(c, T("划词后显示翻译按钮"), T("选中文字后旁边弹出一个小图标，点它出译文"), &d.ShowButton)
+	ui.Divider(c)
+	switchRow(c, T("只在输入框里弹"), T("网页正文、文档里划词不弹"), &d.OnlyInInputs)
+	ui.Divider(c)
+	settingRow(c, T("点翻译按钮后"), T("直接替换出错时仍会弹卡片说明原因"), func() { actionSelect(c, &d.ButtonAction) })
+	settingRow(c, T("不弹按钮的程序"), T("进程名，逗号分隔"), func() {
+		ui.TextInput(c, &s.exclude).Placeholder("game.exe, WindowsTerminal.exe")
+	})
+	ui.Row(c).Padding(8, 0).Children(func() {
+		if ui.Button(c, s.compatLabel()).Clicked() {
+			s.compat = !s.compat
+		}
+	})
+	if s.compat {
+		switchRow(c, T("认不出输入框的程序也弹"), T("微信这类程序开着能用，但聊天记录里划词也会弹"), &d.ShowInBlindApps)
+		ui.Divider(c)
+		switchRow(c, T("只认文本光标"), T("按下鼠标时光标是 I 形才算划词，拖窗口、拖文件不会误弹"), &d.RequireIBeam)
+	}
+}
+
+func (s *settingsState) advancedLabel() string {
+	if s.advanced {
+		return T("▾ 高级")
+	}
+	return T("▸ 高级")
+}
+
+func (s *settingsState) compatLabel() string {
+	if s.compat {
+		return T("▾ 兼容性")
+	}
+	return T("▸ 兼容性")
 }
 
 // targetLangs 是下拉框里的语言：value 原样写进提示词发给模型，label 给人看
@@ -181,7 +272,7 @@ func langSelect(c *ui.Context, value *string) {
 	known := false
 	for _, l := range targetLangs {
 		if strings.EqualFold(l.value, strings.TrimSpace(*value)) {
-			*value, label, known = l.value, l.label, true
+			*value, label, known = l.value, langLabel(l.value, l.label), true
 		}
 	}
 	if !known && strings.TrimSpace(*value) != "" {
@@ -209,7 +300,7 @@ func langSelect(c *ui.Context, value *string) {
 					case l.value == *value:
 						item.Background(t.Surface)
 					}
-					text := l.label
+					text := langLabel(l.value, l.label)
 					item.Children(func() { ui.Text(c, text).SingleLine() })
 				}
 			})
@@ -227,16 +318,27 @@ var buttonActions = []struct{ value, label string }{
 }
 
 func actionSelect(c *ui.Context, value *string) {
-	labels := make([]string, len(buttonActions))
-	current := buttonActions[0].label
+	opts := make([]option, len(buttonActions))
 	for i, o := range buttonActions {
+		opts[i] = option{o.value, T(o.label)}
+	}
+	optionSelect(c, value, opts)
+}
+
+type option struct{ value, label string }
+
+// optionSelect 下拉选一项：value 是存进配置的值，label 是给人看的
+func optionSelect(c *ui.Context, value *string, opts []option) {
+	labels := make([]string, len(opts))
+	current := opts[0].label
+	for i, o := range opts {
 		labels[i] = o.label
 		if o.value == *value {
 			current = o.label
 		}
 	}
 	if ui.Select(c, &current, labels).Changed() {
-		for _, o := range buttonActions {
+		for _, o := range opts {
 			if o.label == current {
 				*value = o.value
 			}
@@ -246,7 +348,7 @@ func actionSelect(c *ui.Context, value *string) {
 
 // switchRow 左边是名字和说明，右边是开关，三者在同一行，不会错位
 func switchRow(c *ui.Context, title, desc string, on *bool) {
-	ui.Row(c).Gap(16).Children(func() {
+	ui.Row(c).Gap(16).Padding(12, 0).Children(func() {
 		ui.Column(c).Grow(1).Gap(3).Children(func() {
 			ui.Text(c, title).FontSize(14)
 			ui.Text(c, desc).FontSize(12).TextColor(c.Theme().TextMuted)
@@ -266,7 +368,7 @@ func (a *App) testDraft() {
 	s := &a.set
 	cfg := s.draft
 	cfg.normalize()
-	s.testing, s.status, s.statusErr = true, "正在请求 "+cfg.Model+"…", false
+	s.testing, s.testMsg, s.testErr = true, T("正在请求 ")+cfg.Model+"…", false
 	go func() {
 		start := time.Now()
 		var res string
@@ -279,10 +381,10 @@ func (a *App) testDraft() {
 		a.setWin.Update(func() {
 			s.testing = false
 			if err != nil {
-				s.status, s.statusErr = "连接失败："+err.Error(), true
+				s.testMsg, s.testErr = T("连接失败：")+err.Error(), true
 				return
 			}
-			s.status, s.statusErr = "连接正常（"+time.Since(start).Round(time.Millisecond).String()+"）：你好，世界 → "+res, false
+			s.testMsg, s.testErr = fmt.Sprintf(T("连接正常（%s）：你好，世界 → %s"), time.Since(start).Round(time.Millisecond), res), false
 		})
 	}()
 }
@@ -299,7 +401,7 @@ func (a *App) saveDraft() {
 		return
 	}
 	if err := saveConfig(a.cfgPath, cfg); err != nil {
-		s.status, s.statusErr = "保存失败："+err.Error(), true
+		s.status, s.statusErr = T("保存失败：")+err.Error(), true
 		return
 	}
 	s.draft = cfg
@@ -313,8 +415,142 @@ func (a *App) saveDraft() {
 		a.hideButton()
 	}
 	if probs := a.registerHotkeys(cfg); len(probs) > 0 {
-		s.status, s.statusErr = "已保存，但快捷键有问题："+strings.Join(probs, "；"), true
+		s.status, s.statusErr = T("已保存，但快捷键有问题：")+strings.Join(probs, T("；")), true
 		return
 	}
-	s.status, s.statusErr = "已保存", false
+	s.status, s.statusErr = T("已保存"), false
 }
+
+// titleBar 自绘标题栏：整条可拖动，右上角最小化和关闭
+func (a *App) titleBar(c *ui.Context) {
+	t := c.Theme()
+	ui.Row(c).Height(36).AlignItems(ui.Center).AlignSelf(ui.Stretch).Children(func() {
+		ui.Row(c).Grow(1).Gap(8).Padding(0, 0, 0, 12).AlignItems(ui.Center).Height(36).Children(func() {
+			if a.avatar != nil {
+				ui.Image(c, a.avatar).Size(18, 18).Radius(9).Clip()
+			}
+			ui.Text(c, "Mami").FontSize(13).Bold()
+		}).DragWindow()
+		for _, b := range []struct {
+			glyph  string
+			danger bool
+			act    func()
+		}{{"–", false, a.setWin.Minimize}, {"✕", true, a.setWin.Close}} {
+			btn := ui.Row(c).Width(46).Height(36).Justify(ui.Center).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+			if btn.Hovered() {
+				if b.danger {
+					btn.Background(t.Danger)
+				} else {
+					btn.Background(t.SurfaceHover)
+				}
+			}
+			glyph := b.glyph
+			btn.Children(func() { ui.Text(c, glyph).FontSize(13).TextColor(t.Text) })
+			if btn.Clicked() {
+				b.act()
+			}
+		}
+	})
+}
+
+// 侧边栏图标（Lucide 描边风格，和 iconChevron 一致）
+var iconConn = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>`))
+var iconTrans = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>`))
+var iconKeys = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></svg>`))
+var iconBtn = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5"/><path d="M19 3h-2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><path d="M9 12h6"/></svg>`))
+
+// jaLangNames 是日语界面下语言的叫法
+var jaLangNames = map[string]string{
+	"English": "英語", "Simplified Chinese": "中国語（簡体字）", "Traditional Chinese": "中国語（繁体字）",
+	"Japanese": "日本語", "Korean": "韓国語", "French": "フランス語", "German": "ドイツ語",
+	"Spanish": "スペイン語", "Portuguese": "ポルトガル語", "Italian": "イタリア語", "Russian": "ロシア語",
+	"Arabic": "アラビア語", "Vietnamese": "ベトナム語", "Thai": "タイ語", "Indonesian": "インドネシア語",
+	"Malay": "マレー語", "Hindi": "ヒンディー語", "Turkish": "トルコ語", "Dutch": "オランダ語", "Polish": "ポーランド語",
+}
+
+// langLabel 下拉框里一个语言怎么写：中文界面「英语 English」，英文界面「English」，日语界面「英語 English」。
+// zhLabel 是 targetLangs 里的中文写法（「中文名 本地名」，或只有本地名）。
+// 列表外的自定义语言原样显示。
+func langLabel(value, zhLabel string) string {
+	ja, known := jaLangNames[value]
+	if !known {
+		return zhLabel
+	}
+	native := zhLabel
+	if _, after, ok := strings.Cut(zhLabel, " "); ok {
+		native = after
+	}
+	switch curLang.Load() {
+	case langZH:
+		return zhLabel
+	case langJA:
+		if native == ja {
+			return ja
+		}
+		return ja + " " + native
+	}
+	// 英语和没有专门名字的其他界面语言：英文名 + 本地名
+	if native == value {
+		return value
+	}
+	return value + " " + native
+}
+
+func (a *App) pageGeneral(c *ui.Context, d *Config) {
+	pageTitle(c, T("通用"))
+	langs := make([]option, len(languageChoices))
+	for i, l := range languageChoices {
+		langs[i] = option{l.value, l.label}
+		if l.value == "auto" {
+			langs[i].label = T("跟随系统")
+		}
+	}
+	settingRow(c, T("界面语言"), T("设置窗口、卡片和托盘菜单用哪种语言"), func() { optionSelect(c, &d.Language, langs) })
+	settingRow(c, T("外观"), T("浅色、深色，或跟随 Windows"), func() {
+		optionSelect(c, &d.Theme, []option{{"auto", T("跟随系统")}, {"light", T("浅色")}, {"dark", T("深色")}})
+	})
+	switchRow(c, T("开机自启"), T("登录 Windows 后在托盘里自动运行"), &a.set.openAtLogin)
+}
+
+// extraPromptBox 额外要求输入框：默认按内容自动长短，右下角的把手可以拖着调高度，点一下把手恢复自动
+func (a *App) extraPromptBox(c *ui.Context, d *Config) {
+	s := &a.set
+	t := c.Theme()
+	const minH, maxH = 80, 280
+	h := s.extraH
+	if !s.extraManual {
+		w, _ := c.Size()
+		_, th := c.MeasureText(max(w-controlPad, 120), ui.Span{Text: d.ExtraPrompt + "\n", Size: 14})
+		h = min(max(th+24, minH), maxH)
+	}
+	ui.TextArea(c, &d.ExtraPrompt).Height(h).Placeholder(T("比如：技术文档风格，术语保留英文"))
+	ui.Row(c).Height(14).Justify(ui.End).Children(func() {
+		grip := ui.Box(c).Size(36, 14).Cursor(ui.CursorResizeNS).Tooltip(T("拖动调整高度，点一下恢复自动"))
+		_, dy, pressed := grip.Dragged()
+		clicked := grip.Clicked()
+		if pressed {
+			if dy != 0 {
+				s.extraManual, s.gripMoved = true, true
+				s.extraH = min(max(h+dy, minH), maxH)
+			}
+		} else {
+			// 松手那一帧把手还在指针下面，会算成一次点击：拖过就不算
+			if clicked && !s.gripMoved {
+				s.extraManual = false
+			}
+			s.gripMoved = false
+		}
+		muted := t.TextMuted
+		grip.Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Fill(ui.Rect{X: r.X + 8, Y: r.Y + 4, W: 20, H: 2}, muted, 1)
+			p.Fill(ui.Rect{X: r.X + 8, Y: r.Y + 8, W: 20, H: 2}, muted, 1)
+		})
+	})
+}
+
+// sidebarW 侧边栏宽度；controlPad 是额外要求框的文字区离窗口左右的距离之和（侧边栏 + 页面左右留白 48 + 输入框内边距）
+const sidebarW = 180
+
+const controlPad = sidebarW + 48 + 28
+
+var iconGen = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></svg>`))

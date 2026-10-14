@@ -97,12 +97,12 @@ func buttonColors(t *ui.Theme) (bg, fg, hover ui.Color) {
 }
 
 func (a *App) buttonView(c *ui.Context) {
-	t := c.Theme()
+	t := a.themed(c)
 	bg, fg, hoverBg := buttonColors(t)
 	b := ui.ButtonBase(c).Fill().Center().
-		Background(bg).Border(1, t.Border).Cursor(ui.CursorPointer).Label("翻译").Tooltip("翻译")
+		Background(bg).Border(1, t.Border).Cursor(ui.CursorPointer).Label(T("翻译")).Tooltip(T("翻译"))
 	if a.btnBusy.Load() {
-		b.Cursor(ui.CursorDefault).Label("翻译中").Tooltip("翻译中…")
+		b.Cursor(ui.CursorDefault).Label(T("翻译中")).Tooltip(T("翻译中…"))
 		b.Children(func() { ui.Spinner(c).FontSize(18).TextColor(fg) })
 		return
 	}
@@ -122,7 +122,7 @@ func (a *App) buttonView(c *ui.Context) {
 // ---------- 译文卡片 ----------
 
 func (a *App) popupView(c *ui.Context) {
-	t := c.Theme()
+	t := a.themed(c)
 	p := &a.pop
 	const pad, headH, gap, footH = 12, 22, 8, 32
 	textW := float32(p.w - 2*pad - 10) // 给滚动条留一点
@@ -153,7 +153,7 @@ func (a *App) popupView(c *ui.Context) {
 			}
 			ui.Text(c, p.header).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
 			if !p.toast {
-				x := ui.ButtonBase(c).Size(22, 22).Radius(6).Cursor(ui.CursorPointer).Label("关闭")
+				x := ui.ButtonBase(c).Size(22, 22).Radius(6).Cursor(ui.CursorPointer).Label(T("关闭"))
 				if x.Hovered() {
 					x.Background(t.SurfaceHover)
 				}
@@ -166,7 +166,7 @@ func (a *App) popupView(c *ui.Context) {
 		case statusLoading:
 			ui.Row(c).Height(20).Gap(8).Children(func() {
 				ui.Spinner(c).FontSize(14)
-				ui.Text(c, "翻译中…").FontSize(14).TextColor(t.TextMuted)
+				ui.Text(c, T("翻译中…")).FontSize(14).TextColor(t.TextMuted)
 			})
 		default:
 			color := t.Text
@@ -180,16 +180,16 @@ func (a *App) popupView(c *ui.Context) {
 		if p.status == statusDone {
 			ui.Row(c).Height(footH).Gap(8).Children(func() {
 				ui.Spacer(c)
-				label := "复制"
+				label := T("复制")
 				if p.copied {
-					label = "已复制"
+					label = T("已复制")
 				}
 				if ui.Button(c, label).Clicked() {
 					text := p.text
 					theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
 					p.copied = true
 				}
-				if !p.terminal && ui.PrimaryButton(c, "替换").Clicked() {
+				if !p.terminal && ui.PrimaryButton(c, T("替换")).Clicked() {
 					text := p.text
 					a.hidePopupNow()
 					theWorker.paste(text)
@@ -206,9 +206,25 @@ func (a *App) runDemo() {
 	a.showButton(pt, a.btnGen.Add(1))
 	a.showPopup(popupState{
 		status: statusDone,
-		header: "中文 → English",
+		header: T("中文 → English"),
 		text:   "Could you take a look at why this plugin doesn't take effect after startup? There's nothing in the logs.\n\nSecond paragraph: the meeting is at 3 p.m. tomorrow.",
 		anchor: POINT{pt.X, pt.Y + 70},
 	})
 	time.AfterFunc(8*time.Second, a.quit)
+}
+
+// themed 按配置里的外观（跟随系统 / 浅色 / 深色）给这一帧选主题
+func (a *App) themed(c *ui.Context) *ui.Theme {
+	cfg, _ := a.config()
+	applyTheme(c, cfg.Theme)
+	return c.Theme()
+}
+
+func applyTheme(c *ui.Context, mode string) {
+	switch mode {
+	case "light":
+		c.SetTheme(ui.LightTheme())
+	case "dark":
+		c.SetTheme(ui.DarkTheme())
+	}
 }

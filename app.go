@@ -391,21 +391,21 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 	st := popupState{reqID: id, replace: replace, fg: fg, anchor: anchor, toast: replace, terminal: term}
 
 	if term && strings.TrimSpace(text) == "" {
-		st.toast, st.status, st.header, st.text = false, statusError, "划词翻译", "终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。"
+		st.toast, st.status, st.header, st.text = false, statusError, "Mami", T("终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。")
 		a.endBusy()
 		a.showPopup(st)
 		return
 	}
 	if strings.TrimSpace(text) == "" {
 		log.Printf("grab selection: nothing copied (fg=%#x hotkey=%v)", fg, fromHotkey)
-		st.toast, st.status, st.header, st.text = false, statusError, "划词翻译", "没取到选中的文字。这个窗口可能不支持 Ctrl+C。"
+		st.toast, st.status, st.header, st.text = false, statusError, "Mami", T("没取到选中的文字。这个窗口可能不支持 Ctrl+C。")
 		a.endBusy()
 		a.showPopup(st)
 		return
 	}
 	if n := utf8.RuneCountInString(text); n > cfg.MaxChars {
-		st.toast, st.status, st.header = false, statusError, "划词翻译"
-		st.text = fmt.Sprintf("选中了 %d 个字，超过上限 %d。", n, cfg.MaxChars)
+		st.toast, st.status, st.header = false, statusError, "Mami"
+		st.text = fmt.Sprintf(T("选中了 %d 个字，超过上限 %d。"), n, cfg.MaxChars)
 		a.endBusy()
 		a.showPopup(st)
 		return
@@ -413,7 +413,7 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 	target, header := pickTarget(text, cfg)
 	st.header = header
 	if term && wantReplace {
-		st.header += " · 终端里不替换"
+		st.header += T(" · 终端里不替换")
 	}
 	if quiet {
 		a.quietID.Store(id)
@@ -458,9 +458,9 @@ func (a *App) onQuietResult(id int64, st popupState, res string, err error) {
 		return
 	default:
 		if st.replace && foreground() != st.fg {
-			st.header += " · 窗口已切换，没有替换"
+			st.header += T(" · 窗口已切换，没有替换")
 		} else if st.replace {
-			st.header += " · 期间点了别处，没有替换"
+			st.header += T(" · 期间点了别处，没有替换")
 		}
 		st.status, st.text = statusDone, res
 	}
@@ -484,7 +484,7 @@ func (a *App) onResult(id int64, res string, err error) {
 			a.hidePopupNow()
 			return
 		}
-		p.header += " · 窗口已切换，没有替换"
+		p.header += T(" · 窗口已切换，没有替换")
 	}
 	p.toast, p.status, p.text = false, statusDone, res
 }
@@ -568,7 +568,7 @@ func (a *App) registerHotkeys(cfg Config) []string {
 		}
 		replace := hk.replace
 		if err := mygo.GlobalShortcut.Register(acc, func() { go a.onHotkey(replace) }); err != nil {
-			problems = append(problems, acc+"："+err.Error())
+			problems = append(problems, acc+T("：")+err.Error())
 		}
 	}
 	return problems
@@ -576,7 +576,7 @@ func (a *App) registerHotkeys(cfg Config) []string {
 
 func (a *App) createTray() {
 	var err error
-	a.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayPNG, ToolTip: "划词翻译"})
+	a.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayPNG, ToolTip: "Mami"})
 	if err != nil {
 		log.Println("tray:", err)
 		return
@@ -586,13 +586,13 @@ func (a *App) createTray() {
 	a.tray.OnRightClick(func() {
 		cfg, _ := a.config()
 		menu := mygo.NewMenu([]*mygo.MenuItem{
-			{Label: "设置…", Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
-			{Label: "划词后显示翻译按钮", Type: mygo.MenuItemCheckbox, Checked: cfg.ShowButton, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
+			{Label: T("设置…"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
+			{Label: T("划词后显示翻译按钮"), Type: mygo.MenuItemCheckbox, Checked: cfg.ShowButton, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
 				a.toggleButton(item.Checked)
 			}},
-			{Label: "打开日志", Click: func(*mygo.MenuItem, *mygo.Window) { mygo.Shell.OpenPath(a.logPath) }},
+			{Label: T("打开日志"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.Shell.OpenPath(a.logPath) }},
 			mygo.Separator(),
-			{Label: "退出", Click: func(*mygo.MenuItem, *mygo.Window) { a.quit() }},
+			{Label: T("退出"), Click: func(*mygo.MenuItem, *mygo.Window) { a.quit() }},
 		})
 		a.tray.SetMenu(menu)
 		defer a.tray.SetMenu(nil)
@@ -605,9 +605,9 @@ func (a *App) updateTrayTip() {
 		return
 	}
 	cfg, _ := a.config()
-	tip := "划词翻译 · " + cfg.Model
+	tip := "Mami · " + cfg.Model
 	if cfg.Hotkey != "" {
-		tip += " · " + cfg.Hotkey + " 原地替换"
+		tip += " · " + cfg.Hotkey + T(" 原地替换")
 	}
 	a.tray.SetToolTip(tip)
 }
