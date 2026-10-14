@@ -161,7 +161,8 @@ func (a *App) popupView(c *ui.Context) {
 	if p.status == statusDone {
 		want += gap + footH
 	}
-	if want != p.h && a.popVisible.Load() {
+	// 边收边显示时高度只增不减：换行位置一变就缩回去再撑开，卡片会上下跳
+	if a.popVisible.Load() && (want > p.h || (want < p.h && !streaming)) {
 		p.h = want
 		w, anchor := p.w, p.anchor
 		go a.resizePopup(w, want, anchor)
@@ -182,6 +183,7 @@ func (a *App) popupView(c *ui.Context) {
 					x.Background(t.SurfaceHover)
 				}
 				if x.Children(func() { ui.Icon(c, iconClose).FontSize(14).TextColor(t.TextMuted) }).Clicked() {
+					a.noteDismiss("close")
 					a.hidePopupNow()
 				}
 			}
@@ -211,10 +213,13 @@ func (a *App) popupView(c *ui.Context) {
 				if textButton(c, label).Clicked() {
 					text := p.text
 					theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
-					p.copied = true
+					p.copied, p.acted = true, true
+					a.recordAction(p.histID, "copy")
 				}
 				if !p.terminal && accentButton(c, T("替换")).Clicked() {
 					text := p.text
+					p.acted = true
+					a.recordAction(p.histID, "replace")
 					a.hidePopupNow()
 					theWorker.paste(text)
 				}

@@ -35,6 +35,9 @@ type Config struct {
 	DisableHotkeys   bool     `json:"disable_hotkeys"` // 总开关：true 时一个全局快捷键都不注册
 	Language         string   `json:"language"`        // 界面语言：auto / zh / en / ja
 	Theme            string   `json:"theme"`           // 外观：auto / light / dark
+	StreamCard       bool     `json:"stream_card"`     // 卡片里边翻边显示（关掉就整段出来再显示）
+	History          bool     `json:"history"`         // 保存翻译记录到 history/*.jsonl
+	HistoryDays      int      `json:"history_days"`    // 记录保留几天，0 = 永久
 }
 
 func defaultConfig() Config {
@@ -57,6 +60,7 @@ func defaultConfig() Config {
 		ExcludeProcesses: []string{},
 		Language:         "auto",
 		Theme:            "auto",
+		HistoryDays:      30,
 	}
 }
 
@@ -91,6 +95,9 @@ func (c *Config) normalize() {
 	}
 	if c.ButtonTimeoutMs <= 0 {
 		c.ButtonTimeoutMs = 4000
+	}
+	if c.HistoryDays < 0 {
+		c.HistoryDays = 30
 	}
 	if c.ExcludeProcesses == nil {
 		c.ExcludeProcesses = []string{}

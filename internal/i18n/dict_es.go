@@ -78,4 +78,19 @@ var dictES = map[string]string{
 	"B 站 Index-Translate（免费）":     "Bilibili Index-Translate (gratis)",
 	"腾讯 TokenHub · Hy-MT2":        "Tencent TokenHub · Hy-MT2",
 	"先在「服务商」里选一家，点「测试连接」确认能用，再保存": "Elige un proveedor, haz clic en «Probar conexión» para comprobar que funciona y guarda",
+
+	// 边翻边显示、翻译记录
+	"边翻边显示": "Mostrar mientras traduce",
+	"模型一边写，卡片一边出字；关掉就等整段译文出来再显示": "La tarjeta se rellena mientras el modelo escribe. Desactivado: se muestra la traducción completa",
+	"保存翻译记录": "Guardar historial de traducciones",
+	"原文、发给模型的提示词和译文按天存成文件，之后可以交给 AI 分析哪里没翻好": "Guarda el original, el prompt enviado al modelo y la traducción en archivos diarios para que una IA los revise después",
+	"保留时间":       "Conservar",
+	"更早的记录会自动删除": "Los registros más antiguos se eliminan automáticamente",
+	"7 天":        "7 días",
+	"30 天":       "30 días",
+	"90 天":       "90 días",
+	"永久":         "Siempre",
+	"记录只存在这台电脑上，终端里的翻译不记。": "El historial se queda en este equipo. Las traducciones en terminales no se guardan.",
+	"打开记录文件夹": "Abrir carpeta del historial",
+	"打开翻译记录":  "Abrir historial de traducciones",
 }

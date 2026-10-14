@@ -126,4 +126,19 @@ var Dict = map[string][2]string{
 	"B 站 Index-Translate（免费）":     {"Bilibili Index-Translate (free)", "Bilibili Index-Translate（無料）"},
 	"腾讯 TokenHub · Hy-MT2":        {"Tencent TokenHub · Hy-MT2", "Tencent TokenHub · Hy-MT2"},
 	"先在「服务商」里选一家，点「测试连接」确认能用，再保存": {"Pick a provider, click Test connection to make sure it works, then save", "まず「プロバイダー」を選び、「接続テスト」で使えることを確認してから保存してください"},
+
+	// 边翻边显示、翻译记录
+	"边翻边显示": {"Show while translating", "翻訳中から表示"},
+	"模型一边写，卡片一边出字；关掉就等整段译文出来再显示": {"The card fills in as the model writes. Off: show the whole translation at once", "モデルが書くそばからカードに表示。オフなら訳文がそろってから表示"},
+	"保存翻译记录": {"Save translation history", "翻訳履歴を保存"},
+	"原文、发给模型的提示词和译文按天存成文件，之后可以交给 AI 分析哪里没翻好": {"Saves the original, the prompt sent to the model and the translation in daily files, so an AI can review them later", "原文・モデルに送ったプロンプト・訳文を日ごとのファイルに保存し、あとで AI に分析させられます"},
+	"保留时间":       {"Keep for", "保存期間"},
+	"更早的记录会自动删除": {"Older records are deleted automatically", "それより古い履歴は自動で削除"},
+	"7 天":        {"7 days", "7 日"},
+	"30 天":       {"30 days", "30 日"},
+	"90 天":       {"90 days", "90 日"},
+	"永久":         {"Forever", "無期限"},
+	"记录只存在这台电脑上，终端里的翻译不记。": {"History stays on this PC. Translations in terminals are not saved.", "履歴はこの PC にだけ保存されます。ターミナルでの翻訳は保存しません。"},
+	"打开记录文件夹": {"Open history folder", "履歴フォルダーを開く"},
+	"打开翻译记录":  {"Open translation history", "翻訳履歴を開く"},
 }

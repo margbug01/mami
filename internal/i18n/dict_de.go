@@ -78,4 +78,19 @@ var dictDE = map[string]string{
 	"B 站 Index-Translate（免费）":     "Bilibili Index-Translate (kostenlos)",
 	"腾讯 TokenHub · Hy-MT2":        "Tencent TokenHub · Hy-MT2",
 	"先在「服务商」里选一家，点「测试连接」确认能用，再保存": "Anbieter wählen, mit „Verbindung testen“ prüfen, dann speichern",
+
+	// 边翻边显示、翻译记录
+	"边翻边显示": "Während der Übersetzung anzeigen",
+	"模型一边写，卡片一边出字；关掉就等整段译文出来再显示": "Die Karte füllt sich, während das Modell schreibt. Aus: Übersetzung erst vollständig anzeigen",
+	"保存翻译记录": "Übersetzungsverlauf speichern",
+	"原文、发给模型的提示词和译文按天存成文件，之后可以交给 AI 分析哪里没翻好": "Speichert Original, an das Modell gesendeten Prompt und Übersetzung in Tagesdateien, damit eine KI sie später auswerten kann",
+	"保留时间":       "Aufbewahren",
+	"更早的记录会自动删除": "Ältere Einträge werden automatisch gelöscht",
+	"7 天":        "7 Tage",
+	"30 天":       "30 Tage",
+	"90 天":       "90 Tage",
+	"永久":         "Unbegrenzt",
+	"记录只存在这台电脑上，终端里的翻译不记。": "Der Verlauf bleibt auf diesem PC. Übersetzungen in Terminals werden nicht gespeichert.",
+	"打开记录文件夹": "Verlaufsordner öffnen",
+	"打开翻译记录":  "Übersetzungsverlauf öffnen",
 }

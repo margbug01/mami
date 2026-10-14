@@ -172,6 +172,7 @@ func TestSnapSettingsI18n(t *testing.T) {
 		a := &App{avatar: loadAvatar()}
 		draft := defaultConfig()
 		draft.Language, draft.Theme = c.lang, c.theme
+		draft.History = true // 把记录相关的几行也画出来
 		draft.ExtraPrompt = "Translate for an AI prompt: be precise, keep structure, placeholders like {name} untouched, do not translate code or file paths."
 		a.set = settingsState{draft: draft, page: c.page, advanced: true, compat: true}
 		tt := ui.NewTester(a.settingsView, settingsW, settingsH)

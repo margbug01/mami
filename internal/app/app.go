@@ -43,12 +43,15 @@ type popupState struct {
 	fg       uintptr
 	anchor   POINT
 	copied   bool
-	terminal bool // 来自终端：卡片只给「复制」
-	w, h     int  // 当前窗口内容尺寸，view 量出新高度时会改
+	terminal bool   // 来自终端：卡片只给「复制」
+	histID   string // 翻译记录里这一条的 id；没开记录时为空
+	acted    bool   // 复制/替换/关闭过，关掉卡片时不再记 dismiss
+	w, h     int    // 当前窗口内容尺寸，view 量出新高度时会改
 }
 
 type App struct {
 	cfgPath, logPath string
+	hist             *history
 	pid              uint32
 
 	mu  sync.Mutex
@@ -390,6 +393,9 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 	}
 	id := a.reqSeq.Add(1)
 	st := popupState{reqID: id, replace: replace, fg: fg, anchor: anchor, toast: replace, terminal: term}
+	if cfg.History && !term { // 终端里选的多半是命令输出，不记
+		st.histID = historyID(time.Now(), id)
+	}
 
 	if term && strings.TrimSpace(text) == "" {
 		st.toast, st.status, st.header, st.text = false, statusError, "Mami", T("终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。")
@@ -429,22 +435,40 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSec)*time.Second)
 		defer cancel()
 		start := time.Now()
-		var onPartial func(string)
-		if !quiet && !replace { // 只有正在显示的卡片才边收边显示
-			var last time.Time
-			onPartial = func(p string) {
-				if time.Since(last) < 50*time.Millisecond {
-					return // 收得太密就跳过几帧，最后的结果总会整段填进去
-				}
-				last = time.Now()
-				a.popWin.Update(func() { a.onPartial(id, p) })
+		var first time.Duration
+		var last time.Time
+		// 请求总是流式的（断了还能留下半截）；只有开了「边翻边显示」、卡片正显示着，才把半截填进卡片
+		showPartial := cfg.StreamCard && !quiet && !replace
+		res, err := tr.TranslateStream(ctx, text, target, func(p string) {
+			if first == 0 {
+				first = time.Since(start)
 			}
-		}
-		res, err := tr.TranslateStream(ctx, text, target, onPartial)
+			if !showPartial || time.Since(last) < 150*time.Millisecond {
+				return // 收得太密就跳过几帧，最后的结果总会整段填进去
+			}
+			last = time.Now()
+			a.popWin.Update(func() { a.onPartial(id, p) })
+		})
+		total := time.Since(start)
 		if err != nil {
-			log.Printf("translate #%d failed after %v: %v", id, time.Since(start).Round(time.Millisecond), err)
+			log.Printf("translate #%d failed after %v: %v", id, total.Round(time.Millisecond), err)
 		} else {
-			log.Printf("translate #%d ok in %v", id, time.Since(start).Round(time.Millisecond))
+			log.Printf("translate #%d ok in %v", id, total.Round(time.Millisecond))
+		}
+		if st.histID != "" {
+			e := historyEntry{ID: st.histID, Time: start.Format(time.RFC3339), App: filepath.Base(processName(windowPID(fg))),
+				Mode: "card", FirstMs: first.Milliseconds(), TotalMs: total.Milliseconds(), Translation: res}
+			if replace {
+				e.Mode = "replace"
+			}
+			var part *errPartial
+			if errors.As(err, &part) {
+				e.Translation, e.Incomplete = part.text, true
+			}
+			if err != nil {
+				e.Error = err.Error()
+			}
+			a.recordTranslation(cfg, tr, e, text, target)
 		}
 		if quiet {
 			a.onQuietResult(id, st, res, err)
@@ -471,6 +495,7 @@ func (a *App) onQuietResult(id int64, st popupState, res string, err error) {
 		st.status, st.text = statusError, err.Error()
 	case st.replace && foreground() == st.fg && !a.busyMoved.Load():
 		theWorker.paste(res)
+		a.recordAction(st.histID, "replace")
 		return
 	default:
 		if st.replace && foreground() != st.fg {
@@ -512,6 +537,8 @@ func (a *App) onResult(id int64, res string, err error) {
 	if p.replace {
 		if foreground() == p.fg {
 			theWorker.paste(res)
+			p.acted = true
+			a.recordAction(p.histID, "replace")
 			a.hidePopupNow()
 			return
 		}
@@ -560,8 +587,20 @@ func (a *App) placePopup(anchor POINT) {
 func (a *App) hidePopup() {
 	a.popBusy.Store(false)
 	if a.popVisible.Swap(false) {
-		a.popWin.Update(func() { a.pop.reqID = 0 })
+		a.popWin.Update(func() {
+			a.noteDismiss("dismiss")
+			a.pop.reqID = 0
+		})
 		a.popWin.Hide()
+	}
+}
+
+// noteDismiss 在主线程上：译文卡片什么都没做就关掉了，记一笔（close=点了 X，dismiss=点别处/被新翻译顶掉）
+func (a *App) noteDismiss(action string) {
+	p := &a.pop
+	if p.status == statusDone && !p.acted && p.histID != "" {
+		p.acted = true
+		a.recordAction(p.histID, action)
 	}
 }
 
@@ -569,6 +608,7 @@ func (a *App) hidePopup() {
 func (a *App) hidePopupNow() {
 	a.popBusy.Store(false)
 	if a.popVisible.Swap(false) {
+		a.noteDismiss("dismiss")
 		a.pop.reqID = 0
 		a.popWin.Hide()
 	}
@@ -625,6 +665,7 @@ func (a *App) createTray() {
 				a.toggleButton(item.Checked)
 			}},
 			{Label: T("打开日志"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.Shell.OpenPath(a.logPath) }},
+			{Label: T("打开翻译记录"), Disabled: !cfg.History, Click: func(*mygo.MenuItem, *mygo.Window) { a.openHistory() }},
 			mygo.Separator(),
 			{Label: T("退出"), Click: func(*mygo.MenuItem, *mygo.Window) { a.quit() }},
 		})

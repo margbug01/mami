@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -248,6 +249,8 @@ func (a *App) pageTranslate(c *ui.Context, d *Config) {
 		ui.Text(c, T("追加给模型的话，比如风格、术语处理")).FontSize(12).TextColor(c.Theme().TextMuted)
 		a.extraPromptBox(c, d)
 	})
+	ui.Divider(c)
+	switchRow(c, T("边翻边显示"), T("模型一边写，卡片一边出字；关掉就等整段译文出来再显示"), &d.StreamCard)
 }
 
 func (a *App) pageHotkeys(c *ui.Context, d *Config) {
@@ -472,6 +475,7 @@ func (a *App) saveDraft() {
 		}
 	}
 	a.updateTrayTip()
+	go a.hist.prune(cfg.HistoryDays)
 	if !cfg.ShowButton {
 		a.hideButton()
 	}
@@ -571,6 +575,23 @@ func (a *App) pageGeneral(c *ui.Context, d *Config) {
 		optionSelect(c, &d.Theme, []option{{"auto", T("跟随系统")}, {"light", T("浅色")}, {"dark", T("深色")}})
 	})
 	switchRow(c, T("开机自启"), T("登录 Windows 后在托盘里自动运行"), &a.set.openAtLogin)
+	ui.Divider(c)
+	switchRow(c, T("保存翻译记录"), T("原文、发给模型的提示词和译文按天存成文件，之后可以交给 AI 分析哪里没翻好"), &d.History)
+	ui.Divider(c)
+	if !d.History {
+		return
+	}
+	settingRow(c, T("保留时间"), T("更早的记录会自动删除"), func() {
+		v := strconv.Itoa(d.HistoryDays)
+		optionSelect(c, &v, []option{{"7", T("7 天")}, {"30", T("30 天")}, {"90", T("90 天")}, {"0", T("永久")}})
+		d.HistoryDays, _ = strconv.Atoi(v)
+	})
+	ui.Row(c).Padding(12, 0).Children(func() {
+		ui.Text(c, T("记录只存在这台电脑上，终端里的翻译不记。")).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
+		if textButton(c, T("打开记录文件夹")).Clicked() {
+			a.openHistory()
+		}
+	})
 }
 
 // extraPromptBox 额外要求输入框：默认按内容自动长短，右下角的把手可以拖着调高度，点一下把手恢复自动

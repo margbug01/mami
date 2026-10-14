@@ -46,6 +46,7 @@ func Run() {
 		}
 		a.logPath = filepath.Join(logDir, "mami.log")
 	}
+	a.hist = &history{dir: filepath.Join(filepath.Dir(a.cfgPath), "history")}
 	if f := openLog(a.logPath); f != nil {
 		log.SetOutput(f)
 		defer f.Close()
@@ -97,6 +98,7 @@ func Run() {
 			probs = append(probs, T("鼠标钩子挂载失败，只能用快捷键"))
 		}
 		go a.mouseLoop()
+		go a.pruneLoop()
 		switch {
 		case cfgErr != nil:
 			a.openSettings()

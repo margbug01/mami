@@ -149,6 +149,22 @@ func partialOutput(s string) string {
 	return s
 }
 
+// Messages 是这次会发给模型的 messages，翻译记录里原样存一份
+func (t *Translator) Messages(text, target string) []map[string]string {
+	switch {
+	case isIndexTranslate(t.cfg.Model):
+		// B 站 Index-Translate 是专门训的翻译模型：按它自己的提示词格式发一条 user 消息
+		return []map[string]string{{"role": "user", "content": indexPrompt(text, target, t.cfg.ExtraPrompt)}}
+	case isHyMT(t.cfg.Model):
+		// 腾讯混元翻译模型：官方建议不带 system，按它的模板发一条 user 消息
+		return []map[string]string{{"role": "user", "content": hyPrompt(text, target, t.cfg.ExtraPrompt)}}
+	}
+	return []map[string]string{
+		{"role": "system", "content": systemPrompt(target, t.cfg.ExtraPrompt)},
+		{"role": "user", "content": text},
+	}
+}
+
 // Translate 等整段译文出来再返回
 func (t *Translator) Translate(ctx context.Context, text, target string) (string, error) {
 	return t.TranslateStream(ctx, text, target, nil)
@@ -170,22 +186,15 @@ func (t *Translator) TranslateStream(ctx context.Context, text, target string, o
 		return "", errors.New(T("还没填 API Key：托盘图标右键 → 设置"))
 	}
 	body := map[string]any{
-		"model": t.cfg.Model,
-		"messages": []map[string]string{
-			{"role": "system", "content": systemPrompt(target, t.cfg.ExtraPrompt)},
-			{"role": "user", "content": text},
-		},
-		"stream": true,
+		"model":    t.cfg.Model,
+		"messages": t.Messages(text, target),
+		"stream":   true,
 	}
 	if isIndexTranslate(t.cfg.Model) {
-		// B 站 Index-Translate 是专门训的翻译模型：按它自己的提示词格式发一条 user 消息，关掉思考
-		body["messages"] = []map[string]string{{"role": "user", "content": indexPrompt(text, target, t.cfg.ExtraPrompt)}}
-		body["chat_template_kwargs"] = map[string]any{"enable_thinking": false}
+		body["chat_template_kwargs"] = map[string]any{"enable_thinking": false} // 关掉思考
 		body["temperature"] = 0
 	}
 	if isHyMT(t.cfg.Model) {
-		// 腾讯混元翻译模型：官方建议不带 system，按它的模板发一条 user 消息
-		body["messages"] = []map[string]string{{"role": "user", "content": hyPrompt(text, target, t.cfg.ExtraPrompt)}}
 		body["temperature"] = 0
 	}
 	if t.cfg.Temperature != nil {
@@ -197,7 +206,7 @@ func (t *Translator) TranslateStream(ctx context.Context, text, target string, o
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mami/2.2")
+	req.Header.Set("User-Agent", "Mami/2.3")
 	req.Header.Set("Accept", "text/event-stream, application/json")
 	if k := strings.TrimSpace(t.cfg.APIKey); k != "" { // B 站免费接口不要 key，空着就不发
 		req.Header.Set("Authorization", "Bearer "+k)
