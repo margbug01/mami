@@ -94,18 +94,19 @@ const (
 	VK_RWIN         = 0x5C
 	VK_MASK         = 0xE8 // 未分配的虚拟键：松开 Alt 时不让菜单栏被激活
 
-	GWL_EXSTYLE       = ^uintptr(19)                                                   // -20
-	GWL_STYLE         = ^uintptr(15)                                                   // -16
-	WS_FRAME_BITS     = 0x00C00000 | 0x00080000 | 0x00040000 | 0x00020000 | 0x00010000 // CAPTION|SYSMENU|THICKFRAME|MINIMIZEBOX|MAXIMIZEBOX
-	WS_EX_TOOLWINDOW  = 0x00000080
-	WS_EX_NOACTIVATE  = 0x08000000
-	HWND_TOPMOST      = ^uintptr(0) // -1
-	HWND_MESSAGE      = ^uintptr(2) // -3
-	SWP_NOSIZE        = 0x0001
-	SWP_NOACTIVATE    = 0x0010
-	SWP_FRAMECHANGED  = 0x0020
-	SWP_NOMOVE        = 0x0002
-	DWMWA_CORNER_PREF = 33
+	GWL_EXSTYLE              = ^uintptr(19)                                                   // -20
+	GWL_STYLE                = ^uintptr(15)                                                   // -16
+	WS_FRAME_BITS            = 0x00C00000 | 0x00080000 | 0x00040000 | 0x00020000 | 0x00010000 // CAPTION|SYSMENU|THICKFRAME|MINIMIZEBOX|MAXIMIZEBOX
+	WS_EX_TOOLWINDOW         = 0x00000080
+	WS_EX_NOACTIVATE         = 0x08000000
+	HWND_TOPMOST             = ^uintptr(0) // -1
+	HWND_MESSAGE             = ^uintptr(2) // -3
+	SWP_NOSIZE               = 0x0001
+	SWP_NOACTIVATE           = 0x0010
+	SWP_FRAMECHANGED         = 0x0020
+	SWP_NOMOVE               = 0x0002
+	DWMWA_CORNER_PREF        = 33
+	DWMWA_NCRENDERING_POLICY = 2
 )
 
 type POINT struct{ X, Y int32 }
@@ -231,6 +232,9 @@ func makeFloating(h uintptr) {
 	pSetWindowPos.Call(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_FRAMECHANGED)
 	pref := int32(2) // Win11 圆角
 	pDwmSetWindowAttribute.Call(h, DWMWA_CORNER_PREF, uintptr(unsafe.Pointer(&pref)), 4)
+	// 关掉系统给无边框窗口加的阴影（按钮和卡片四周那圈暗影）
+	nc := int32(1) // DWMNCRP_DISABLED
+	pDwmSetWindowAttribute.Call(h, DWMWA_NCRENDERING_POLICY, uintptr(unsafe.Pointer(&nc)), 4)
 }
 
 // moveTo 按物理像素摆窗口（钩子和 GetCursorPos 给的都是物理像素）

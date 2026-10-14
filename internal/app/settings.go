@@ -290,8 +290,7 @@ func langSelect(c *ui.Context, value *string) {
 		ui.Icon(c, iconChevron).FontSize(14).TextColor(t.TextMuted)
 	})
 	sel.Popup(func(panel ui.Element) {
-		panel.Margin(4, 0, 0, 0).Padding(4).Radius(t.Radius+2).Background(t.Background).Border(1, t.Border).
-			Shadow(0, 6, 18, 0, ui.RGBA(0, 0, 0, 0.35))
+		panel.Margin(4, 0, 0, 0).Padding(4).Radius(t.Radius+2).Background(t.Background).Border(1, t.Border)
 		ui.Scroll(c).Height(langListH).Children(func() {
 			ui.Column(c).Gap(1).Children(func() {
 				for _, l := range opts {
