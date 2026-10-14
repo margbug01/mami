@@ -37,7 +37,7 @@
 - **终端里也安全。** 在 Windows Terminal 里一个键都不发（多发一个 `Ctrl+C` 就会打断你正在跑的程序），改用 UI Automation 读选区，卡片只给「复制」。
 - **按模型拼提示词。** 腾讯 **Hy-MT2**、B 站 **Index-Translate** 这类翻译模型有专用格式，其他模型（DeepSeek、GPT、Qwen…）用通用系统提示词。
 - **20 种目标语言**、额外要求/术语表、代理、按程序排除、开机自启。
-- **浅色和深色主题**，跟随 Windows 或手动选。
+- **浅色和深色主题**，跟随 Windows 或手动选。界面字体是 [MiSans](https://hyperos.mi.com/font)（内置了子集）。
 - **9 种界面语言**：简体中文、繁體中文、English、日本語、한국어、Español、Français、Deutsch、Русский。
 
 ## 截图

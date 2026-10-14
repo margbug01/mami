@@ -221,10 +221,17 @@ func (a *App) themed(c *ui.Context) *ui.Theme {
 }
 
 func applyTheme(c *ui.Context, mode string) {
+	registerFonts()
+	var t *ui.Theme
 	switch mode {
 	case "light":
-		c.SetTheme(ui.LightTheme())
+		t = ui.LightTheme()
 	case "dark":
-		c.SetTheme(ui.DarkTheme())
+		t = ui.DarkTheme()
+	default: // 跟随系统：拿系统给的主题改一份，只换字体
+		cur := *c.Theme()
+		t = &cur
 	}
+	t.Font = fontStack
+	c.SetTheme(t)
 }
