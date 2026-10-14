@@ -1,0 +1,57 @@
+name: Release
+
+# 推 v* 标签就构建并发版：版本号以 mygo.json 为准，和标签对不上直接失败，
+# 免得 README 写的是新版、Releases 里挂的还是旧包。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build, e.g. v2.2.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check version matches tag
+        run: |
+          ver=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' mygo.json)
+          echo "mygo.json version: $ver, tag: $TAG"
+          [ "v$ver" = "$TAG" ] || { echo "::error::mygo.json says $ver but tag is $TAG"; exit 1; }
+          echo "VERSION=$ver" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go tool mygo build
+
+      - name: Publish
+        run: |
+          dir=build/windows-amd64
+          setup="$dir/Mami Setup $VERSION amd64.exe"
+          ls -l "$dir"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$setup" "$dir/Mami.exe" --clobber
+          else
+            gh release create "$TAG" "$setup" "$dir/Mami.exe" --title "Mami $VERSION" --generate-notes
+          fi

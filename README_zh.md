@@ -33,6 +33,7 @@
 - **`Alt+T` 原地替换。** 没选中文字时，先全选整个输入框，翻译完再贴回去。
 - **只在输入框里弹。** 用 UI Automation 区分输入框和网页正文，看网页时不会到处冒按钮；双击空输入框也不会触发。
 - **三种点击后的显示方式。** 先弹「翻译中」卡片、出结果再弹卡片、或者直接替换。后两种模式下按钮会变成转圈，出错时一定会弹卡片。
+- **边翻边显示。** 模型还在写，卡片里就先出字；网络中途断了，已经收到的那一半会留着（标明不完整）。
 - **不抢焦点。** 浮窗是不激活窗口，选区不会丢；翻译完会还原你的剪贴板。
 - **终端里也安全。** 在 Windows Terminal 里一个键都不发（多发一个 `Ctrl+C` 就会打断你正在跑的程序），改用 UI Automation 读选区，卡片只给「复制」。
 - **按模型拼提示词。** 腾讯 **Hy-MT2**、B 站 **Index-Translate** 这类翻译模型有专用格式，其他模型（DeepSeek、GPT、Qwen…）用通用系统提示词。
@@ -64,7 +65,7 @@
 
 到 [Releases](https://github.com/margbug01/mami/releases/latest) 下载 `Mami Setup x.y.z amd64.exe`（安装包）或 `Mami.exe`（绿色版）。Windows 10/11，x64。
 
-第一次启动会打开设置窗口。默认指向 B 站**免费**的 Index-Translate-35B 接口（不用 Key），装好就能试。这个免费接口高峰期会过载，可能返回 504。
+第一次启动会打开设置窗口的「接口」页。在「服务商」里选一家（B 站免费、腾讯 TokenHub、OpenRouter、DeepSeek 或自定义），接口地址和模型会自动填好，点「测试连接」确认能用再保存。没改之前用的是 B 站**免费**的 Index-Translate-35B 接口（不用 Key），高峰期会过载，可能返回 504。
 
 ## 推荐的接口
 
@@ -100,7 +101,7 @@
 
 设置分五页：**接口**、**翻译**、**快捷键**、**划词按钮**，以及**通用**（界面语言、主题、开机自启）。语言和主题改了立刻预览，点保存才生效。
 
-配置在 `%AppData%\Mami\config.json`，日志在 `%AppData%\Mami\logs\mami.log`。API Key 只存在这个文件里，只发给你填的接口。
+配置在 `%AppData%\Mami\config.json`，日志在 `%AppData%\Mami\logs\mami.log`。API Key 用 Windows DPAPI 加密后存在这个文件里（只有这台电脑上你的 Windows 账户解得开；旧版本存的明文 key 下次启动时自动加密），只发给你填的接口。
 
 ## 已知限制
 
@@ -108,7 +109,7 @@
 - 不支持 `Ctrl+C` 的地方（游戏、远程桌面）取不到字；管理员权限运行的程序，Mami 也得用管理员权限运行。
 - 终端里不能原地替换：粘贴不会删掉选中的字。
 - 只在 Windows 11、125% 缩放、单显示器上测过。
-- 韩语、西班牙语、法语、德语、俄语的界面翻译是机器写的，还没有母语者审过，欢迎指正。
+- 中英文以外的界面翻译逐条核对过意思、术语统一和 Windows 的叫法，但还没有母语者审过，欢迎指正。
 
 ## 构建
 
@@ -118,6 +119,8 @@
 go test ./...
 go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS 安装包
 ```
+
+推一个 `v*` 标签会跑 `.github/workflows/release.yml`：测试、构建，把安装包和绿色版传到这个 Release。标签必须和 `mygo.json` 里的 `version` 一致，否则直接失败。
 
 `Mami.exe -demo` 会画出按钮和一张示例卡片，用来看界面。`docs/` 里的截图是离屏渲染出来的：`MAMI_DOCS=$PWD/docs go test ./internal/app -run TestSnapDocs`。
 
@@ -133,7 +136,8 @@ go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS 安装包
 | `hook.go` | 低级鼠标 + 键盘钩子，单独一条 OS 线程 |
 | `uia.go` | 原生 COM 调 UI Automation：焦点是不是输入框、选区在哪、终端选区文字 |
 | `worker.go` / `clipboard.go` | 消息窗口线程：持有剪贴板、模拟 `Ctrl+C` / `Ctrl+V` |
-| `translate.go` / `config.go` | 接口请求、按模型拼提示词、配置读写 |
+| `translate.go` / `config.go` | 流式接口请求、按模型拼提示词、配置读写 |
+| `dpapi.go` | 用 Windows DPAPI 加密配置里的 API Key |
 
 窗口、托盘、全局快捷键、单实例、开机自启交给 MyGo；全局钩子、跨进程读选区、不抢焦点的浮窗是纯 Win32（`syscall`），不用 cgo。
 

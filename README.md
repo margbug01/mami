@@ -34,6 +34,7 @@ I write a lot of prompts in Chinese and send them in English. Copy, open a trans
 - **Only in input boxes.** UI Automation tells an editable field from page text, so reading a web page doesn't scatter buttons around. Double-clicking an empty box doesn't trigger it either.
 - **Three click modes.** Show a loading card, show the card only when the result arrives, or replace directly. In the quiet modes the button turns into a spinner; errors always show a card.
 - **Never steals focus.** Floating windows are non-activating, so your selection stays put. Your clipboard is saved and restored afterwards.
+- **Streams as it translates.** The card fills in while the model is still writing. If the connection drops halfway, you keep the part that arrived (marked as incomplete).
 - **Safe in terminals.** In Windows Terminal it sends *no* keystrokes (a stray `Ctrl+C` would kill your running program) and reads the selection through UI Automation. The card shows Copy only.
 - **Model-aware prompts.** Dedicated formats for translation models such as Tencent **Hy-MT2** and bilibili **Index-Translate**, and a generic system prompt for everything else (DeepSeek, GPT, Qwen…).
 - **20 target languages**, extra instructions and glossary, proxy, per-app exclusions, start at login.
@@ -64,7 +65,7 @@ I write a lot of prompts in Chinese and send them in English. Copy, open a trans
 
 Download `Mami Setup x.y.z amd64.exe` (installer) or `Mami.exe` (portable) from [Releases](https://github.com/margbug01/mami/releases/latest). Windows 10/11, x64.
 
-On first launch the settings window opens. Out of the box it points at bilibili's **free** Index-Translate-35B endpoint (no key needed) so you can try it immediately. That free endpoint gets overloaded at peak hours and may return 504.
+On first launch the settings window opens on the API page. Pick a **Provider** (bilibili free, Tencent TokenHub, OpenRouter, DeepSeek, or Custom) and it fills in the endpoint and model; press **Test connection** to check it before saving. Until you change it, Mami uses bilibili's **free** Index-Translate-35B endpoint (no key needed), which gets overloaded at peak hours and may return 504.
 
 ## Recommended backends
 
@@ -100,7 +101,7 @@ Direction is automatic. Text containing Chinese goes to your **Chinese to** lang
 
 Settings has five pages: **API**, **Translation**, **Shortcuts**, **Selection button**, and **General** (interface language, theme, start at login). Language and theme changes preview live and apply when you press Save.
 
-Config lives in `%AppData%\Mami\config.json`, logs in `%AppData%\Mami\logs\mami.log`. Your API key stays in that file and is only sent to the endpoint you configured.
+Config lives in `%AppData%\Mami\config.json`, logs in `%AppData%\Mami\logs\mami.log`. Your API key is stored there encrypted with Windows DPAPI (only your Windows account on this PC can decrypt it; keys saved by older versions are encrypted on the next start) and is only sent to the endpoint you configured.
 
 ## Known limitations
 
@@ -108,7 +109,7 @@ Config lives in `%AppData%\Mami\config.json`, logs in `%AppData%\Mami\logs\mami.
 - Apps that don't support `Ctrl+C` (games, remote desktop) can't be read. Elevated apps need Mami running elevated too.
 - In terminals there is no in-place replace, because pasting doesn't remove the selected text.
 - Only tested on Windows 11 at 125% scaling, single monitor.
-- The interface translations for Korean, Spanish, French, German and Russian are machine-written and not yet reviewed by native speakers. Corrections are welcome.
+- The interface translations other than Chinese and English were checked for meaning, consistent terms and Windows wording, but not by native speakers. Corrections are welcome.
 
 ## Build
 
@@ -118,6 +119,8 @@ Requires Go 1.27.1+ (`GOTOOLCHAIN=auto` downloads it).
 go test ./...
 go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS installer
 ```
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`: it tests, builds and publishes the installer and portable exe to that release. The tag must match `version` in `mygo.json`, or the build fails.
 
 `Mami.exe -demo` draws the button and a sample card for a quick UI check. The screenshots in `docs/` are rendered off-screen: `MAMI_DOCS=$PWD/docs go test ./internal/app -run TestSnapDocs`.
 
@@ -133,7 +136,8 @@ go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS installer
 | `hook.go` | Low-level mouse and keyboard hooks on a dedicated OS thread |
 | `uia.go` | UI Automation via raw COM vtables: is the focus editable, where is the selection, terminal selection text |
 | `worker.go` / `clipboard.go` | Message-only window that owns the clipboard and sends `Ctrl+C` / `Ctrl+V` |
-| `translate.go` / `config.go` | API requests, per-model prompt formats, config |
+| `translate.go` / `config.go` | Streaming API requests, per-model prompt formats, config |
+| `dpapi.go` | Encrypts the API key in the config with Windows DPAPI |
 
 MyGo handles the window, tray, global shortcuts, single instance and auto-start. The global hook, cross-process selection, and non-activating floating windows are plain Win32 via `syscall` — no cgo.
 

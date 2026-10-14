@@ -4,3 +4,4 @@ build/
 config.json
 config.json.bak-*
 *.test
+.alma-snapshots
