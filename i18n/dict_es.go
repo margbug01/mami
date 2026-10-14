@@ -1,4 +1,4 @@
-package main
+package i18n
 
 // Español
 var dictES = map[string]string{

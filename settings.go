@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"mami/i18n"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 )
@@ -58,7 +60,7 @@ func (a *App) openSettings() {
 				e.PreventDefault()
 				a.setWin.Hide()
 				saved, _ := a.config()
-				setLang(resolveLang(saved.Language, sysLocale)) // 没保存的语言预览收回
+				i18n.Set(i18n.Resolve(saved.Language, sysLocale)) // 没保存的语言预览收回
 			}
 		})
 	} else if !a.setWin.IsVisible() {
@@ -72,7 +74,7 @@ func (a *App) settingsView(c *ui.Context) {
 	t := c.Theme()
 	s := &a.set
 	d := &s.draft
-	setLang(resolveLang(d.Language, sysLocale)) // 在设置里改了立刻预览，保存才算数
+	i18n.Set(i18n.Resolve(d.Language, sysLocale)) // 在设置里改了立刻预览，保存才算数
 	applyTheme(c, d.Theme)
 	t = c.Theme()
 	ui.Column(c).Fill().Children(func() {
@@ -480,10 +482,10 @@ func langLabel(value, zhLabel string) string {
 	if _, after, ok := strings.Cut(zhLabel, " "); ok {
 		native = after
 	}
-	switch curLang.Load() {
-	case langZH:
+	switch i18n.Current() {
+	case i18n.ZH:
 		return zhLabel
-	case langJA:
+	case i18n.JA:
 		if native == ja {
 			return ja
 		}
@@ -498,10 +500,10 @@ func langLabel(value, zhLabel string) string {
 
 func (a *App) pageGeneral(c *ui.Context, d *Config) {
 	pageTitle(c, T("通用"))
-	langs := make([]option, len(languageChoices))
-	for i, l := range languageChoices {
-		langs[i] = option{l.value, l.label}
-		if l.value == "auto" {
+	langs := make([]option, len(i18n.Choices))
+	for i, l := range i18n.Choices {
+		langs[i] = option{l.Value, l.Label}
+		if l.Value == "auto" {
 			langs[i].label = T("跟随系统")
 		}
 	}

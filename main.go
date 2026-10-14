@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"mami/i18n"
+
 	"github.com/egoist/mygo"
 )
 
@@ -72,7 +74,7 @@ func main() {
 			log.Fatal("worker: ", err)
 		}
 		sysLocale = mygo.App.Locale()
-		setLang(resolveLang(cfg.Language, sysLocale))
+		i18n.Set(i18n.Resolve(cfg.Language, sysLocale))
 		a.createWindows()
 		log.Printf("start: model=%s base=%s hotkey=%s config=%s", cfg.Model, cfg.BaseURL, cfg.Hotkey, a.cfgPath)
 		if *demo {

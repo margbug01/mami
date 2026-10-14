@@ -1,9 +1,9 @@
-package main
+package i18n
 
 // i18nDict：中文原文 → {英文, 日文}。
 // 新增界面文字时，先在代码里写 T("中文")，再回来补这张表；
 // TestI18nDictComplete 会扫源码，漏了会失败。
-var i18nDict = map[string][2]string{
+var Dict = map[string][2]string{
 	// 侧边栏和页面
 	"接口":            {"API", "接続"},
 	"翻译":            {"Translation", "翻訳"},

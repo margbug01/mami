@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"mami/i18n"
 )
 
 func pickLang(t *testing.T, start, choose string) string {
@@ -139,7 +140,7 @@ func TestSnapSettingsPages(t *testing.T) {
 
 func TestButtonActionsTranslated(t *testing.T) {
 	for _, o := range buttonActions {
-		if e, ok := i18nDict[o.label]; !ok || e[0] == "" || e[1] == "" {
+		if e, ok := i18n.Dict[o.label]; !ok || e[0] == "" || e[1] == "" {
 			t.Errorf("%q 没有译文", o.label)
 		}
 	}
@@ -151,7 +152,7 @@ func TestSnapSettingsI18n(t *testing.T) {
 	if dir == "" {
 		t.Skip("MAMI_SNAP not set")
 	}
-	defer setLang(langZH)
+	defer i18n.Set(i18n.ZH)
 	for _, c := range []struct {
 		lang, theme, page string
 		dark              bool
@@ -226,7 +227,7 @@ func TestSnapDocs(t *testing.T) {
 	if dir == "" {
 		t.Skip("MAMI_DOCS not set")
 	}
-	defer setLang(langZH)
+	defer i18n.Set(i18n.ZH)
 	save := func(name string, tt *ui.Tester) {
 		tt.Frame()
 		f, err := os.Create(filepath.Join(dir, name))
@@ -242,7 +243,7 @@ func TestSnapDocs(t *testing.T) {
 		dark   bool
 		theme  string
 	}{{"", true, "dark"}, {"-light", false, "light"}} {
-		setLang(langZH)
+		i18n.Set(i18n.ZH)
 		a := &App{avatar: loadAvatar()}
 		cfg := defaultConfig()
 		cfg.Theme = d.theme

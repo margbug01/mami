@@ -1,4 +1,4 @@
-package main
+package i18n
 
 // Русский
 var dictRU = map[string]string{

@@ -127,7 +127,7 @@ go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS 安装包
 |---|---|
 | `main.go` / `app.go` | 启动、托盘、快捷键、按钮和卡片定位、翻译流程 |
 | `views.go` / `settings.go` | MyGo 界面：按钮（按物理像素对齐的点阵）、卡片、设置 |
-| `i18n.go` / `i18n_*.go` | 界面翻译。代码里写 `T("中文")`，再把其他语言补进词典；漏了测试会失败 |
+| `i18n/` | 界面翻译，每种语言一份词典。代码里写 `T("中文")`，再把其他语言补进词典；漏了测试会失败 |
 | `hook.go` | 低级鼠标 + 键盘钩子，单独一条 OS 线程 |
 | `uia.go` | 原生 COM 调 UI Automation：焦点是不是输入框、选区在哪、终端选区文字 |
 | `worker.go` / `clipboard.go` | 消息窗口线程：持有剪贴板、模拟 `Ctrl+C` / `Ctrl+V` |

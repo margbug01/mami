@@ -1,4 +1,4 @@
-package main
+package i18n
 
 // 繁體中文
 var dictTW = map[string]string{

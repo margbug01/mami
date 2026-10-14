@@ -1,4 +1,4 @@
-package main
+package i18n
 
 // 한국어
 var dictKO = map[string]string{
