@@ -20,6 +20,7 @@ type settingsState struct {
 	draft       Config
 	exclude     string
 	openAtLogin bool
+	hotkeysOn   bool // 「启用快捷键」开关，保存时写回 DisableHotkeys 的反面
 	status      string
 	statusErr   bool
 	testing     bool
@@ -40,6 +41,7 @@ func (a *App) openSettings() {
 			draft:       cfg,
 			exclude:     strings.Join(cfg.ExcludeProcesses, ", "),
 			openAtLogin: mygo.App.OpenAtLogin(),
+			hotkeysOn:   !cfg.DisableHotkeys,
 		}
 	}
 	if a.setWin == nil {
@@ -198,6 +200,11 @@ func (a *App) pageTranslate(c *ui.Context, d *Config) {
 
 func (a *App) pageHotkeys(c *ui.Context, d *Config) {
 	pageTitle(c, T("快捷键"))
+	switchRow(c, T("启用快捷键"), T("关掉后不注册任何全局快捷键，不会和别的程序抢键；划词按钮照常能用"), &a.set.hotkeysOn)
+	ui.Divider(c)
+	if !a.set.hotkeysOn {
+		return
+	}
 	settingRow(c, T("原地替换"), T("写法如 Ctrl+Shift+Y、Alt+F2"), func() { ui.TextInput(c, &d.Hotkey).Placeholder("Alt+T") })
 	settingRow(c, T("只弹卡片"), T("留空表示不用"), func() { ui.TextInput(c, &d.PopupHotkey).Placeholder("Alt+Shift+T") })
 	switchRow(c, T("快捷键没选中就全选"), T("按 Alt+T 时没选中文字，先全选整个输入框再翻译"), &d.SelectAllIfEmpty)
@@ -396,6 +403,7 @@ func (a *App) saveDraft() {
 	cfg.BaseURL, cfg.Model = strings.TrimSpace(cfg.BaseURL), strings.TrimSpace(cfg.Model)
 	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
 	cfg.ExcludeProcesses = splitList(s.exclude)
+	cfg.DisableHotkeys = !s.hotkeysOn
 	cfg.normalize()
 	if err := a.setConfig(cfg); err != nil {
 		s.status, s.statusErr = err.Error(), true

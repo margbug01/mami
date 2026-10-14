@@ -115,4 +115,6 @@ var Dict = map[string][2]string{
 	"鼠标钩子挂载失败，只能用快捷键":                               {"Mouse hook failed; only shortcuts will work", "マウスフックに失敗しました。ショートカットのみ使えます"},
 	"配置文件没读成功，保存会覆盖它：":                              {"Couldn't read the config file; saving will overwrite it: ", "設定ファイルを読み込めませんでした。保存すると上書きされます："},
 	"默认用 B 站免费的 Index-Translate-35B，不用 Key；换别的接口再填": {"Uses Bilibili's free Index-Translate-35B by default, no key needed; fill this in if you switch endpoints", "既定は Bilibili の無料 Index-Translate-35B で、キー不要です。別の API を使う場合は入力してください"},
+	"启用快捷键":                                         {"Enable shortcuts", "ショートカットを有効にする"},
+	"关掉后不注册任何全局快捷键，不会和别的程序抢键；划词按钮照常能用": {"Registers no global shortcuts when off, so nothing clashes with other programs; the selection button still works", "オフにするとグローバルショートカットを一切登録せず、他のアプリと競合しません。選択ボタンは引き続き使えます"},
 }

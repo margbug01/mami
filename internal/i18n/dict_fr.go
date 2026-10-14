@@ -67,4 +67,6 @@ var dictFR = map[string]string{
 	"鼠标钩子挂载失败，只能用快捷键":                               "Échec du crochet souris ; seuls les raccourcis fonctionneront",
 	"配置文件没读成功，保存会覆盖它：":                              "Impossible de lire le fichier de configuration ; l'enregistrement l'écrasera : ",
 	"默认用 B 站免费的 Index-Translate-35B，不用 Key；换别的接口再填": "Utilise par défaut l'Index-Translate-35B gratuit de Bilibili, sans clé ; à renseigner si vous changez d'API",
+	"启用快捷键":                                         "Activer les raccourcis",
+	"关掉后不注册任何全局快捷键，不会和别的程序抢键；划词按钮照常能用": "Désactivé, aucun raccourci global n'est enregistré : pas de conflit avec d'autres programmes ; le bouton de sélection fonctionne toujours",
 }

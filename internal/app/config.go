@@ -30,8 +30,9 @@ type Config struct {
 	Temperature      *float64 `json:"temperature"`
 	ExtraPrompt      string   `json:"extra_prompt"`
 	ExcludeProcesses []string `json:"exclude_processes"`
-	Language         string   `json:"language"` // 界面语言：auto / zh / en / ja
-	Theme            string   `json:"theme"`    // 外观：auto / light / dark
+	DisableHotkeys   bool     `json:"disable_hotkeys"` // 总开关：true 时一个全局快捷键都不注册
+	Language         string   `json:"language"`        // 界面语言：auto / zh / en / ja
+	Theme            string   `json:"theme"`           // 外观：auto / light / dark
 }
 
 func defaultConfig() Config {

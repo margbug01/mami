@@ -67,4 +67,6 @@ var dictES = map[string]string{
 	"鼠标钩子挂载失败，只能用快捷键":                               "No se pudo instalar el gancho del ratón; solo funcionarán los atajos",
 	"配置文件没读成功，保存会覆盖它：":                              "No se pudo leer el archivo de configuración; al guardar se sobrescribirá: ",
 	"默认用 B 站免费的 Index-Translate-35B，不用 Key；换别的接口再填": "Por defecto usa el Index-Translate-35B gratuito de Bilibili, sin Key; rellénalo si cambias de API",
+	"启用快捷键":                                         "Activar atajos",
+	"关掉后不注册任何全局快捷键，不会和别的程序抢键；划词按钮照常能用": "Si está desactivado, no se registra ningún atajo global y no hay conflictos con otros programas; el botón de selección sigue funcionando",
 }

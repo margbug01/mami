@@ -67,4 +67,6 @@ var dictDE = map[string]string{
 	"鼠标钩子挂载失败，只能用快捷键":                               "Maus-Hook konnte nicht installiert werden; nur Tastenkürzel funktionieren",
 	"配置文件没读成功，保存会覆盖它：":                              "Konfigurationsdatei konnte nicht gelesen werden; Speichern überschreibt sie: ",
 	"默认用 B 站免费的 Index-Translate-35B，不用 Key；换别的接口再填": "Standardmäßig wird das kostenlose Index-Translate-35B von Bilibili ohne Key verwendet; bei einer anderen API hier eintragen",
+	"启用快捷键":                                         "Tastenkürzel aktivieren",
+	"关掉后不注册任何全局快捷键，不会和别的程序抢键；划词按钮照常能用": "Wenn aus, wird kein globales Tastenkürzel registriert und es gibt keine Konflikte mit anderen Programmen; der Auswahl-Button funktioniert weiter",
 }

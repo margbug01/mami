@@ -558,6 +558,9 @@ func toCRLF(s string) string {
 func (a *App) registerHotkeys(cfg Config) []string {
 	mygo.GlobalShortcut.UnregisterAll()
 	var problems []string
+	if cfg.DisableHotkeys {
+		return nil
+	}
 	for _, hk := range []struct {
 		acc     string
 		replace bool
@@ -606,7 +609,7 @@ func (a *App) updateTrayTip() {
 	}
 	cfg, _ := a.config()
 	tip := "Mami · " + cfg.Model
-	if cfg.Hotkey != "" {
+	if cfg.Hotkey != "" && !cfg.DisableHotkeys {
 		tip += " · " + cfg.Hotkey + T(" 原地替换")
 	}
 	a.tray.SetToolTip(tip)
