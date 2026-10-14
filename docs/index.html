@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mami · Translate where you type</title>
+<meta name="description" content="Mami is a Windows tray app. Select text in any input box, click a small button for the translation, or press Alt+T to replace it in place. Works with any OpenAI-compatible API.">
+<meta property="og:title" content="Mami · Translate where you type">
+<meta property="og:description" content="Select text in any input box, click a small button, get the translation. Windows tray app, bring your own model.">
+<meta property="og:image" content="https://margbug01.github.io/mami/card.png">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f5f7; --fg: #101114; --muted: #5b616d; --line: #dcdee3;
+  --panel: #ffffff; --accent: #2f6fed; --accent-fg: #ffffff; --sel: #cddffd;
+  --display: "Bricolage Grotesque", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --body: "Figtree", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0f11; --fg: #ececee; --muted: #8f95a1; --line: #25272c;
+    --panel: #16181b; --accent: #4c8dff; --accent-fg: #07101f; --sel: #27406e;
+  }
+}
+* { box-sizing: border-box; }
+html { color-scheme: light dark; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 400 1.0625rem/1.65 var(--body); -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 clamp(1.25rem, 4vw, 2.5rem); }
+
+/* header */
+header { display: flex; align-items: center; gap: 1.25rem; padding: 1.5rem 0; }
+.brand { display: flex; align-items: center; gap: .7rem; font: 700 1.25rem var(--display); text-decoration: none; letter-spacing: -.01em; }
+.brand svg { width: 34px; height: 27px; }
+header nav { margin-left: auto; display: flex; align-items: center; gap: 1.5rem; font-size: .95rem; }
+header nav a { text-decoration: none; color: var(--muted); }
+header nav a:hover { color: var(--fg); }
+.lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+.lang button {
+  font: 500 .85rem var(--body); color: var(--muted); background: none; border: 0;
+  padding: .2rem .75rem; border-radius: 999px; cursor: pointer;
+}
+.lang button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+
+/* hero */
+.hero { display: grid; gap: clamp(2rem, 5vw, 4rem); padding: clamp(2rem, 6vw, 4.5rem) 0 clamp(3rem, 8vw, 6rem); align-items: center; }
+@media (min-width: 920px) { .hero { grid-template-columns: 1fr 460px; } }
+h1 { font: 700 clamp(2.6rem, 6.4vw, 4.4rem)/1.04 var(--display); letter-spacing: -.035em; margin: 0 0 1.4rem; text-wrap: balance; }
+:lang(zh-CN) h1, :lang(zh-CN) h2 { letter-spacing: 0; }
+.lead { font-size: 1.15rem; max-width: 33rem; color: var(--muted); margin: 0 0 2rem; }
+kbd {
+  font: 600 .82em var(--body); padding: .08em .45em; border: 1px solid var(--line);
+  border-bottom-width: 2px; border-radius: 5px; background: var(--panel); color: var(--fg);
+}
+.cta { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: center; }
+.btn {
+  display: inline-block; text-decoration: none; font-weight: 600; padding: .8rem 1.4rem;
+  border-radius: 10px; background: var(--accent); color: var(--accent-fg);
+}
+.btn:hover { filter: brightness(1.08); }
+.link { color: var(--fg); font-weight: 500; }
+.meta { margin: 1.1rem 0 0; font-size: .9rem; color: var(--muted); }
+
+/* live demo */
+.win { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px -30px rgba(0,0,0,.35); }
+.win-bar { display: flex; align-items: center; gap: .5rem; padding: .7rem 1rem; border-bottom: 1px solid var(--line); font-size: .85rem; color: var(--muted); }
+.win-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.composer { padding: 1.4rem 1.25rem 1.5rem; min-height: 9.5rem; font-size: 1.05rem; line-height: 1.9; cursor: text; }
+.composer p { margin: 0; }
+.sel { background: linear-gradient(var(--sel), var(--sel)) no-repeat left / 0% 100%; border-radius: 3px; }
+.sel.on { background-size: 100% 100%; transition: background-size .9s steps(24, end); }
+.dotbtn {
+  display: none; vertical-align: middle; margin-left: .35rem; width: 36px; height: 30px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--fg); color: var(--bg);
+  cursor: pointer; padding: 0; place-items: center; transform: translateY(-2px);
+}
+.dotbtn svg { width: 22px; height: 18px; }
+.dotbtn.show { display: inline-grid; animation: pop .22s ease-out; }
+.dotbtn.press { transform: translateY(-2px) scale(.9); }
+@keyframes pop { from { transform: translateY(-2px) scale(.4); opacity: 0; } }
+.card { margin: 0 1.25rem 1.25rem; border: 1px solid var(--line); border-radius: 12px; padding: .9rem 1rem 1rem; background: var(--bg); display: none; }
+.card.show { display: block; }
+.card-head { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); margin-bottom: .45rem; }
+.card-body { font-size: 1rem; line-height: 1.6; min-height: 3.2rem; }
+.card-body.busy { color: var(--muted); }
+.card-foot { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .8rem; }
+.card-foot button {
+  font: 500 .9rem var(--body); padding: .4rem .95rem; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+}
+.card-foot button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.card-foot[hidden] { display: none; }
+.demo-note { display: flex; justify-content: space-between; gap: 1rem; margin: .8rem .25rem 0; font-size: .88rem; color: var(--muted); }
+.demo-note button { font: inherit; color: var(--fg); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* sections */
+section { padding: clamp(2.5rem, 6vw, 4.5rem) 0; border-top: 1px solid var(--line); }
+h2 { font: 700 clamp(1.7rem, 3.4vw, 2.4rem)/1.1 var(--display); letter-spacing: -.025em; margin: 0 0 2rem; max-width: 30rem; text-wrap: balance; }
+.points { display: grid; gap: 2rem 3rem; margin: 0; }
+@media (min-width: 760px) { .points { grid-template-columns: 1fr 1fr; } }
+.points dt { font: 700 1.15rem var(--display); margin-bottom: .35rem; }
+.points dd { margin: 0; color: var(--muted); max-width: 30rem; }
+.shot { margin: 2.2rem 0 0; }
+.shot img { display: block; width: 100%; max-width: 760px; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { margin-top: .8rem; font-size: .92rem; color: var(--muted); max-width: 40rem; }
+ol.steps { margin: 0 0 2.5rem; padding-left: 1.3rem; max-width: 40rem; }
+ol.steps li { margin-bottom: .6rem; padding-left: .3rem; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; min-width: 640px; }
+th, td { text-align: left; padding: .7rem 1rem .7rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; color: var(--muted); }
+code { font: 500 .88em ui-monospace, "Cascadia Code", Consolas, monospace; }
+footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sel.on { transition: none; }
+  .dotbtn.show { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="#top" id="top" aria-label="Mami"><span id="logo"></span>Mami</a>
+    <nav>
+      <a href="https://github.com/margbug01/mami">GitHub</a>
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="zh" aria-pressed="false">中文</button>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <div>
+        <h1 data-i18n="h1">Translate where you type.</h1>
+        <p class="lead" data-i18n="lead">Select text in any input box and a small button appears. Click it for the translation, or press <kbd>Alt</kbd> <kbd>T</kbd> to replace the text in place. Mami is a Windows tray app that uses the model and API key you already have.</p>
+        <div class="cta">
+          <a class="btn" href="https://github.com/margbug01/mami/releases/latest" data-i18n="download">Download for Windows</a>
+          <a class="link" href="https://github.com/margbug01/mami" data-i18n="source">View the source</a>
+        </div>
+        <p class="meta" data-i18n="meta">Windows 10 and 11, x64. Free and open source under the MIT license.</p>
+      </div>
+
+      <div>
+        <div class="win" aria-label="Interactive demo">
+          <div class="win-bar"><i></i><i></i><i></i><span data-i18n="winTitle">Chat</span></div>
+          <div class="composer" id="composer" tabindex="0">
+            <p><span class="sel" id="sel">这是写给 AI 的提示词：请逐条检查日志，不要直接改代码。</span><button class="dotbtn" id="dot" type="button" aria-label="Translate"></button></p>
+          </div>
+          <div class="card" id="card">
+            <div class="card-head"><span>中文 → English</span></div>
+            <div class="card-body" id="cardBody"></div>
+            <div class="card-foot" id="cardFoot" hidden>
+              <button type="button" id="copyBtn" data-i18n="copy">Copy</button>
+              <button type="button" id="replaceBtn" class="primary" data-i18n="replace">Replace</button>
+            </div>
+          </div>
+        </div>
+        <div class="demo-note">
+          <span id="demoHint" data-i18n="hintIdle">Select the text above, or click it.</span>
+          <button type="button" id="replay" data-i18n="replay">Replay</button>
+        </div>
+      </div>
+    </div>
+
+    <section>
+      <h2 data-i18n="h2a">Built to stay out of the way</h2>
+      <dl class="points">
+        <div><dt data-i18n="p1t">Input boxes only</dt><dd data-i18n="p1d">Web pages and documents are left alone. Before showing anything, Mami asks Windows whether the focus is an editable field.</dd></div>
+        <div><dt data-i18n="p2t">Keeps your selection</dt><dd data-i18n="p2d">The button and the card never take focus, and your clipboard is put back after every translation.</dd></div>
+        <div><dt data-i18n="p3t">Safe in terminals</dt><dd data-i18n="p3d">In Windows Terminal Mami sends no keystrokes, so the program you are running never gets a surprise Ctrl+C.</dd></div>
+        <div><dt data-i18n="p4t">Your model, your key</dt><dd data-i18n="p4d">Any OpenAI-compatible endpoint. Tencent Hy-MT2 and bilibili Index-Translate get prompt formats of their own.</dd></div>
+      </dl>
+    </section>
+
+    <section>
+      <h2 data-i18n="h2b">Make it yours</h2>
+      <p class="lead" style="margin:0" data-i18n="make">Light and dark themes, nine interface languages, twenty target languages, and extra instructions for style and terminology.</p>
+      <figure class="shot">
+        <picture>
+          <source media="(prefers-color-scheme: dark)" srcset="settings.png">
+          <img src="settings-light.png" width="1400" height="960" alt="Mami settings window" loading="lazy">
+        </picture>
+        <figcaption data-i18n="cap">The extra-instructions box grows with what you type. Drag the handle at its corner to size it yourself.</figcaption>
+      </figure>
+    </section>
+
+    <section>
+      <h2 data-i18n="h2c">Get started</h2>
+      <ol class="steps">
+        <li data-i18n="s1">Download the installer from the releases page and run it. Mami opens its settings the first time.</li>
+        <li data-i18n="s2">It starts on bilibili's free endpoint, which needs no key. For daily use, pick one of the endpoints below and paste your key.</li>
+        <li data-i18n="s3">Select text in any input box. Press <kbd>Alt</kbd> <kbd>T</kbd> to translate and replace, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> to only see the card.</li>
+      </ol>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th data-i18n="th1">Provider</th><th>Base URL</th><th data-i18n="th2">Model</th><th data-i18n="th3">Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Tencent TokenHub</td><td><code>https://tokenhub.tencentmaas.com/v1</code></td><td><code>hy-mt2-pro</code></td><td data-i18n="n1">Paid, stable, about 1 s.</td></tr>
+            <tr><td>OpenRouter</td><td><code>https://openrouter.ai/api/v1</code></td><td><code>tencent/hy-mt2-30b-a3b</code></td><td data-i18n="n2">Same model family, pay as you go.</td></tr>
+            <tr><td data-i18n="n3p">bilibili (free)</td><td><code>https://index-translate.bilibili.com/v1</code></td><td><code>Index-Translate-35B-A3B</code></td><td data-i18n="n3">No key. Can be flaky at peak hours.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span data-i18n="foot">MIT licensed. Built with Go and MyGo.</span>
+    <a href="https://github.com/margbug01/mami">GitHub</a>
+    <a href="https://github.com/margbug01/mami/releases/latest">Releases</a>
+    <a href="https://github.com/margbug01/mami/blob/main/README_zh.md">中文 README</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+  // The 「文A」 dot matrix from the app's own button: 5x5 + 5x5, A offset by (5,3).
+  var WEN = ["..#..", "#####", ".#.#.", "..#..", "##.##"];
+  var A = ["..#..", ".#.#.", "#...#", "#####", "#...#"];
+  function glyph(size) {
+    var cells = [];
+    function put(rows, ox, oy) {
+      rows.forEach(function (row, y) {
+        row.split("").forEach(function (ch, x) {
+          if (ch === "#") cells.push('<circle cx="' + (ox + x + .5) + '" cy="' + (oy + y + .5) + '" r=".36"/>');
+        });
+      });
+    }
+    put(WEN, 0, 0); put(A, 5, 3);
+    return '<svg viewBox="0 0 10 8" fill="currentColor" aria-hidden="true">' + cells.join("") + "</svg>";
+  }
+  document.getElementById("logo").innerHTML = glyph();
+  document.getElementById("dot").innerHTML = glyph();
+
+  var T = {
+    en: {
+      h1: "Translate where you type.",
+      lead: "Select text in any input box and a small button appears. Click it for the translation, or press <kbd>Alt</kbd> <kbd>T</kbd> to replace the text in place. Mami is a Windows tray app that uses the model and API key you already have.",
+      download: "Download for Windows", source: "View the source",
+      meta: "Windows 10 and 11, x64. Free and open source under the MIT license.",
+      winTitle: "Chat", copy: "Copy", replace: "Replace", replay: "Replay",
+      hintIdle: "Select the text above, or click it.",
+      hintBtn: "Click the button.", hintCard: "Replace puts the translation back in the box.",
+      hintDone: "Replaced in place. Alt+T does this without the card.",
+      busy: "Translating…", copied: "Copied",
+      h2a: "Built to stay out of the way",
+      p1t: "Input boxes only", p1d: "Web pages and documents are left alone. Before showing anything, Mami asks Windows whether the focus is an editable field.",
+      p2t: "Keeps your selection", p2d: "The button and the card never take focus, and your clipboard is put back after every translation.",
+      p3t: "Safe in terminals", p3d: "In Windows Terminal Mami sends no keystrokes, so the program you are running never gets a surprise Ctrl+C.",
+      p4t: "Your model, your key", p4d: "Any OpenAI-compatible endpoint. Tencent Hy-MT2 and bilibili Index-Translate get prompt formats of their own.",
+      h2b: "Make it yours",
+      make: "Light and dark themes, nine interface languages, twenty target languages, and extra instructions for style and terminology.",
+      cap: "The extra-instructions box grows with what you type. Drag the handle at its corner to size it yourself.",
+      h2c: "Get started",
+      s1: "Download the installer from the releases page and run it. Mami opens its settings the first time.",
+      s2: "It starts on bilibili's free endpoint, which needs no key. For daily use, pick one of the endpoints below and paste your key.",
+      s3: "Select text in any input box. Press <kbd>Alt</kbd> <kbd>T</kbd> to translate and replace, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> to only see the card.",
+      th1: "Provider", th2: "Model", th3: "Notes",
+      n1: "Paid, stable, about 1 s.", n2: "Same model family, pay as you go.",
+      n3p: "bilibili (free)", n3: "No key. Can be flaky at peak hours.",
+      foot: "MIT licensed. Built with Go and MyGo."
+    },
+    zh: {
+      h1: "在哪打字，就在哪翻译。",
+      lead: "在任何输入框里选中文字，旁边会冒出一个小按钮。点它看译文，或者按 <kbd>Alt</kbd> <kbd>T</kbd> 直接原地替换。Mami 是个 Windows 托盘小工具，用你自己已有的模型和 API Key。",
+      download: "下载 Windows 版", source: "查看源码",
+      meta: "Windows 10 / 11，x64。免费开源，MIT 许可。",
+      winTitle: "聊天", copy: "复制", replace: "替换", replay: "重放",
+      hintIdle: "选中上面的文字，或者点一下它。",
+      hintBtn: "点一下那个按钮。", hintCard: "点「替换」会把译文放回输入框。",
+      hintDone: "已经原地替换。按 Alt+T 可以不弹卡片直接这样做。",
+      busy: "翻译中…", copied: "已复制",
+      h2a: "不碍事，是第一要求",
+      p1t: "只在输入框里弹", p1d: "网页正文、文档里划词不会打扰你。出按钮之前，Mami 会先问 Windows：焦点是不是一个能编辑的输入框。",
+      p2t: "不丢选区", p2d: "按钮和卡片都不抢焦点，每次翻译完还会把你的剪贴板还原。",
+      p3t: "终端里也安全", p3d: "在 Windows Terminal 里 Mami 一个键都不发，你正在跑的程序不会突然收到一个 Ctrl+C。",
+      p4t: "你的模型，你的 Key", p4d: "任何 OpenAI 兼容接口都行。腾讯 Hy-MT2、B 站 Index-Translate 有各自专用的提示词格式。",
+      h2b: "按你的习惯来",
+      make: "浅色和深色主题、9 种界面语言、20 种目标语言，还能写额外要求来管风格和术语。",
+      cap: "「额外要求」输入框会随你输入的内容长高，也可以拖右下角的把手自己调。",
+      h2c: "开始用",
+      s1: "到发布页下载安装包并运行，第一次启动会自动打开设置。",
+      s2: "默认用 B 站的免费接口，不需要 Key。日常使用的话，从下面选一个接口，填上你的 Key。",
+      s3: "在任意输入框里选中文字。按 <kbd>Alt</kbd> <kbd>T</kbd> 翻译并替换，按 <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> 只看卡片。",
+      th1: "服务商", th2: "模型", th3: "说明",
+      n1: "收费，稳定，约 1 秒。", n2: "同一系列模型，按量付费。",
+      n3p: "B 站（免费）", n3: "不用 Key，高峰期可能不稳。",
+      foot: "MIT 许可。用 Go 和 MyGo 写成。"
+    }
+  };
+  var ORIGINAL = "这是写给 AI 的提示词：请逐条检查日志，不要直接改代码。";
+  var TRANSLATION = "This is a prompt for an AI: check the logs one by one, and don't change the code directly.";
+  var lang = (navigator.language || "en").toLowerCase().indexOf("zh") === 0 ? "zh" : "en";
+  try { lang = localStorage.getItem("mami-lang") || lang; } catch (e) {}
+
+  var $ = function (id) { return document.getElementById(id); };
+  var sel = $("sel"), dot = $("dot"), card = $("card"), body = $("cardBody"), foot = $("cardFoot"), hint = $("demoHint");
+  var state = "idle", timers = [], typing = null;
+
+  function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+  function stop() { timers.forEach(clearTimeout); timers = []; if (typing) { clearInterval(typing); typing = null; } }
+  function say(key) { hint.setAttribute("data-i18n", key); hint.textContent = T[lang][key]; }
+
+  function reset() {
+    stop(); state = "idle";
+    sel.textContent = ORIGINAL; sel.className = "sel";
+    dot.className = "dotbtn"; card.className = "card"; foot.hidden = true; body.textContent = "";
+    say("hintIdle");
+  }
+  function select() {
+    if (state !== "idle") return;
+    state = "selected"; sel.className = "sel on"; say("hintBtn");
+    later(function () { dot.className = "dotbtn show"; }, 950);
+  }
+  function translate() {
+    if (state !== "selected" && state !== "idle") return;
+    if (state === "idle") { select(); return; }
+    stop(); state = "busy";
+    dot.className = "dotbtn show press";
+    card.className = "card show"; foot.hidden = true;
+    body.className = "card-body busy"; body.textContent = T[lang].busy;
+    later(function () { dot.className = "dotbtn show"; }, 140);
+    later(function () {
+      body.className = "card-body"; body.textContent = "";
+      var words = TRANSLATION.split(" "), i = 0;
+      typing = setInterval(function () {
+        body.textContent += (i ? " " : "") + words[i++];
+        if (i >= words.length) { clearInterval(typing); typing = null; foot.hidden = false; state = "card"; say("hintCard"); }
+      }, 55);
+    }, 650);
+  }
+  function replace() {
+    if (state !== "card") return;
+    state = "done"; card.className = "card"; dot.className = "dotbtn";
+    sel.className = "sel"; sel.textContent = TRANSLATION; say("hintDone");
+  }
+
+  sel.addEventListener("click", select);
+  $("composer").addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(); } });
+  dot.addEventListener("click", function () { if (state === "selected") translate(); });
+  $("replaceBtn").addEventListener("click", replace);
+  $("copyBtn").addEventListener("click", function () {
+    var b = $("copyBtn"); b.textContent = T[lang].copied;
+    try { navigator.clipboard.writeText(TRANSLATION); } catch (e) {}
+    setTimeout(function () { b.textContent = T[lang].copy; }, 1200);
+  });
+  $("replay").addEventListener("click", function () { reset(); play(); });
+
+  function play() {
+    var forced = /[?&]demo=1/.test(location.search);
+    if (!forced && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    later(select, 700);
+    later(function () { if (state === "selected") translate(); }, 2900);
+  }
+
+  function apply() {
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var v = T[lang][el.getAttribute("data-i18n")];
+      if (v !== undefined) el.innerHTML = v;
+    });
+    document.querySelectorAll(".lang button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === lang)); });
+    if (state === "busy") body.textContent = T[lang].busy;
+  }
+  document.querySelectorAll(".lang button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      lang = b.dataset.lang; try { localStorage.setItem("mami-lang", lang); } catch (e) {}
+      apply();
+    });
+  });
+
+  apply(); play();
+})();
+</script>
+</body>
+</html>
