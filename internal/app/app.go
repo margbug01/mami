@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -428,7 +429,18 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSec)*time.Second)
 		defer cancel()
 		start := time.Now()
-		res, err := tr.Translate(ctx, text, target)
+		var onPartial func(string)
+		if !quiet && !replace { // 只有正在显示的卡片才边收边显示
+			var last time.Time
+			onPartial = func(p string) {
+				if time.Since(last) < 50*time.Millisecond {
+					return // 收得太密就跳过几帧，最后的结果总会整段填进去
+				}
+				last = time.Now()
+				a.popWin.Update(func() { a.onPartial(id, p) })
+			}
+		}
+		res, err := tr.TranslateStream(ctx, text, target, onPartial)
 		if err != nil {
 			log.Printf("translate #%d failed after %v: %v", id, time.Since(start).Round(time.Millisecond), err)
 		} else {
@@ -450,7 +462,11 @@ func (a *App) onQuietResult(id int64, st popupState, res string, err error) {
 	}
 	a.endBusy()
 	st.toast = false
+	var part *errPartial
 	switch {
+	case err != nil && !st.replace && errors.As(err, &part):
+		st.status, st.text = statusDone, part.text
+		st.header += T(" · 连接中断，译文不完整")
 	case err != nil:
 		st.status, st.text = statusError, err.Error()
 	case st.replace && foreground() == st.fg && !a.busyMoved.Load():
@@ -467,6 +483,15 @@ func (a *App) onQuietResult(id int64, st popupState, res string, err error) {
 	a.showPopup(st)
 }
 
+// onPartial 在主线程上执行：流式收到的半截译文先填进还在「翻译中」的卡片
+func (a *App) onPartial(id int64, text string) {
+	p := &a.pop
+	if !a.popVisible.Load() || p.reqID != id || p.status != statusLoading || p.toast {
+		return
+	}
+	p.text = text
+}
+
 // onResult 在主线程上执行
 func (a *App) onResult(id int64, res string, err error) {
 	p := &a.pop
@@ -474,6 +499,12 @@ func (a *App) onResult(id int64, res string, err error) {
 		return // 已经被关掉或者被新请求顶掉了
 	}
 	a.popBusy.Store(false)
+	var part *errPartial
+	if err != nil && !p.replace && errors.As(err, &part) {
+		p.status, p.text = statusDone, part.text
+		p.header += T(" · 连接中断，译文不完整")
+		return
+	}
 	if err != nil {
 		p.toast, p.status, p.text = false, statusError, err.Error()
 		return

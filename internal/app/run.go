@@ -103,7 +103,7 @@ func Run() {
 			a.set.status, a.set.statusErr = T("配置文件没读成功，保存会覆盖它：")+cfgErr.Error(), true
 		case created:
 			a.openSettings()
-			a.set.status = T("默认用 B 站免费的 Index-Translate-35B，不用 Key；换别的接口再填")
+			a.set.status = T("先在「服务商」里选一家，点「测试连接」确认能用，再保存")
 		case len(probs) > 0:
 			a.openSettings()
 			a.set.status, a.set.statusErr = strings.Join(probs, "；"), true

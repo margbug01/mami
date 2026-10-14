@@ -71,7 +71,7 @@ func TestSnapSettingsDropdown(t *testing.T) {
 	}
 	a := &App{avatar: loadAvatar()}
 	a.set = settingsState{draft: defaultConfig(), page: pageTrans}
-	tt := ui.NewTester(a.settingsView, 700, 480)
+	tt := ui.NewTester(a.settingsView, settingsW, settingsH)
 	tt.SetDark(true)
 	for i, open := range []string{"英语 English", "简体中文"} {
 		if err := tt.Click(open); err != nil {
@@ -129,7 +129,7 @@ func TestSnapSettingsPages(t *testing.T) {
 	for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen} {
 		a := &App{avatar: loadAvatar()}
 		a.set = settingsState{draft: defaultConfig(), page: page, testMsg: "连接正常（1.4s）：你好，世界 → Hello, world"}
-		tt := ui.NewTester(a.settingsView, 700, 480)
+		tt := ui.NewTester(a.settingsView, settingsW, settingsH)
 		tt.SetDark(true)
 		tt.Frame()
 		f, _ := os.Create(filepath.Join(dir, "page-"+page+".png"))
@@ -146,30 +146,38 @@ func TestButtonActionsTranslated(t *testing.T) {
 	}
 }
 
-// MAMI_SNAP=dir 时，存英文浅色、日文深色的设置页
+// MAMI_SNAP=dir 时，把 9 种界面语言 × 5 个设置页都截下来（高级、兼容性展开）
 func TestSnapSettingsI18n(t *testing.T) {
 	dir := os.Getenv("MAMI_SNAP")
 	if dir == "" {
 		t.Skip("MAMI_SNAP not set")
 	}
 	defer i18n.Set(i18n.ZH)
-	for _, c := range []struct {
+	// 每种界面语言的每一页都截一张，用来查文字有没有被挤出、截断
+	type snap struct {
 		lang, theme, page string
 		dark              bool
-	}{
-		{"en", "light", pageTrans, false}, {"ja", "dark", pageBtn, true}, {"ja", "auto", pageGen, true},
-		{"en", "light", pageGen, false}, {"ja", "dark", pageConn, true}, {"en", "dark", pageKeys, true},
-		{"zh-TW", "dark", pageBtn, true}, {"ko", "dark", pageBtn, true}, {"es", "light", pageBtn, false},
-		{"fr", "dark", pageTrans, true}, {"de", "dark", pageBtn, true}, {"ru", "dark", pageBtn, true},
-	} {
+	}
+	var cases []snap
+	for i, lang := range []string{"zh", "zh-TW", "en", "ja", "ko", "es", "fr", "de", "ru"} {
+		theme, dark := "dark", true
+		if i%2 == 1 {
+			theme, dark = "light", false
+		}
+		for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen} {
+			cases = append(cases, snap{lang, theme, page, dark})
+		}
+	}
+	for _, c := range cases {
 		a := &App{avatar: loadAvatar()}
 		draft := defaultConfig()
 		draft.Language, draft.Theme = c.lang, c.theme
 		draft.ExtraPrompt = "Translate for an AI prompt: be precise, keep structure, placeholders like {name} untouched, do not translate code or file paths."
-		a.set = settingsState{draft: draft, page: c.page}
-		tt := ui.NewTester(a.settingsView, 700, 480)
+		a.set = settingsState{draft: draft, page: c.page, advanced: true, compat: true}
+		tt := ui.NewTester(a.settingsView, settingsW, settingsH)
 		tt.SetDark(c.dark)
 		tt.Frame()
+		tt.Frame() // 第一帧才注册字体，按钮宽度按第二帧量的才准
 		f, _ := os.Create(filepath.Join(dir, "i18n-"+c.lang+"-"+c.theme+"-"+c.page+".png"))
 		png.Encode(f, tt.Image())
 		f.Close()
@@ -178,24 +186,25 @@ func TestSnapSettingsI18n(t *testing.T) {
 
 // 额外要求框：默认随内容长短；拖右下角把手手动调；点一下恢复自动
 func TestExtraPromptResize(t *testing.T) {
+	const gripX = settingsW - 42 // 把手离窗口右边 42
 	a := &App{avatar: loadAvatar()}
 	a.set = settingsState{draft: defaultConfig(), page: pageTrans}
-	tt := ui.NewTester(a.settingsView, 700, 480)
+	tt := ui.NewTester(a.settingsView, settingsW, settingsH)
 	tt.Frame()
 	if a.set.extraManual {
 		t.Fatal("没动把手就不该进手动模式")
 	}
 	grab := func(dy float32) (float32, bool) {
 		for y := float32(345); y < 372; y += 2 {
-			tt.Move(658, y)
+			tt.Move(gripX, y)
 			tt.Frame()
-			tt.Press(658, y)
+			tt.Press(gripX, y)
 			tt.Frame()
-			tt.Move(658, y+dy/2)
+			tt.Move(gripX, y+dy/2)
 			tt.Frame()
-			tt.Move(658, y+dy)
+			tt.Move(gripX, y+dy)
 			tt.Frame()
-			tt.Release(658, y+dy)
+			tt.Release(gripX, y+dy)
 			tt.Frame()
 			if a.set.extraManual {
 				return y, true
@@ -212,9 +221,9 @@ func TestExtraPromptResize(t *testing.T) {
 		t.Errorf("往下拖 40 后高度只有 %v", grown)
 	}
 	tt.Frame()
-	tt.Move(658, y+40)
+	tt.Move(gripX, y+40)
 	tt.Frame()
-	tt.ClickAt(658, y+40)
+	tt.ClickAt(gripX, y+40)
 	tt.Frame()
 	if a.set.extraManual {
 		t.Errorf("点一下把手没有恢复自动")
@@ -259,7 +268,7 @@ func TestSnapDocs(t *testing.T) {
 		cfg.BaseURL, cfg.Model = "https://tokenhub.tencentmaas.com/v1", "hy-mt2-pro"
 		a2 := &App{avatar: loadAvatar()}
 		a2.set = settingsState{draft: cfg, page: pageTrans}
-		tt = ui.NewTester(a2.settingsView, 700, 480)
+		tt = ui.NewTester(a2.settingsView, settingsW, settingsH)
 		tt.SetDark(d.dark)
 		tt.SetScale(2)
 		save("settings"+d.suffix+".png", tt)
@@ -269,7 +278,7 @@ func TestSnapDocs(t *testing.T) {
 	cfg.Language, cfg.Theme = "ja", "dark"
 	a := &App{avatar: loadAvatar()}
 	a.set = settingsState{draft: cfg, page: pageBtn}
-	tt := ui.NewTester(a.settingsView, 700, 480)
+	tt := ui.NewTester(a.settingsView, settingsW, settingsH)
 	tt.SetDark(true)
 	tt.SetScale(2)
 	save("settings-ja.png", tt)

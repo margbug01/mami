@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -137,6 +138,97 @@ func TestConfigRoundTrip(t *testing.T) {
 	got, _, err = loadConfig(p)
 	if err != nil || got.Model != "m2" || got.MaxChars != 6000 || got.BaseURL == "" {
 		t.Fatalf("bom/partial: %+v %v", got, err)
+	}
+}
+
+func sseServer(t *testing.T, lines ...string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		if body["stream"] != true {
+			t.Errorf("stream=%v, want true", body["stream"])
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		for _, l := range lines {
+			w.Write([]byte(l + "\n\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+}
+
+func TestTranslateStream(t *testing.T) {
+	srv := sseServer(t,
+		`: keep-alive`,
+		`data: {"choices":[{"delta":{"role":"assistant"}}]}`,
+		`data: {"choices":[{"delta":{"content":"<think>hm"}}]}`,
+		`data: {"choices":[{"delta":{"content":"m</think>Hello"}}]}`,
+		`data: {"choices":[{"delta":{"content":", world"}}]}`,
+		`data: {"choices":[{"delta":{},"finish_reason":"stop"}]}`,
+		`data: [DONE]`)
+	defer srv.Close()
+	cfg := defaultConfig()
+	cfg.BaseURL, cfg.APIKey = srv.URL, "k"
+	tr, _ := newTranslator(cfg)
+	var parts []string
+	got, err := tr.TranslateStream(context.Background(), "你好，世界", "English", func(p string) { parts = append(parts, p) })
+	if err != nil || got != "Hello, world" {
+		t.Fatalf("got %q %v", got, err)
+	}
+	// 思考过程没收完时什么都不显示，收完以后只显示正文
+	if strings.Join(parts, "|") != "Hello|Hello, world" {
+		t.Fatalf("parts=%q", parts)
+	}
+}
+
+func TestTranslateStreamBrokenKeepsPartial(t *testing.T) {
+	srv := sseServer(t,
+		`data: {"choices":[{"delta":{"content":"Half a sen"}}]}`,
+		`data: {"error":{"message":"upstream timeout"}}`)
+	defer srv.Close()
+	cfg := defaultConfig()
+	cfg.BaseURL, cfg.APIKey = srv.URL, "k"
+	tr, _ := newTranslator(cfg)
+	_, err := tr.Translate(context.Background(), "x", "English")
+	var part *errPartial
+	if !errors.As(err, &part) || part.text != "Half a sen" || !strings.Contains(err.Error(), "upstream timeout") {
+		t.Fatalf("err=%#v", err)
+	}
+}
+
+func TestPartialOutput(t *testing.T) {
+	for in, want := range map[string]string{
+		"<think>still thinking": "",
+		"<think>a</think> Hi":   "Hi",
+		"```text\nHel":          "Hel",
+		"```":                   "",
+	} {
+		if got := partialOutput(in); got != want {
+			t.Errorf("partialOutput(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
+func TestConfigKeyEncrypted(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.json")
+	// 旧版本留下的明文 key：读的时候就加密存回去
+	os.WriteFile(p, []byte(`{"api_key":"sk-plain-123","model":"m"}`), 0o600)
+	cfg, _, err := loadConfig(p)
+	if err != nil || cfg.APIKey != "sk-plain-123" {
+		t.Fatalf("load plain: %+v %v", cfg, err)
+	}
+	raw, _ := os.ReadFile(p)
+	if strings.Contains(string(raw), "sk-plain-123") || !strings.Contains(string(raw), `"api_key_dpapi"`) {
+		t.Fatalf("key still plain on disk: %s", raw)
+	}
+	cfg, _, err = loadConfig(p)
+	if err != nil || cfg.APIKey != "sk-plain-123" || cfg.APIKeyDPAPI != "" {
+		t.Fatalf("reload: %+v %v", cfg, err)
+	}
+	// 解不开（比如从别的电脑拷来）就当没填，不报错
+	os.WriteFile(p, []byte(`{"api_key_dpapi":"bm90LWEtYmxvYg==","model":"m"}`), 0o600)
+	cfg, _, err = loadConfig(p)
+	if err != nil || cfg.APIKey != "" {
+		t.Fatalf("bad blob: %+v %v", cfg, err)
 	}
 }
 

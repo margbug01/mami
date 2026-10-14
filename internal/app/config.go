@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,8 @@ import (
 
 type Config struct {
 	BaseURL          string   `json:"base_url"`
-	APIKey           string   `json:"api_key"`
+	APIKey           string   `json:"api_key,omitempty"` // 只在内存里是明文；存盘时加密进 api_key_dpapi
+	APIKeyDPAPI      string   `json:"api_key_dpapi,omitempty"`
 	Model            string   `json:"model"`
 	TargetForChinese string   `json:"target_for_chinese"`
 	TargetForOther   string   `json:"target_for_other"`
@@ -109,6 +111,22 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 			return cfg, false, fmt.Errorf(T("%s 格式不对：%w"), filepath.Base(path), err)
 		}
 	}
+	plainInFile := strings.TrimSpace(cfg.APIKey) != ""
+	if !plainInFile && cfg.APIKeyDPAPI != "" {
+		// 手动往 api_key 里填了明文的话以明文为准；解不开（配置是从别的电脑/账户拷来的）就当没填
+		if k, err := unprotectKey(cfg.APIKeyDPAPI); err == nil {
+			cfg.APIKey = k
+		} else {
+			log.Printf("api key: can't decrypt (config from another PC or account?): %v", err)
+		}
+	}
+	cfg.APIKeyDPAPI = ""
+	if plainInFile {
+		// 旧版本存的明文 key：马上加密存回去，不用等下次在设置里点保存
+		if err := saveConfig(path, cfg); err != nil {
+			log.Printf("api key: encrypt plain key in config: %v", err)
+		}
+	}
 	if strings.TrimSpace(cfg.APIKey) == "" {
 		for _, k := range []string{"MAMI_API_KEY", "OPENAI_API_KEY"} {
 			if v := os.Getenv(k); v != "" {
@@ -124,6 +142,14 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 // saveConfig 先写临时文件再改名，写一半崩了也不会留下坏配置。
 func saveConfig(path string, cfg Config) error {
 	cfg.normalize()
+	cfg.APIKeyDPAPI = ""
+	if k := strings.TrimSpace(cfg.APIKey); k != "" {
+		if enc, err := protectKey(k); err == nil {
+			cfg.APIKey, cfg.APIKeyDPAPI = "", enc
+		} else {
+			log.Printf("api key: DPAPI failed, saving as plain text: %v", err) // 总比丢了 key 强
+		}
+	}
 	out, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err

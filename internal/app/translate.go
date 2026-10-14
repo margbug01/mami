@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -133,7 +134,38 @@ func cleanOutput(s string) string {
 	return s
 }
 
+// partialOutput 把流式收到一半的文字整理成能先给人看的样子：
+// 去掉思考过程（没收完的 <think> 后面整段先不显示）和开头的代码块围栏。
+func partialOutput(s string) string {
+	s = thinkRe.ReplaceAllString(s, "")
+	if i := strings.Index(s, "<think>"); i >= 0 {
+		s = s[:i]
+	}
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "```") {
+		_, after, _ := strings.Cut(s, "\n")
+		s = after
+	}
+	return s
+}
+
+// Translate 等整段译文出来再返回
 func (t *Translator) Translate(ctx context.Context, text, target string) (string, error) {
+	return t.TranslateStream(ctx, text, target, nil)
+}
+
+// errPartial 流式翻译中途断了：已经收到一部分译文，随错误一起返回
+type errPartial struct {
+	text string
+	err  error
+}
+
+func (e *errPartial) Error() string { return e.err.Error() }
+func (e *errPartial) Unwrap() error { return e.err }
+
+// TranslateStream 请求流式输出，每收到一段就用当前已有的译文调 onPartial（可为 nil）。
+// 接口不支持流式、直接回整段 JSON 也照样能用。
+func (t *Translator) TranslateStream(ctx context.Context, text, target string, onPartial func(string)) (string, error) {
 	if strings.TrimSpace(t.cfg.APIKey) == "" && !isIndexTranslate(t.cfg.Model) {
 		return "", errors.New(T("还没填 API Key：托盘图标右键 → 设置"))
 	}
@@ -143,7 +175,7 @@ func (t *Translator) Translate(ctx context.Context, text, target string) (string
 			{"role": "system", "content": systemPrompt(target, t.cfg.ExtraPrompt)},
 			{"role": "user", "content": text},
 		},
-		"stream": false,
+		"stream": true,
 	}
 	if isIndexTranslate(t.cfg.Model) {
 		// B 站 Index-Translate 是专门训的翻译模型：按它自己的提示词格式发一条 user 消息，关掉思考
@@ -165,7 +197,8 @@ func (t *Translator) Translate(ctx context.Context, text, target string) (string
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mami/2.1")
+	req.Header.Set("User-Agent", "Mami/2.2")
+	req.Header.Set("Accept", "text/event-stream, application/json")
 	if k := strings.TrimSpace(t.cfg.APIKey); k != "" { // B 站免费接口不要 key，空着就不发
 		req.Header.Set("Authorization", "Bearer "+k)
 	}
@@ -175,6 +208,9 @@ func (t *Translator) Translate(ctx context.Context, text, target string) (string
 		return "", fmt.Errorf(T("请求失败：%w"), err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK && strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
+		return readStream(resp.Body, onPartial)
+	}
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 
 	if resp.StatusCode != http.StatusOK {
@@ -209,6 +245,67 @@ func (t *Translator) Translate(ctx context.Context, text, target string) (string
 		return "", errors.New(T("模型返回了空内容"))
 	}
 	return res, nil
+}
+
+// readStream 读 SSE：每行 data: {choices:[{delta:{content}}]}，以 data: [DONE] 结束
+func readStream(r io.Reader, onPartial func(string)) (string, error) {
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 64<<10), 4<<20)
+	var b strings.Builder
+	shown := ""
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		payload, ok := strings.CutPrefix(line, "data:")
+		if !ok {
+			continue
+		}
+		payload = strings.TrimSpace(payload)
+		if payload == "[DONE]" {
+			break
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content json.RawMessage `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+			Error *struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal([]byte(payload), &chunk) != nil {
+			continue
+		}
+		if chunk.Error != nil && chunk.Error.Message != "" {
+			return "", streamErr(b.String(), errors.New(chunk.Error.Message))
+		}
+		if len(chunk.Choices) == 0 || len(chunk.Choices[0].Delta.Content) == 0 {
+			continue
+		}
+		b.WriteString(contentText(chunk.Choices[0].Delta.Content))
+		if onPartial != nil {
+			if p := partialOutput(b.String()); p != shown {
+				shown = p
+				onPartial(p)
+			}
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return "", streamErr(b.String(), fmt.Errorf(T("请求失败：%w"), err))
+	}
+	res := cleanOutput(b.String())
+	if res == "" {
+		return "", errors.New(T("模型返回了空内容"))
+	}
+	return res, nil
+}
+
+// streamErr 收到过译文就带上，卡片可以把这一半留着
+func streamErr(got string, err error) error {
+	if p := cleanOutput(got); p != "" {
+		return &errPartial{text: p, err: err}
+	}
+	return err
 }
 
 // content 可能是字符串，也可能是 [{type:"text",text:"..."}] 数组

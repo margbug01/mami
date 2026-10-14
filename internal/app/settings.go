@@ -30,6 +30,7 @@ type settingsState struct {
 	gripMoved   bool // 这次按住把手时拖动过
 	advanced    bool
 	compat      bool
+	custom      bool // 「服务商」手动选了自定义（地址还是某家预设的也不跳回去）
 	testMsg     string
 	testErr     bool
 }
@@ -48,9 +49,9 @@ func (a *App) openSettings() {
 		reset()
 		a.setWin = mygo.NewWindow(mygo.WindowOptions{
 			Title:           "Mami · Settings",
-			Width:           700,
-			Height:          480,
-			MinWidth:        640,
+			Width:           settingsW,
+			Height:          settingsH,
+			MinWidth:        settingsW - 60,
 			MinHeight:       420,
 			DisableMaximize: true,
 			Frameless:       true,
@@ -117,7 +118,7 @@ func (a *App) settingsView(c *ui.Context) {
 				color = t.Danger
 			}
 			ui.Text(c, s.status).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-			if ui.PrimaryButton(c, T("保存")).Clicked() {
+			if accentButton(c, T("保存")).Clicked() {
 				a.saveDraft()
 			}
 		})
@@ -158,6 +159,27 @@ func (a *App) pageConnection(c *ui.Context, d *Config) {
 	s := &a.set
 	t := c.Theme()
 	pageTitle(c, T("接口（OpenAI 兼容）"))
+	cur := "custom"
+	if !s.custom {
+		cur = providerOf(d.BaseURL)
+	}
+	desc := T("选一个会自动填好接口地址和模型")
+	if cur == "bilibili" {
+		desc = T("免费、不用 Key，但高峰期常超时")
+	}
+	settingRow(c, T("服务商"), desc, func() {
+		v := cur
+		optionSelect(c, &v, providerOptions())
+		if v != cur {
+			s.custom = v == "custom"
+			for _, p := range providers {
+				if p.id == v && p.base != "" {
+					d.BaseURL, d.Model = p.base, p.model
+				}
+			}
+			s.testMsg, s.testErr = "", false
+		}
+	})
 	settingRow(c, T("接口地址"), T("会自动拼上 /chat/completions"), func() {
 		ui.TextInput(c, &d.BaseURL).Placeholder("https://api.deepseek.com/v1")
 	})
@@ -171,12 +193,12 @@ func (a *App) pageConnection(c *ui.Context, d *Config) {
 			color = t.Danger
 		}
 		ui.Text(c, s.testMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-		if ui.Button(c, T("测试连接")).Disabled(s.testing).Clicked() {
+		if textButton(c, T("测试连接")).Disabled(s.testing).Clicked() {
 			a.testDraft()
 		}
 	})
 	ui.Row(c).Padding(8, 0).Children(func() {
-		if ui.Button(c, s.advancedLabel()).Clicked() {
+		if textButton(c, s.advancedLabel()).Clicked() {
 			s.advanced = !s.advanced
 		}
 	})
@@ -185,6 +207,36 @@ func (a *App) pageConnection(c *ui.Context, d *Config) {
 			ui.TextInput(c, &d.Proxy).Placeholder("http://127.0.0.1:7890")
 		})
 	}
+}
+
+// providers 是「服务商」下拉框里的预设：选中后填好接口地址和模型。
+// 按接口地址认出当前用的是哪一家，认不出就是自定义。
+var providers = []struct{ id, base, model string }{
+	{"bilibili", "https://index-translate.bilibili.com/v1", "Index-Translate-35B-A3B"},
+	{"tokenhub", "https://tokenhub.tencentmaas.com/v1", "hy-mt2-pro"},
+	{"openrouter", "https://openrouter.ai/api/v1", "tencent/hy-mt2-30b-a3b"},
+	{"deepseek", "https://api.deepseek.com/v1", "deepseek-flash"},
+	{"custom", "", ""},
+}
+
+func providerOptions() []option {
+	return []option{
+		{"bilibili", T("B 站 Index-Translate（免费）")},
+		{"tokenhub", T("腾讯 TokenHub · Hy-MT2")},
+		{"openrouter", "OpenRouter · Hy-MT2"},
+		{"deepseek", "DeepSeek"},
+		{"custom", T("自定义")},
+	}
+}
+
+func providerOf(base string) string {
+	b := strings.TrimRight(strings.TrimSpace(base), "/")
+	for _, p := range providers {
+		if p.base != "" && strings.EqualFold(b, p.base) {
+			return p.id
+		}
+	}
+	return "custom"
 }
 
 func (a *App) pageTranslate(c *ui.Context, d *Config) {
@@ -222,7 +274,7 @@ func (a *App) pageButton(c *ui.Context, d *Config) {
 		ui.TextInput(c, &s.exclude).Placeholder("game.exe, WindowsTerminal.exe")
 	})
 	ui.Row(c).Padding(8, 0).Children(func() {
-		if ui.Button(c, s.compatLabel()).Clicked() {
+		if textButton(c, s.compatLabel()).Clicked() {
 			s.compat = !s.compat
 		}
 	})
@@ -558,7 +610,10 @@ func (a *App) extraPromptBox(c *ui.Context, d *Config) {
 }
 
 // sidebarW 侧边栏宽度；controlPad 是额外要求框的文字区离窗口左右的距离之和（侧边栏 + 页面左右留白 48 + 输入框内边距）
-const sidebarW = 180
+const sidebarW = 212
+
+// settingsW, settingsH 设置窗口的默认尺寸；侧边栏放得下「Auswahl-Schaltfläche」这类长词
+const settingsW, settingsH = 732, 480
 
 const controlPad = sidebarW + 48 + 28
 

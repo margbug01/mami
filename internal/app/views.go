@@ -122,6 +122,22 @@ func (a *App) buttonView(c *ui.Context) {
 	}
 }
 
+// textButton / accentButton 就是 ui.Button / ui.PrimaryButton，只多给一个按 MiSans 量出来的最小宽度。
+// MyGo 给带左右内边距的按钮量宽时没按主题字体算，MiSans 比系统字体宽，西文标签会被截成「Guar…」。
+func textButton(c *ui.Context, label string) ui.Element {
+	return fitLabel(c, ui.Button(c, label), label)
+}
+
+func accentButton(c *ui.Context, label string) ui.Element {
+	return fitLabel(c, ui.PrimaryButton(c, label), label)
+}
+
+func fitLabel(c *ui.Context, b ui.Element, label string) ui.Element {
+	t := c.Theme()
+	w, _ := c.MeasureText(10000, ui.Span{Text: label, Size: t.FontSize})
+	return b.MinWidth(w + 2*t.Space(3.5) + 8) // 两边内边距 + 边框；正好等宽时 MyGo 仍会按小数误差截成省略号，多留几像素
+}
+
 // ---------- 译文卡片 ----------
 
 func (a *App) popupView(c *ui.Context) {
@@ -130,12 +146,14 @@ func (a *App) popupView(c *ui.Context) {
 	const pad, headH, gap, footH = 12, 22, 8, 32
 	textW := float32(p.w - 2*pad - 10) // 给滚动条留一点
 
+	// streaming：流式翻译已经收到一部分，卡片先显示出来，标题栏转圈表示还没完
+	streaming := p.status == statusLoading && p.text != ""
 	body := p.text
-	if p.status == statusLoading {
+	if p.status == statusLoading && !streaming {
 		body = ""
 	}
 	bodyH := float32(20)
-	if p.status != statusLoading {
+	if p.status != statusLoading || streaming {
 		_, mh := c.MeasureText(textW, ui.Span{Text: body, Size: 14})
 		bodyH = min(mh+2, bodyMaxH)
 	}
@@ -155,6 +173,9 @@ func (a *App) popupView(c *ui.Context) {
 				ui.Image(c, a.avatar).Size(18, 18).Radius(9).Clip()
 			}
 			ui.Text(c, p.header).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
+			if streaming {
+				ui.Spinner(c).FontSize(12).TextColor(t.TextMuted)
+			}
 			if !p.toast {
 				x := ui.ButtonBase(c).Size(22, 22).Radius(6).Cursor(ui.CursorPointer).Label(T("关闭"))
 				if x.Hovered() {
@@ -165,8 +186,8 @@ func (a *App) popupView(c *ui.Context) {
 				}
 			}
 		})
-		switch p.status {
-		case statusLoading:
+		switch {
+		case p.status == statusLoading && !streaming:
 			ui.Row(c).Height(20).Gap(8).Children(func() {
 				ui.Spinner(c).FontSize(14)
 				ui.Text(c, T("翻译中…")).FontSize(14).TextColor(t.TextMuted)
@@ -187,12 +208,12 @@ func (a *App) popupView(c *ui.Context) {
 				if p.copied {
 					label = T("已复制")
 				}
-				if ui.Button(c, label).Clicked() {
+				if textButton(c, label).Clicked() {
 					text := p.text
 					theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
 					p.copied = true
 				}
-				if !p.terminal && ui.PrimaryButton(c, T("替换")).Clicked() {
+				if !p.terminal && accentButton(c, T("替换")).Clicked() {
 					text := p.text
 					a.hidePopupNow()
 					theWorker.paste(text)
