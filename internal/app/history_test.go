@@ -106,3 +106,54 @@ func TestHistoryPrune(t *testing.T) {
 		}
 	}
 }
+
+func TestHistoryStats(t *testing.T) {
+	dir := t.TempDir()
+	at := func(s string) time.Time {
+		v, _ := time.ParseInLocation("2006-01-02 15:04", s, time.Local)
+		return v
+	}
+	write := func(e historyEntry) {
+		ts, _ := time.Parse(time.RFC3339, e.Time)
+		f, _ := os.OpenFile(filepath.Join(dir, ts.Local().Format("2006-01-02")+".jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		b, _ := json.Marshal(e)
+		f.Write(append(b, '\n'))
+		f.Close()
+	}
+	rfc := func(s string) string { return at(s).Format(time.RFC3339) }
+	write(historyEntry{Type: "translation", ID: "1", Time: rfc("2026-10-14 13:24"), App: "Alma.exe", TotalMs: 1800, FirstMs: 1200})
+	write(historyEntry{Type: "action", ID: "1", Action: "copy"})
+	write(historyEntry{Type: "action", ID: "1", Action: "dismiss"}) // 复制过再关，仍算用了
+	write(historyEntry{Type: "translation", ID: "2", Time: rfc("2026-10-14 21:05"), App: "Alma.exe", TotalMs: 1000})
+	write(historyEntry{Type: "action", ID: "2", Action: "close"})
+	write(historyEntry{Type: "translation", ID: "3", Time: rfc("2026-10-15 21:30"), App: "chrome.exe", Error: "HTTP 504"})
+
+	// 日志：开记录之前的两条要补，之后那条已经在记录里了，不能重复算
+	logf := filepath.Join(dir, "mami.log")
+	os.WriteFile(logf, []byte(
+		"2026/10/13 22:03:12.936265 translate #1 ok in 7.655s\n"+
+			"2026/10/13 22:04:00.000000 translate #2 failed after 30s: context deadline exceeded\n"+
+			"2026/10/13 22:05:00.000000 translate #3: 12 chars → English (replace=false)\n"+
+			"2026/10/14 13:24:05.000000 translate #4 ok in 1.8s\n"), 0o600)
+
+	s := loadHistoryStats(dir, []string{logf, filepath.Join(dir, "missing.log")})
+	if s.total != 5 || s.fromLog != 2 || s.errors != 2 {
+		t.Fatalf("total=%d fromLog=%d errors=%d", s.total, s.fromLog, s.errors)
+	}
+	if s.days["2026-10-13"] != 2 || s.days["2026-10-14"] != 2 || s.days["2026-10-15"] != 1 || s.maxDay() != 2 || s.activeDays() != 3 {
+		t.Fatalf("days %v", s.days)
+	}
+	if s.hours[21] != 2 || s.hours[22] != 2 || s.hours[13] != 1 {
+		t.Fatalf("hours %v", s.hours)
+	}
+	if top := s.topHours(1); top[0].key != "21" || top[0].n != 2 {
+		t.Fatalf("topHours %v", top) // 21 和 22 一样多，取早的
+	}
+	if s.used != 1 || s.unused != 1 || s.apps["Alma.exe"] != 2 || s.topApps(1)[0].key != "Alma.exe" {
+		t.Fatalf("used=%d unused=%d apps=%v", s.used, s.unused, s.apps)
+	}
+	// 平均耗时只算成功的：7.655 + 1.8 + 1.0
+	if s.nMs != 3 || s.sumMs != 7655+1800+1000 || s.nFirst != 1 {
+		t.Fatalf("ms %d/%d first %d", s.sumMs, s.nMs, s.nFirst)
+	}
+}

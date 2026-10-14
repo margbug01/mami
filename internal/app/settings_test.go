@@ -126,7 +126,7 @@ func TestSnapSettingsPages(t *testing.T) {
 	if dir == "" {
 		t.Skip("MAMI_SNAP not set")
 	}
-	for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen} {
+	for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen, pageHist} {
 		a := &App{avatar: loadAvatar()}
 		a.set = settingsState{draft: defaultConfig(), page: page, testMsg: "连接正常（1.4s）：你好，世界 → Hello, world"}
 		tt := ui.NewTester(a.settingsView, settingsW, settingsH)
@@ -164,7 +164,7 @@ func TestSnapSettingsI18n(t *testing.T) {
 		if i%2 == 1 {
 			theme, dark = "light", false
 		}
-		for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen} {
+		for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen, pageHist} {
 			cases = append(cases, snap{lang, theme, page, dark})
 		}
 	}

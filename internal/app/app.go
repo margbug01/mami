@@ -52,6 +52,7 @@ type popupState struct {
 type App struct {
 	cfgPath, logPath string
 	hist             *history
+	logPaths         []string // 「记录」页从这些日志里补开记录之前的次数
 	pid              uint32
 
 	mu  sync.Mutex

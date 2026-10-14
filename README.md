@@ -35,7 +35,7 @@ I write a lot of prompts in Chinese and send them in English. Copy, open a trans
 - **Three click modes.** Show a loading card, show the card only when the result arrives, or replace directly. In the quiet modes the button turns into a spinner; errors always show a card.
 - **Never steals focus.** Floating windows are non-activating, so your selection stays put. Your clipboard is saved and restored afterwards.
 - **Optional live display.** Turn on *Show while translating* and the card fills in while the model is still writing. Either way, if the connection drops halfway you keep the part that arrived (marked as incomplete).
-- **Translation history (opt-in).** Saves the original, the exact prompt sent to the model, the translation, timings and what you did with it (copy / replace / closed unused) to daily JSONL files. Hand them to an AI to find prompts the model *executed* instead of translating, ignored instructions, or inconsistent terms.
+- **Translation history (opt-in).** Saves the original, the exact prompt sent to the model, the translation, timings and what you did with it (copy / replace / closed unused) to daily JSONL files. Hand them to an AI to find prompts the model *executed* instead of translating, ignored instructions, or inconsistent terms. The **History** page in Settings shows a 6-month heatmap, a time-of-day chart, busiest hours, top apps, how often a translation was actually used, and average speed.
 - **Safe in terminals.** In Windows Terminal it sends *no* keystrokes (a stray `Ctrl+C` would kill your running program) and reads the selection through UI Automation. The card shows Copy only.
 - **Model-aware prompts.** Dedicated formats for translation models such as Tencent **Hy-MT2** and bilibili **Index-Translate**, and a generic system prompt for everything else (DeepSeek, GPT, Qwen…).
 - **20 target languages**, extra instructions and glossary, proxy, per-app exclusions, start at login.
@@ -100,7 +100,7 @@ Translation models will happily *execute* a multi-line prompt instead of transla
 
 Direction is automatic. Text containing Chinese goes to your **Chinese to** language (English by default); everything else goes to **Others to** (Simplified Chinese by default).
 
-Settings has five pages: **API**, **Translation**, **Shortcuts**, **Selection button**, and **General** (interface language, theme, start at login). Language and theme changes preview live and apply when you press Save.
+Settings has six pages: **API**, **Translation**, **Shortcuts**, **Selection button**, **General** and **History** (interface language, theme, start at login). Language and theme changes preview live and apply when you press Save.
 
 Config lives in `%AppData%\Mami\config.json`, translation history (if turned on) in `%AppData%\Mami\history\YYYY-MM-DD.jsonl`, logs in `%AppData%\Mami\logs\mami.log`. Your API key is stored there encrypted with Windows DPAPI (only your Windows account on this PC can decrypt it; keys saved by older versions are encrypted on the next start) and is only sent to the endpoint you configured.
 
@@ -139,7 +139,7 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`: it tests, builds and pu
 | `worker.go` / `clipboard.go` | Message-only window that owns the clipboard and sends `Ctrl+C` / `Ctrl+V` |
 | `translate.go` / `config.go` | Streaming API requests, per-model prompt formats, config |
 | `dpapi.go` | Encrypts the API key in the config with Windows DPAPI |
-| `history.go` | Opt-in translation history (daily JSONL files, auto-pruned) |
+| `history.go` / `historystats.go` / `historypage.go` | Opt-in translation history (daily JSONL, auto-pruned), its statistics and the History page |
 
 MyGo handles the window, tray, global shortcuts, single instance and auto-start. The global hook, cross-process selection, and non-activating floating windows are plain Win32 via `syscall` — no cgo.
 

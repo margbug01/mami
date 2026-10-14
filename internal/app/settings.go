@@ -31,7 +31,8 @@ type settingsState struct {
 	gripMoved   bool // 这次按住把手时拖动过
 	advanced    bool
 	compat      bool
-	custom      bool // 「服务商」手动选了自定义（地址还是某家预设的也不跳回去）
+	stats       *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
+	custom      bool          // 「服务商」手动选了自定义（地址还是某家预设的也不跳回去）
 	testMsg     string
 	testErr     bool
 }
@@ -93,6 +94,7 @@ func (a *App) settingsView(c *ui.Context) {
 					ui.SidebarItem(c, pageKeys, iconKeys, T("快捷键"))
 					ui.SidebarItem(c, pageBtn, iconBtn, T("划词按钮"))
 					ui.SidebarItem(c, pageGen, iconGen, T("通用"))
+					ui.SidebarItem(c, pageHist, iconHist, T("记录"))
 				}).Grow(1)
 			})
 			ui.Scroll(c).Grow(1).Children(func() {
@@ -106,6 +108,8 @@ func (a *App) settingsView(c *ui.Context) {
 						a.pageButton(c, d)
 					case pageGen:
 						a.pageGeneral(c, d)
+					case pageHist:
+						a.pageHistory(c, d)
 					default:
 						a.pageConnection(c, d)
 					}

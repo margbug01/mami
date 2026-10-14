@@ -47,6 +47,10 @@ func Run() {
 		a.logPath = filepath.Join(logDir, "mami.log")
 	}
 	a.hist = &history{dir: filepath.Join(filepath.Dir(a.cfgPath), "history")}
+	a.logPaths = []string{a.logPath}
+	if os.Getenv("MAMI_CONFIG") == "" { // 改名前（Huaci）的日志也算进去
+		a.logPaths = append(a.logPaths, filepath.Join(filepath.Dir(filepath.Dir(a.cfgPath)), "Huaci", "logs", "huaci.log"))
+	}
 	if f := openLog(a.logPath); f != nil {
 		log.SetOutput(f)
 		defer f.Close()
