@@ -14,6 +14,7 @@ import (
 
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
+	gdi32    = syscall.NewLazyDLL("gdi32.dll")
 	kernel32 = syscall.NewLazyDLL("kernel32.dll")
 	dwmapi   = syscall.NewLazyDLL("dwmapi.dll")
 	shcore   = syscall.NewLazyDLL("shcore.dll")
@@ -65,6 +66,9 @@ var (
 	pQueryFullProcessImageNameW = kernel32.NewProc("QueryFullProcessImageNameW")
 
 	pDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
+	pSetWindowRgn          = user32.NewProc("SetWindowRgn")
+	pCreateRoundRectRgn    = gdi32.NewProc("CreateRoundRectRgn")
+	pGetDpiForWindow       = user32.NewProc("GetDpiForWindow")
 	pGetDpiForMonitor      = shcore.NewProc("GetDpiForMonitor")
 )
 
@@ -224,13 +228,14 @@ func windowRect(h uintptr) RECT {
 // makeFloating 把 MyGo 的无边框窗口改成浮窗：点它不会激活它，
 // 原来窗口里的选区和光标都还在；也不进 Alt+Tab。
 func makeFloating(h uintptr) {
+	defer roundCorners(h)
 	// MyGo 的无边框窗口仍带 WS_CAPTION，系统据此强制最小尺寸（150% 下约 50×47），小按钮缩不下去
 	st, _, _ := pGetWindowLongPtrW.Call(h, GWL_STYLE)
 	pSetWindowLongPtrW.Call(h, GWL_STYLE, st&^WS_FRAME_BITS)
 	ex, _, _ := pGetWindowLongPtrW.Call(h, GWL_EXSTYLE)
 	pSetWindowLongPtrW.Call(h, GWL_EXSTYLE, ex|WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW)
 	pSetWindowPos.Call(h, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_FRAMECHANGED)
-	pref := int32(2) // Win11 圆角
+	pref := int32(1) // 不用系统圆角：Win11 会给圆角窗口配一圈投影，圆角改用 SetWindowRgn 自己裁
 	pDwmSetWindowAttribute.Call(h, DWMWA_CORNER_PREF, uintptr(unsafe.Pointer(&pref)), 4)
 	// 关掉系统给无边框窗口加的阴影（按钮和卡片四周那圈暗影）
 	nc := int32(1) // DWMNCRP_DISABLED
@@ -239,11 +244,13 @@ func makeFloating(h uintptr) {
 
 // moveTo 按物理像素摆窗口（钩子和 GetCursorPos 给的都是物理像素）
 func moveTo(h uintptr, x, y int32) {
+	defer roundCorners(h)
 	pSetWindowPos.Call(h, HWND_TOPMOST, uintptr(x), uintptr(y), 0, 0, SWP_NOSIZE|SWP_NOACTIVATE)
 }
 
 // placeAt 连尺寸一起设（物理像素）
 func placeAt(h uintptr, x, y, w, ht int32) {
+	defer roundCorners(h)
 	pSetWindowPos.Call(h, HWND_TOPMOST, uintptr(x), uintptr(y), uintptr(w), uintptr(ht), SWP_NOACTIVATE)
 }
 
@@ -310,4 +317,24 @@ func isTerminal(fg uintptr) bool {
 		return true
 	}
 	return false
+}
+
+// roundCorners 把窗口裁成圆角矩形（半径 10 DIP）。窗口区域之外的像素系统不画，
+// 也就没有投影；窗口大小变了要重新裁。
+func roundCorners(h uintptr) {
+	var r RECT
+	pGetWindowRect.Call(h, uintptr(unsafe.Pointer(&r)))
+	w, ht := r.w(), r.h()
+	if w <= 0 || ht <= 0 {
+		return
+	}
+	dpi, _, _ := pGetDpiForWindow.Call(h)
+	if dpi == 0 {
+		dpi = 96
+	}
+	d := int32(dpi) * 20 / 96 // 圆角直径（物理像素）
+	rgn, _, _ := pCreateRoundRectRgn.Call(0, 0, uintptr(w+1), uintptr(ht+1), uintptr(d), uintptr(d))
+	if rgn != 0 {
+		pSetWindowRgn.Call(h, rgn, 1) // 成功后区域归系统所有
+	}
 }
