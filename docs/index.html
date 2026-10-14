@@ -9,15 +9,17 @@
 <meta property="og:description" content="Select text in any input box, click a small button, get the translation. Windows tray app, bring your own model.">
 <meta property="og:image" content="https://margbug01.github.io/mami/card.png">
 <link rel="icon" href="icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Regular.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Medium.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Semibold.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Bold.min.css">
 <style>
 :root {
   --bg: #f4f5f7; --fg: #101114; --muted: #5b616d; --line: #dcdee3;
   --panel: #ffffff; --accent: #2f6fed; --accent-fg: #ffffff; --sel: #cddffd;
-  --display: "Bricolage Grotesque", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  --body: "Figtree", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --display: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --body: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -52,7 +54,7 @@ header nav a:hover { color: var(--fg); }
 /* hero */
 .hero { display: grid; gap: clamp(2rem, 5vw, 4rem); padding: clamp(2rem, 6vw, 4.5rem) 0 clamp(3rem, 8vw, 6rem); align-items: center; }
 @media (min-width: 920px) { .hero { grid-template-columns: 1fr 460px; } }
-h1 { font: 700 clamp(2.6rem, 6.4vw, 4.4rem)/1.04 var(--display); letter-spacing: -.035em; margin: 0 0 1.4rem; text-wrap: balance; }
+h1 { font: 700 clamp(2.6rem, 6.4vw, 4.4rem)/1.04 var(--display); letter-spacing: -.025em; margin: 0 0 1.4rem; text-wrap: balance; }
 :lang(zh-CN) h1, :lang(zh-CN) h2 { letter-spacing: 0; }
 .lead { font-size: 1.15rem; max-width: 33rem; color: var(--muted); margin: 0 0 2rem; }
 kbd {
@@ -102,7 +104,7 @@ kbd {
 
 /* sections */
 section { padding: clamp(2.5rem, 6vw, 4.5rem) 0; border-top: 1px solid var(--line); }
-h2 { font: 700 clamp(1.7rem, 3.4vw, 2.4rem)/1.1 var(--display); letter-spacing: -.025em; margin: 0 0 2rem; max-width: 30rem; text-wrap: balance; }
+h2 { font: 700 clamp(1.7rem, 3.4vw, 2.4rem)/1.1 var(--display); letter-spacing: -.015em; margin: 0 0 2rem; max-width: 30rem; text-wrap: balance; }
 .points { display: grid; gap: 2rem 3rem; margin: 0; }
 @media (min-width: 760px) { .points { grid-template-columns: 1fr 1fr; } }
 .points dt { font: 700 1.15rem var(--display); margin-bottom: .35rem; }
@@ -215,7 +217,7 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
   </main>
 
   <footer>
-    <span data-i18n="foot">MIT licensed. Built with Go and MyGo.</span>
+    <span data-i18n="foot">MIT licensed. Built with Go and MyGo. Set in MiSans.</span>
     <a href="https://github.com/margbug01/mami">GitHub</a>
     <a href="https://github.com/margbug01/mami/releases/latest">Releases</a>
     <a href="https://github.com/margbug01/mami/blob/main/README_zh.md">中文 README</a>
@@ -268,7 +270,7 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       th1: "Provider", th2: "Model", th3: "Notes",
       n1: "Paid, stable, about 1 s.", n2: "Same model family, pay as you go.",
       n3p: "bilibili (free)", n3: "No key. Can be flaky at peak hours.",
-      foot: "MIT licensed. Built with Go and MyGo."
+      foot: "MIT licensed. Built with Go and MyGo. Set in MiSans."
     },
     zh: {
       h1: "在哪打字，就在哪翻译。",
@@ -295,7 +297,7 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       th1: "服务商", th2: "模型", th3: "说明",
       n1: "收费，稳定，约 1 秒。", n2: "同一系列模型，按量付费。",
       n3p: "B 站（免费）", n3: "不用 Key，高峰期可能不稳。",
-      foot: "MIT 许可。用 Go 和 MyGo 写成。"
+      foot: "MIT 许可。用 Go 和 MyGo 写成，字体 MiSans。"
     }
   };
   var ORIGINAL = "这是写给 AI 的提示词：请逐条检查日志，不要直接改代码。";
