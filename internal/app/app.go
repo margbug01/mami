@@ -55,6 +55,7 @@ type App struct {
 	tr  *Translator
 
 	btnWin, popWin, setWin *mygo.Window
+	anchorWin              *mygo.Window
 	btnHwnd, popHwnd       atomic.Uintptr
 	tray                   *mygo.Tray
 	quitting               bool
@@ -105,22 +106,20 @@ func (a *App) setConfig(cfg Config) error {
 
 // minW/minH 必须给：不给的话 Windows 按带标题栏窗口的最小尺寸算（约 136×38 DIP），小按钮会被撑宽
 func (a *App) floatingWindow(title string, w, h, minW, minH int, view func(c *ui.Context)) (*mygo.Window, uintptr) {
-	win := mygo.NewWindow(mygo.WindowOptions{
-		Title:             title,
-		Width:             w,
-		Height:            h,
-		MinWidth:          minW,
-		MinHeight:         minH,
-		Hidden:            true,
-		Frameless:         true,
-		DisableShadow:     true,
-		AlwaysOnTop:       true,
-		SkipTaskbar:       true,
-		DisableResize:     true,
-		DisableMinimize:   true,
-		DisableMaximize:   true,
-		DisableFullScreen: true,
-		Content:           ui.View(view),
+	// 浮出层（Flyout）：无框、不画系统阴影、不抢键盘，窗口本身透明合成，
+	// 圆角由界面自己抗锯齿地画。它必须有个 Parent，用一个隐藏的小窗口充当。
+	if a.anchorWin == nil {
+		a.anchorWin = mygo.NewWindow(mygo.WindowOptions{
+			Title: "mami-anchor", Width: 1, Height: 1, Hidden: true, Frameless: true,
+			SkipTaskbar: true, Content: ui.View(func(c *ui.Context) {}),
+		})
+	}
+	win := mygo.NewFlyout(mygo.FlyoutOptions{
+		Parent:  a.anchorWin,
+		Width:   w,
+		Height:  h,
+		Hidden:  true,
+		Content: ui.View(view),
 	})
 	win.OnClose(func(e *mygo.CloseEvent) {
 		if !a.quitting { // Alt+F4 之类只是藏起来

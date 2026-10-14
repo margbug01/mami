@@ -88,6 +88,9 @@ func loadAvatar() *ui.Bitmap {
 
 // ---------- 浮动按钮 ----------
 
+// cornerR 按钮和卡片的圆角半径（DIP）
+const cornerR = 10
+
 // buttonColors 划词按钮配色：深色主题纯黑底白字，浅色主题白底黑字，不用主题蓝
 func buttonColors(t *ui.Theme) (bg, fg, hover ui.Color) {
 	if t.Dark {
@@ -100,7 +103,7 @@ func (a *App) buttonView(c *ui.Context) {
 	t := a.themed(c)
 	bg, fg, hoverBg := buttonColors(t)
 	b := ui.ButtonBase(c).Fill().Center().
-		Background(bg).Border(1, t.Border).Cursor(ui.CursorPointer).Label(T("翻译")).Tooltip(T("翻译"))
+		Background(bg).Border(1, t.Border).Radius(cornerR).Cursor(ui.CursorPointer).Label(T("翻译")).Tooltip(T("翻译"))
 	if a.btnBusy.Load() {
 		b.Cursor(ui.CursorDefault).Label(T("翻译中")).Tooltip(T("翻译中…"))
 		b.Children(func() { ui.Spinner(c).FontSize(18).TextColor(fg) })
@@ -146,7 +149,7 @@ func (a *App) popupView(c *ui.Context) {
 		go a.resizePopup(w, want, anchor)
 	}
 
-	ui.Column(c).Fill().Padding(pad, 14).Gap(gap).Background(t.Background).Border(1, t.Border).Children(func() {
+	ui.Column(c).Fill().Padding(pad, 14).Gap(gap).Background(t.Background).Border(1, t.Border).Radius(cornerR).Children(func() {
 		ui.Row(c).Height(headH).Gap(6).Children(func() {
 			if a.avatar != nil {
 				ui.Image(c, a.avatar).Size(18, 18).Radius(9).Clip()
@@ -217,7 +220,12 @@ func (a *App) runDemo() {
 func (a *App) themed(c *ui.Context) *ui.Theme {
 	cfg, _ := a.config()
 	applyTheme(c, cfg.Theme)
-	return c.Theme()
+	t := c.Theme()
+	// 窗口根背景透明，圆角外面才露出桌面；按钮和卡片的底色仍用 t 里的原色
+	clear := *t
+	clear.Background = ui.RGBA(0, 0, 0, 0)
+	c.SetTheme(&clear)
+	return t
 }
 
 func applyTheme(c *ui.Context, mode string) {
