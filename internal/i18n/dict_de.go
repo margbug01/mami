@@ -54,6 +54,7 @@ var dictDE = map[string]string{
 	" · 终端里不替换":                  " · In Terminals wird nicht ersetzt",
 	"选中了 %d 个字，超过上限 %d。":         "%d Zeichen markiert, das Limit liegt bei %d.",
 	"没取到选中的文字。这个窗口可能不支持 Ctrl+C。": "Der markierte Text konnte nicht gelesen werden. Dieses Fenster unterstützt Strg+C möglicherweise nicht.",
+	"没选中文字，光标也不在输入框里。为了不把整页内容都选上，这里不会自动全选。":         "Kein Text markiert, und der Cursor steht nicht in einem Eingabefeld. Damit nicht die ganze Seite markiert wird, wird hier nicht automatisch alles ausgewählt.",
 	"终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。": "Markiere im Terminal den Text zuerst mit der Maus. Damit kein Strg+C ein laufendes Programm unterbricht, wird dort nicht automatisch alles markiert.",
 
 	"设置…": "Einstellungen …", "打开日志": "Protokoll öffnen", "退出": "Beenden", " 原地替换": " direkt ersetzen",

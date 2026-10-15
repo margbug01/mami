@@ -387,7 +387,7 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 	term := isTerminal(fg)
 	wantReplace := replace
 	var text string
-	var selectedAll bool
+	var selectedAll, noInput bool
 	if term {
 		// 终端：没选中时 Ctrl+C 是中断信号，Ctrl+A 各 TUI 意思也不一样，所以一个键都不发，
 		// 直接经 UIA 读终端自己的选区；替换也做不到（粘贴不会删掉选中的字），只给卡片
@@ -395,7 +395,7 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 		replace = false
 		log.Printf("grab (terminal, uia): %d chars", len([]rune(text)))
 	} else {
-		text, selectedAll = grabSelection(owner, fromHotkey && cfg.SelectAllIfEmpty)
+		text, selectedAll, noInput = grabSelection(owner, fromHotkey && cfg.SelectAllIfEmpty)
 	}
 	id := a.reqSeq.Add(1)
 	st := popupState{reqID: id, replace: replace, fg: fg, anchor: anchor, toast: replace, terminal: term, selectedAll: selectedAll}
@@ -405,6 +405,12 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 
 	if term && strings.TrimSpace(text) == "" {
 		st.toast, st.status, st.header, st.text = false, statusError, "Mami", T("终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。")
+		a.endBusy()
+		a.showPopup(st)
+		return
+	}
+	if noInput {
+		st.toast, st.status, st.header, st.text = false, statusError, "Mami", T("没选中文字，光标也不在输入框里。为了不把整页内容都选上，这里不会自动全选。")
 		a.endBusy()
 		a.showPopup(st)
 		return

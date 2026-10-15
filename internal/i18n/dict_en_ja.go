@@ -97,6 +97,7 @@ var Dict = map[string][2]string{
 	" · 终端里不替换":      {" · Not replaced in terminals", " · ターミナルでは置換しません"},
 	"选中了 %d 个字，超过上限 %d。":                            {"%d characters selected, over the limit of %d.", "%d 文字を選択しました。上限 %d を超えています。"},
 	"没取到选中的文字。这个窗口可能不支持 Ctrl+C。":                    {"Couldn't get the selected text. This window may not support Ctrl+C.", "選択した文字を取得できませんでした。このウィンドウは Ctrl+C に対応していない可能性があります。"},
+	"没选中文字，光标也不在输入框里。为了不把整页内容都选上，这里不会自动全选。":         {"No text selected, and the cursor isn’t in a text box. To avoid selecting the whole page, Mami won’t select all here.", "文字が選択されておらず、カーソルも入力欄にありません。ページ全体を選択しないよう、ここでは自動で全選択しません。"},
 	"终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。": {"In a terminal, select the text with the mouse first. To avoid sending Ctrl+C and interrupting a running program, Mami never auto-selects there.", "ターミナルでは先にマウスで文字を選択してください。実行中のプログラムを Ctrl+C で中断しないよう、自動全選択は行いません。"},
 
 	// 托盘

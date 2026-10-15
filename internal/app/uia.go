@@ -117,42 +117,57 @@ func selectedTextUIA() string {
 	}
 }
 
-// uiaEmptyReqs 问焦点输入框里是不是明确什么都没选（Alt+T 没选中时直接全选，不白等 Ctrl+C）
-var uiaEmptyReqs = make(chan chan bool, 4)
+// inputState Alt+T 没选中时用：焦点是不是能打字的输入框、里面是不是明确什么都没选
+type inputState struct {
+	input bool // 可写的 ValuePattern，或者不是整页 Document 的 TextPattern
+	empty bool // 输入框里选区明确是空的：Ctrl+C 不会改剪贴板，不用白等 600ms
+}
 
-// selectionKnownEmpty 焦点是带 TextPattern 的输入框，而且选区明确是空的。问不出、超时都返回 false，照旧先试 Ctrl+C
-func selectionKnownEmpty() bool {
-	reply := make(chan bool, 1)
+var uiaInputReqs = make(chan chan inputState, 4)
+
+// focusedInput 问不出、超时都当不是输入框：宁可不全选，也别把整页聊天记录/网页选上
+func focusedInput() inputState {
+	reply := make(chan inputState, 1)
 	select {
-	case uiaEmptyReqs <- reply:
+	case uiaInputReqs <- reply:
 	default:
-		return false
+		return inputState{}
 	}
 	select {
 	case v := <-reply:
 		return v
 	case <-time.After(200 * time.Millisecond):
-		return false
+		log.Println("uia: input query timed out")
+		return inputState{}
 	}
 }
 
-// focusedSelectionEmpty 在 UIA 线程上；网页正文（Document）不算输入框
-func focusedSelectionEmpty(auto uintptr) bool {
+// focusedInputState 在 UIA 线程上；判定和 uiaFocus 一致，网页正文（Document）不算输入框
+func focusedInputState(auto uintptr) inputState {
 	var el uintptr
 	if hr := comCall(auto, 8, uintptr(unsafe.Pointer(&el))); hr != 0 || el == 0 { // GetFocusedElement
-		return false
+		return inputState{}
 	}
 	defer comRelease(el)
 	ct := uiaProp(el, uiaControlTypeProperty)
+	valuePat := uiaProp(el, uiaIsValuePatternAvail).boolean()
+	readOnly := uiaProp(el, uiaValueIsReadOnly)
 	textPat := uiaProp(el, uiaIsTextPatternAvailable).boolean()
+	isDoc := ct.VT == vtI4 && int32(ct.Val) == uiaDocumentControlType
+	var s inputState
+	s.input = (valuePat && readOnly.VT == vtBool && !readOnly.boolean()) || (textPat && !isDoc)
+	if readOnly.VT != vtBool && readOnly.VT != 0 {
+		pVariantClear.Call(uintptr(unsafe.Pointer(&readOnly)))
+	}
 	st := selUnknown
-	if textPat && !(ct.VT == vtI4 && int32(ct.Val) == uiaDocumentControlType) {
+	if s.input && textPat {
 		st, _, _ = uiaSelection(el)
 	}
-	if st != selEmpty {
-		log.Printf("uia: selection not known empty (controlType=%d textPattern=%v state=%d)", int32(ct.Val), textPat, st)
+	s.empty = st == selEmpty
+	if !s.empty {
+		log.Printf("uia: focus controlType=%d input=%v textPattern=%v selection=%d", int32(ct.Val), s.input, textPat, st)
 	}
-	return st == selEmpty
+	return s
 }
 
 // focusedSelectionText 在 UIA 线程上：焦点元素 TextPattern 的全部选区拼起来
@@ -213,8 +228,8 @@ func startUIA() error {
 				req.reply <- focusIsEditable(auto, req.fg, req.pt)
 			case reply := <-uiaTextReqs:
 				reply <- focusedSelectionText(auto)
-			case reply := <-uiaEmptyReqs:
-				reply <- focusedSelectionEmpty(auto)
+			case reply := <-uiaInputReqs:
+				reply <- focusedInputState(auto)
 			}
 		}
 	}()

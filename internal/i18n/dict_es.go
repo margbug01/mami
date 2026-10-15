@@ -54,6 +54,7 @@ var dictES = map[string]string{
 	" · 终端里不替换":                  " · No se reemplaza en terminales",
 	"选中了 %d 个字，超过上限 %d。":         "Se seleccionaron %d caracteres; el límite es %d.",
 	"没取到选中的文字。这个窗口可能不支持 Ctrl+C。": "No se pudo obtener el texto seleccionado. Es posible que esta ventana no admita Ctrl+C.",
+	"没选中文字，光标也不在输入框里。为了不把整页内容都选上，这里不会自动全选。":         "No hay texto seleccionado y el cursor no está en un cuadro de texto. Para no seleccionar toda la página, aquí no se selecciona todo automáticamente.",
 	"终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。": "En una terminal, selecciona primero el texto con el ratón. Para no enviar Ctrl+C e interrumpir un programa en ejecución, no se selecciona todo automáticamente.",
 
 	"设置…": "Configuración…", "打开日志": "Abrir registro", "退出": "Salir", " 原地替换": " traducir y reemplazar",

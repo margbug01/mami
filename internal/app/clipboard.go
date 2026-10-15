@@ -216,14 +216,22 @@ func waitModifiersUp(timeout time.Duration) {
 }
 
 // grabSelection 用模拟 Ctrl+C 取当前选中的文字，取完把剪贴板原样还回去。
-func grabSelection(owner uintptr, selectAllIfEmpty bool) (text string, selectedAll bool) {
+// 没选中时只在确实是输入框里才全选：焦点在聊天记录、网页正文上按 Ctrl+A 会把整页几千字都选上。
+// noInput：想全选但焦点不是输入框，所以没全选
+func grabSelection(owner uintptr, selectAllIfEmpty bool) (text string, selectedAll, noInput bool) {
 	snap, _ := snapshotClipboard(owner)
 	snapSeq := clipSeq()
 	changed := false
 
 	seq := clipSeq()
 	start := time.Now()
-	if selectAllIfEmpty && selectionKnownEmpty() {
+	var in inputState
+	if selectAllIfEmpty {
+		in = focusedInput()
+		// UIA 说不清的老式程序/Qt（微信这类）：有系统输入光标也算输入框
+		in.input = in.input || systemCaret(foreground())
+	}
+	if selectAllIfEmpty && in.input && in.empty {
 		// 输入框明确没选中：Ctrl+C 不会改剪贴板，等它就是白等 600ms，直接走下面的全选
 		log.Printf("grab: nothing selected (uia, %v), select all", time.Since(start).Round(time.Millisecond))
 	} else {
@@ -236,21 +244,27 @@ func grabSelection(owner uintptr, selectAllIfEmpty bool) (text string, selectedA
 		log.Printf("grab: ctrl+c changed=%v after %v (sendinput %v), %d chars, seq %d→%d", changed, time.Since(start).Round(time.Millisecond), sent.Round(time.Millisecond), len([]rune(text)), seq, clipSeq())
 	}
 	if strings.TrimSpace(text) == "" && selectAllIfEmpty {
-		sendCtrl('A')
-		selectedAll = true
-		pumpSleep(40 * time.Millisecond)
-		seq = clipSeq()
-		sendCtrl('C')
-		if waitClipChange(seq, 600*time.Millisecond) {
-			changed = true
-			text = getClipboardText(owner)
+		if !in.input {
+			log.Printf("grab: nothing selected and focus is not an input box, not selecting all")
+			noInput = true
+		} else {
+			sendCtrl('A')
+			selectedAll = true
+			pumpSleep(40 * time.Millisecond)
+			seq = clipSeq()
+			sendCtrl('C')
+			if waitClipChange(seq, 600*time.Millisecond) {
+				changed = true
+				text = getClipboardText(owner)
+			}
+			log.Printf("grab: select all → %d chars", len([]rune(text)))
 		}
 	}
 	// 超时之后剪贴板才被写（程序卡了一下）也得还原，不然用户原来的剪贴板就被顶掉了
 	if changed || clipSeq() != snapSeq {
 		restoreClipboard(owner, snap)
 	}
-	return text, selectedAll
+	return text, selectedAll, noInput
 }
 
 // collapseSelection 按一下右方向键：全选留下的选区收到末尾，光标回到文字最后

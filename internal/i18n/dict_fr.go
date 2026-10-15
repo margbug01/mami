@@ -54,6 +54,7 @@ var dictFR = map[string]string{
 	" · 终端里不替换":                  " · Pas de remplacement dans les terminaux",
 	"选中了 %d 个字，超过上限 %d。":         "%d caractères sélectionnés, la limite est de %d.",
 	"没取到选中的文字。这个窗口可能不支持 Ctrl+C。": "Impossible de récupérer le texte sélectionné. Cette fenêtre ne prend peut-être pas en charge Ctrl+C.",
+	"没选中文字，光标也不在输入框里。为了不把整页内容都选上，这里不会自动全选。":         "Aucun texte sélectionné et le curseur n'est pas dans une zone de saisie. Pour éviter de sélectionner toute la page, rien n'est sélectionné automatiquement ici.",
 	"终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。": "Dans un terminal, sélectionnez d'abord le texte à la souris. Pour ne pas envoyer Ctrl+C et interrompre un programme en cours, rien n'y est sélectionné automatiquement.",
 
 	"设置…": "Paramètres…", "打开日志": "Ouvrir le journal", "退出": "Quitter", " 原地替换": " remplacer sur place",
