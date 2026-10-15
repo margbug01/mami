@@ -178,6 +178,11 @@ func waitClipChange(seq uint32, timeout time.Duration) bool {
 		}
 		pumpSleep(10 * time.Millisecond)
 	}
+	// 卡顿时一次循环就能睡过 deadline：出门前再看一眼，晚到的复制也算
+	if clipSeq() != seq {
+		pumpSleep(20 * time.Millisecond)
+		return true
+	}
 	return false
 }
 
@@ -213,6 +218,7 @@ func waitModifiersUp(timeout time.Duration) {
 // grabSelection 用模拟 Ctrl+C 取当前选中的文字，取完把剪贴板原样还回去。
 func grabSelection(owner uintptr, selectAllIfEmpty bool) (text string, selectedAll bool) {
 	snap, _ := snapshotClipboard(owner)
+	snapSeq := clipSeq()
 	changed := false
 
 	seq := clipSeq()
@@ -222,11 +228,12 @@ func grabSelection(owner uintptr, selectAllIfEmpty bool) (text string, selectedA
 		log.Printf("grab: nothing selected (uia, %v), select all", time.Since(start).Round(time.Millisecond))
 	} else {
 		sendCtrl('C')
+		sent := time.Since(start)
 		if waitClipChange(seq, 600*time.Millisecond) {
 			changed = true
 			text = getClipboardText(owner)
 		}
-		log.Printf("grab: ctrl+c changed=%v after %v, %d chars, seq %d→%d", changed, time.Since(start).Round(time.Millisecond), len([]rune(text)), seq, clipSeq())
+		log.Printf("grab: ctrl+c changed=%v after %v (sendinput %v), %d chars, seq %d→%d", changed, time.Since(start).Round(time.Millisecond), sent.Round(time.Millisecond), len([]rune(text)), seq, clipSeq())
 	}
 	if strings.TrimSpace(text) == "" && selectAllIfEmpty {
 		sendCtrl('A')
@@ -239,7 +246,8 @@ func grabSelection(owner uintptr, selectAllIfEmpty bool) (text string, selectedA
 			text = getClipboardText(owner)
 		}
 	}
-	if changed {
+	// 超时之后剪贴板才被写（程序卡了一下）也得还原，不然用户原来的剪贴板就被顶掉了
+	if changed || clipSeq() != snapSeq {
 		restoreClipboard(owner, snap)
 	}
 	return text, selectedAll
