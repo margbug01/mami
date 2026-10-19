@@ -29,6 +29,22 @@ type voiceKeys struct {
 	pressed   [256]bool
 }
 
+// heal 把记成「按着」、实际早已松开的键纠正回来。低级钩子收不到锁屏、安全桌面、管理员窗口里的按键，
+// 漏掉一次松开，之后每次按触发键都会被当成组合键（或当成触发键的连发）而不启动。
+// isDown 在钩子里是这次事件之前的真实状态（GetAsyncKeyState 在钩子返回后才更新）。
+func (s *voiceKeys) heal(isDown func(vk uint32) bool) (healed []uint32) {
+	for vk, pressed := range s.pressed {
+		if pressed && !isDown(uint32(vk)) {
+			s.pressed[vk] = false
+			healed = append(healed, uint32(vk))
+			if uint32(vk) == s.held { // 触发键自己的松开丢了：当作这一下按成组合键作废，不动正在进行的录音
+				s.held, s.combo = 0, false
+			}
+		}
+	}
+	return healed
+}
+
 func (s *voiceKeys) othersDown(trigger uint32) bool {
 	for key, pressed := range s.pressed {
 		if pressed && uint32(key) != trigger {

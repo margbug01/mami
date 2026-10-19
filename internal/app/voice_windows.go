@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"log"
 	"math"
 	"strings"
 	"sync/atomic"
@@ -44,8 +45,15 @@ func voiceHookKey(key *kbdLLHook, down bool) bool {
 	if voiceKeyboard.recording && voiceRecording.Load() == 0 {
 		voiceKeyboard.recording = false // 录音已在别处结束（点了胶囊、超时、出错），下一下重新开始
 	}
+	if healed := voiceKeyboard.heal(func(vk uint32) bool { return keyDown(uintptr(vk)) }); len(healed) > 0 {
+		log.Printf("voice: cleared stuck keys %x", healed)
+	}
 	held := voiceKeyboard.held
-	action, swallow := voiceKeyboard.step(key.VkCode, down, trigger, voiceActive.Load() != 0 || blocked)
+	busy := voiceActive.Load() != 0
+	action, swallow := voiceKeyboard.step(key.VkCode, down, trigger, busy || blocked)
+	if down && key.VkCode == trigger && held == 0 && action == voiceNone && !voiceKeyboard.recording {
+		log.Printf("voice: trigger ignored (busy=%v modifier=%v others=%v)", busy, blocked, voiceKeyboard.othersDown(trigger))
+	}
 	if !down && key.VkCode == held && held == 0xA5 {
 		sendKeys(KEYBDINPUT{WVk: VK_MASK}, KEYBDINPUT{WVk: VK_MASK, DwFlags: KEYEVENTF_KEYUP})
 	}

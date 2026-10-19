@@ -54,3 +54,32 @@ func TestVoiceKeys(t *testing.T) {
 		t.Fatal("key mapping")
 	}
 }
+
+func TestVoiceKeysHeal(t *testing.T) {
+	const trigger = 0xA3
+	var s voiceKeys
+	// Win+L 锁屏：按下收到了，松开在安全桌面上收不到
+	s.step(0x5B, true, trigger, false)
+	s.step('L', true, trigger, false)
+	if action, _ := s.step(trigger, true, trigger, false); action != voiceNone {
+		t.Fatal("stuck keys should block, as before the fix")
+	}
+	s.step(trigger, false, trigger, false)
+	if healed := s.heal(func(vk uint32) bool { return false }); len(healed) != 2 {
+		t.Fatalf("healed %v", healed)
+	}
+	if action, _ := s.step(trigger, true, trigger, false); action != voiceStart {
+		t.Fatal("trigger should start after healing")
+	}
+	// 触发键自己的松开丢了：held 清掉，下一下重新算
+	s.heal(func(vk uint32) bool { return false })
+	if s.held != 0 || s.pressed[trigger] {
+		t.Fatal("held trigger not cleared")
+	}
+	// 真按着的键不动
+	s = voiceKeys{}
+	s.step('A', true, trigger, false)
+	if healed := s.heal(func(vk uint32) bool { return vk == 'A' }); len(healed) != 0 || !s.pressed['A'] {
+		t.Fatal("real key cleared")
+	}
+}
