@@ -11,46 +11,54 @@ import (
 )
 
 type Config struct {
-	VoiceEnabled     bool     `json:"voice_enabled"`
-	VoiceHotkey      string   `json:"voice_hotkey"`
-	VoiceStyle       string   `json:"voice_style"` // 胶囊样式：bars 渐变波柱 / orb 果冻球
-	VoiceSound       bool     `json:"voice_sound"` // 开始、结束、取消的提示音
-	ASRBaseURL       string   `json:"asr_base_url"`
-	ASRModel         string   `json:"asr_model"`
-	ASRAPIKey        string   `json:"asr_api_key,omitempty"`
-	ASRAPIKeyDPAPI   string   `json:"asr_api_key_dpapi,omitempty"`
-	ASRHotwords      []string `json:"asr_hotwords"`
-	BaseURL          string   `json:"base_url"`
-	APIKey           string   `json:"api_key,omitempty"` // 只在内存里是明文；存盘时加密进 api_key_dpapi
-	APIKeyDPAPI      string   `json:"api_key_dpapi,omitempty"`
-	Model            string   `json:"model"`
-	TargetForChinese string   `json:"target_for_chinese"`
-	TargetForOther   string   `json:"target_for_other"`
-	Hotkey           string   `json:"hotkey"`
-	PopupHotkey      string   `json:"popup_hotkey"`
-	ShowButton       bool     `json:"show_button"`
-	RequireIBeam     bool     `json:"require_ibeam"`
-	OnlyInInputs     bool     `json:"only_in_inputs"`
-	ShowInBlindApps  bool     `json:"show_in_blind_apps"` // 微信这类认不出输入框的程序：照样弹
-	ButtonAction     string   `json:"button_action"`      // 点翻译按钮后：card / result / replace
-	ButtonTimeoutMs  int      `json:"button_timeout_ms"`
-	SelectAllIfEmpty bool     `json:"select_all_if_empty"`
-	MaxChars         int      `json:"max_chars"`
-	TimeoutSec       int      `json:"timeout_sec"`
-	Proxy            string   `json:"proxy"`
-	Temperature      *float64 `json:"temperature"`
-	ExtraPrompt      string   `json:"extra_prompt"`
-	ExcludeProcesses []string `json:"exclude_processes"`
-	DisableHotkeys   bool     `json:"disable_hotkeys"` // 总开关：true 时一个全局快捷键都不注册
-	Language         string   `json:"language"`        // 界面语言：auto / zh / en / ja
-	Theme            string   `json:"theme"`           // 外观：auto / light / dark
-	StreamCard       bool     `json:"stream_card"`     // 卡片里边翻边显示（关掉就整段出来再显示）
-	History          bool     `json:"history"`         // 保存翻译记录到 history/*.jsonl
-	HistoryDays      int      `json:"history_days"`    // 记录保留几天，0 = 永久
+	PolishStyle       string   `json:"polish_style"`
+	PolishBaseURL     string   `json:"polish_base_url"`
+	PolishModel       string   `json:"polish_model"`
+	PolishAPIKey      string   `json:"polish_api_key,omitempty"`
+	PolishAPIKeyDPAPI string   `json:"polish_api_key_dpapi,omitempty"`
+	VoiceEnabled      bool     `json:"voice_enabled"`
+	VoiceHotkey       string   `json:"voice_hotkey"`
+	VoiceStyle        string   `json:"voice_style"` // 胶囊样式：bars 渐变波柱 / orb 果冻球
+	VoiceSound        bool     `json:"voice_sound"` // 开始、结束、取消的提示音
+	ASRBaseURL        string   `json:"asr_base_url"`
+	ASRModel          string   `json:"asr_model"`
+	ASRAPIKey         string   `json:"asr_api_key,omitempty"`
+	ASRAPIKeyDPAPI    string   `json:"asr_api_key_dpapi,omitempty"`
+	ASRHotwords       []string `json:"asr_hotwords"`
+	BaseURL           string   `json:"base_url"`
+	APIKey            string   `json:"api_key,omitempty"` // 只在内存里是明文；存盘时加密进 api_key_dpapi
+	APIKeyDPAPI       string   `json:"api_key_dpapi,omitempty"`
+	Model             string   `json:"model"`
+	TargetForChinese  string   `json:"target_for_chinese"`
+	TargetForOther    string   `json:"target_for_other"`
+	Hotkey            string   `json:"hotkey"`
+	PopupHotkey       string   `json:"popup_hotkey"`
+	ShowButton        bool     `json:"show_button"`
+	RequireIBeam      bool     `json:"require_ibeam"`
+	OnlyInInputs      bool     `json:"only_in_inputs"`
+	ShowInBlindApps   bool     `json:"show_in_blind_apps"` // 微信这类认不出输入框的程序：照样弹
+	ButtonAction      string   `json:"button_action"`      // 点翻译按钮后：card / result / replace
+	ButtonTimeoutMs   int      `json:"button_timeout_ms"`
+	SelectAllIfEmpty  bool     `json:"select_all_if_empty"`
+	MaxChars          int      `json:"max_chars"`
+	TimeoutSec        int      `json:"timeout_sec"`
+	Proxy             string   `json:"proxy"`
+	Temperature       *float64 `json:"temperature"`
+	ExtraPrompt       string   `json:"extra_prompt"`
+	ExcludeProcesses  []string `json:"exclude_processes"`
+	DisableHotkeys    bool     `json:"disable_hotkeys"` // 总开关：true 时一个全局快捷键都不注册
+	Language          string   `json:"language"`        // 界面语言：auto / zh / en / ja
+	Theme             string   `json:"theme"`           // 外观：auto / light / dark
+	StreamCard        bool     `json:"stream_card"`     // 卡片里边翻边显示（关掉就整段出来再显示）
+	History           bool     `json:"history"`         // 保存翻译记录到 history/*.jsonl
+	HistoryDays       int      `json:"history_days"`    // 记录保留几天，0 = 永久
 }
 
 func defaultConfig() Config {
 	return Config{
+		PolishStyle:      "standard",
+		PolishBaseURL:    "https://api.deepseek.com/v1",
+		PolishModel:      "deepseek-flash",
 		VoiceHotkey:      "RAlt",
 		VoiceStyle:       "bars",
 		VoiceSound:       true,
@@ -87,6 +95,20 @@ const (
 )
 
 func (c *Config) normalize() {
+	switch c.PolishStyle {
+	case "off", "light", "standard", "structured":
+	default:
+		c.PolishStyle = "standard"
+	}
+	c.PolishBaseURL = strings.TrimRight(strings.TrimSpace(c.PolishBaseURL), "/")
+	if c.PolishBaseURL == "" {
+		c.PolishBaseURL = "https://api.deepseek.com/v1"
+	}
+	c.PolishModel = strings.TrimSpace(c.PolishModel)
+	if c.PolishModel == "" {
+		c.PolishModel = "deepseek-flash"
+	}
+	c.PolishAPIKey = strings.TrimSpace(c.PolishAPIKey)
 	switch c.VoiceHotkey {
 	case "RAlt", "RCtrl", "RShift", "Off":
 	default:
@@ -153,6 +175,15 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 			return cfg, false, fmt.Errorf(T("%s 格式不对：%w"), filepath.Base(path), err)
 		}
 	}
+	polishPlain := strings.TrimSpace(cfg.PolishAPIKey) != ""
+	if !polishPlain && cfg.PolishAPIKeyDPAPI != "" {
+		if k, err := unprotectKey(cfg.PolishAPIKeyDPAPI); err == nil {
+			cfg.PolishAPIKey = k
+		} else {
+			log.Printf("polish key: can't decrypt: %v", err)
+		}
+	}
+	cfg.PolishAPIKeyDPAPI = ""
 	asrPlain := strings.TrimSpace(cfg.ASRAPIKey) != ""
 	if !asrPlain && cfg.ASRAPIKeyDPAPI != "" {
 		if k, err := unprotectKey(cfg.ASRAPIKeyDPAPI); err == nil {
@@ -172,7 +203,7 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 		}
 	}
 	cfg.APIKeyDPAPI = ""
-	if plainInFile || asrPlain {
+	if plainInFile || asrPlain || polishPlain {
 		// 旧版本存的明文 key：马上加密存回去，不用等下次在设置里点保存
 		if err := saveConfig(path, cfg); err != nil {
 			log.Printf("api key: encrypt plain key in config: %v", err)
@@ -193,6 +224,14 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 // saveConfig 先写临时文件再改名，写一半崩了也不会留下坏配置。
 func saveConfig(path string, cfg Config) error {
 	cfg.normalize()
+	cfg.PolishAPIKeyDPAPI = ""
+	if cfg.PolishAPIKey != "" {
+		enc, err := protectKey(cfg.PolishAPIKey)
+		if err != nil {
+			return fmt.Errorf("Polish DPAPI: %w", err)
+		}
+		cfg.PolishAPIKey, cfg.PolishAPIKeyDPAPI = "", enc
+	}
 	cfg.ASRAPIKeyDPAPI = ""
 	if cfg.ASRAPIKey != "" {
 		enc, err := protectKey(cfg.ASRAPIKey)

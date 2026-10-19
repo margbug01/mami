@@ -39,7 +39,14 @@ func (a *App) historyStatsNow() *historyStats {
 func (a *App) pageHistory(c *ui.Context, d *Config) {
 	t := c.Theme()
 	st := a.historyStatsNow()
-	pageTitle(c, T("翻译记录"))
+	pageTitle(c, T("记录"))
+	ui.Row(c).Padding(4, 0, 12, 0).Children(func() {
+		ui.Segmented(c, &a.set.histTab, T("翻译"), T("语音")).Label(T("记录"))
+	})
+	if a.set.histTab == 1 {
+		a.voiceHistory(c, d, st)
+		return
+	}
 	if !d.History {
 		ui.Text(c, T("还没打开「保存翻译记录」（在「通用」页）。下面的次数和耗时是从日志里补出来的，没有原文和用法。")).
 			FontSize(12).TextColor(t.TextMuted).Padding(0, 0, 8, 0)

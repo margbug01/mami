@@ -25,6 +25,7 @@ type historyStats struct {
 	sumMs            int64
 	nMs              int64
 	sumFirst, nFirst int64
+	voice            []historyEntry // 语音记录，新的在前
 	loaded           time.Time
 }
 
@@ -80,6 +81,9 @@ func loadHistoryStats(dir string, logs []string) *historyStats {
 					s.sumFirst += e.FirstMs
 					s.nFirst++
 				}
+			case "voice":
+				e.Messages = nil
+				s.voice = append(s.voice, e)
 			case "action":
 				if e.Action == "copy" || e.Action == "replace" {
 					acted[e.ID] = "used"
@@ -100,7 +104,45 @@ func loadHistoryStats(dir string, logs []string) *historyStats {
 	for _, l := range logs {
 		s.addFromLog(l, earliest)
 	}
+	// RFC3339 同一时区下按字符串排就是按时间排
+	sort.SliceStable(s.voice, func(i, j int) bool { return s.voice[i].Time > s.voice[j].Time })
 	return s
+}
+
+// voiceFinal 贴出去的那段：润色后的文字，没润色（或旧记录）就是识别原文
+func voiceFinal(e historyEntry) string {
+	if e.Translation != "" {
+		return e.Translation
+	}
+	return e.Source
+}
+
+// typingCharsPerMin 估「省下的时间」用的打字速度：中文日常打字大约每分钟 50 字
+const typingCharsPerMin = 50
+
+type voiceSummary struct {
+	total, today, chars int
+	savedMs             int64 // 打这些字要的时间减去说话+识别+润色的时间，每条不低于 0
+	polishMs, nPolish   int64
+}
+
+func summarizeVoice(list []historyEntry, now time.Time) voiceSummary {
+	var v voiceSummary
+	day := now.Format("2006-01-02")
+	for _, e := range list {
+		n := len([]rune(strings.TrimSpace(voiceFinal(e))))
+		v.total++
+		v.chars += n
+		if t, err := time.Parse(time.RFC3339, e.Time); err == nil && t.In(now.Location()).Format("2006-01-02") == day {
+			v.today++
+		}
+		v.savedMs += max(0, int64(n)*60000/typingCharsPerMin-e.TotalMs)
+		if e.PolishMs > 0 {
+			v.polishMs += e.PolishMs
+			v.nPolish++
+		}
+	}
+	return v
 }
 
 // 2026/10/14 12:48:51.678885 translate #10 ok in 983ms

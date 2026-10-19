@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -200,4 +201,26 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+func TestVoiceHistorySummary(t *testing.T) {
+	now := time.Date(2026, 10, 20, 9, 0, 0, 0, time.Local)
+	list := []historyEntry{
+		{ID: "a", Time: now.Add(-time.Hour).Format(time.RFC3339), Source: "嗯那个十个字的原话啊", Translation: "十个字的润色结果呀。", TotalMs: 3000, PolishMs: 600},
+		{ID: "b", Time: now.AddDate(0, 0, -1).Format(time.RFC3339), Source: "五个字原话", TotalMs: 60000},
+	}
+	v := summarizeVoice(list, now)
+	// 第一条 10 字：打字 12 秒减 3 秒 = 9 秒；第二条说得比打字还慢，不倒扣
+	if v.total != 2 || v.today != 1 || v.chars != 15 || v.savedMs != 9000 || v.nPolish != 1 || v.polishMs != 600 {
+		t.Fatalf("%+v", v)
+	}
+	if voiceFinal(list[1]) != "五个字原话" || voiceFinal(list[0]) != "十个字的润色结果呀。" {
+		t.Fatal("voiceFinal")
+	}
+	if dayLabel(now, now) != T("今天") || dayLabel(now.AddDate(0, 0, -1), now) != T("昨天") || dayLabel(now.AddDate(0, -1, 0), now) != now.AddDate(0, -1, 0).Format(T("1月2日")) {
+		t.Fatal("dayLabel")
+	}
+	if shortDuration(12500) != fmt.Sprintf(T("%d 秒"), 12) || shortDuration(185000) != fmt.Sprintf(T("%d 分钟"), 3) {
+		t.Fatal("shortDuration")
+	}
 }

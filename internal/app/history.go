@@ -20,6 +20,8 @@ import (
 // 用户之后可以把这些文件交给 AI，看哪些提示词被模型执行了而不是翻译、额外要求有没有被遵守。
 
 type historyEntry struct {
+	PolishStyle string              `json:"polish_style,omitempty"`
+	PolishMs    int64               `json:"polish_ms,omitempty"`
 	Type        string              `json:"type"`
 	ID          string              `json:"id"`
 	Time        string              `json:"time"`

@@ -76,6 +76,13 @@ func postVoice(action int, id uint64) {
 
 // voiceClick 胶囊上的 ✕ / ✓：和 Esc / 再按一下触发键走同一条路
 func voiceClick(action int) {
+	if action == voiceCancel {
+		if id := voiceActive.Load(); id != 0 && voiceActive.CompareAndSwap(id, 0) {
+			voiceRecording.CompareAndSwap(id, 0)
+			postVoice(action, id)
+		}
+		return
+	}
 	if id := voiceRecording.Load(); id != 0 && voiceRecording.CompareAndSwap(id, 0) {
 		postVoice(action, id)
 	}
@@ -207,7 +214,7 @@ const (
 	voiceWinH  = 64 // 果冻球的高度，也给药丸留出上下空间做弹出动画
 	voiceOrbW  = 56
 	voiceRecW  = 112
-	voiceDotsW = 64
+	voiceDotsW = 88
 )
 
 func voiceKind(state voiceViewState) int {
@@ -345,6 +352,12 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		a.voiceNotice(id, T("没听清，请再说一次"))
 		return
 	}
+	source := text
+	text, polishMs := polishVoice(ctx, cfg, source)
+	if !valid() {
+		finish()
+		return
+	}
 	theWorker.paste(text, func(owner uintptr) bool {
 		if !valid() {
 			finish()
@@ -368,7 +381,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		}
 		finish()
 		if cfg.History {
-			go a.hist.write(historyEntry{Type: "voice", ID: "voice-" + historyID(started, int64(id)), Time: time.Now().Format(time.RFC3339), Model: cfg.ASRModel, BaseURL: cfg.ASRBaseURL, Source: text, TotalMs: time.Since(started).Milliseconds()})
+			go a.hist.write(historyEntry{Type: "voice", ID: "voice-" + historyID(started, int64(id)), Time: time.Now().Format(time.RFC3339), Model: cfg.ASRModel, BaseURL: cfg.ASRBaseURL, Source: source, Translation: text, PolishStyle: cfg.PolishStyle, PolishMs: polishMs, TotalMs: time.Since(started).Milliseconds()})
 		}
 		return !copied
 	})
@@ -421,12 +434,19 @@ func (a *App) voiceView(c *ui.Context) {
 		if a.voiceOrb(state) {
 			recognizing := state.recognizing
 			orb := ui.ButtonBase(c).Size(voiceOrbW, voiceOrbW).Background(ui.RGBA(0, 0, 0, 0)).Opacity(opacity*(0.4+0.6*kind)).Scale(size, size).Translate(0, dy)
-			if !recognizing {
-				orb.Cursor(ui.CursorPointer).Tooltip(T("点一下完成，Esc 取消"))
+			orb.Cursor(ui.CursorPointer)
+			if recognizing {
+				orb.Tooltip(T("取消"))
+			} else {
+				orb.Tooltip(T("点一下完成，Esc 取消"))
 			}
 			orb.DrawOver(func(p *ui.Painter, r ui.Rect) { drawOrb(p, r, orbLv, now, recognizing) })
-			if !recognizing && orb.Clicked() {
-				go voiceClick(voiceStop)
+			if orb.Clicked() {
+				if recognizing {
+					go voiceClick(voiceCancel)
+				} else {
+					go voiceClick(voiceStop)
+				}
 			}
 			return
 		}
@@ -446,7 +466,12 @@ func (a *App) voiceView(c *ui.Context) {
 					}
 				})
 			case 2:
-				row.Justify(ui.Center).Children(func() { ui.Box(c).Size(36, 12).Draw(drawDots) })
+				row.Padding(0, 5).Gap(8).Justify(ui.Center).Children(func() {
+					if pillButton(c, false, T("取消")).Clicked() {
+						go voiceClick(voiceCancel)
+					}
+					ui.Box(c).Size(36, 12).Draw(drawDots)
+				})
 			default:
 				row.Padding(0, 14).Justify(ui.Center).Children(func() {
 					ui.Text(c, state.text).FontSize(12).TextColor(pillFg).MaxLines(1).Tooltip(state.text)

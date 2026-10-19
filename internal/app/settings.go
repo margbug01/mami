@@ -18,24 +18,30 @@ import (
 
 // settingsState 是设置窗口里正在改、还没保存的那份配置（主线程）
 type settingsState struct {
-	draft       Config
-	exclude     string
-	asrHotwords string
-	openAtLogin bool
-	hotkeysOn   bool // 「启用快捷键」开关，保存时写回 DisableHotkeys 的反面
-	status      string
-	statusErr   bool
-	testing     bool
-	page        string
-	extraH      float32 // 额外要求输入框的高度（手动拖过之后才用）
-	extraManual bool
-	gripMoved   bool // 这次按住把手时拖动过
-	advanced    bool
-	compat      bool
-	stats       *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
-	custom      bool          // 「服务商」手动选了自定义（地址还是某家预设的也不跳回去）
-	testMsg     string
-	testErr     bool
+	draft         Config
+	exclude       string
+	asrHotwords   string
+	openAtLogin   bool
+	hotkeysOn     bool // 「启用快捷键」开关，保存时写回 DisableHotkeys 的反面
+	status        string
+	statusErr     bool
+	testing       bool
+	page          string
+	extraH        float32 // 额外要求输入框的高度（手动拖过之后才用）
+	extraManual   bool
+	gripMoved     bool // 这次按住把手时拖动过
+	advanced      bool
+	compat        bool
+	stats         *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
+	custom        bool          // 「服务商」手动选了自定义（地址还是某家预设的也不跳回去）
+	testMsg       string
+	testErr       bool
+	polishTesting bool
+	histTab       int // 「记录」页：0 翻译、1 语音
+	copiedID      string
+	copiedAt      time.Time
+	polishTestMsg string
+	polishTestErr bool
 }
 
 func (a *App) openSettings() {
@@ -274,6 +280,48 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 			a.testVoiceDraft()
 		}
 	})
+	ui.Divider(c)
+	pageTitle(c, T("润色"))
+	settingRow(c, T("档位"), "", func() {
+		optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}})
+	})
+	settingRow(c, T("润色接口地址"), T("润色始终直连，不使用代理"), func() { ui.TextInput(c, &d.PolishBaseURL) })
+	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.PolishModel) })
+	settingRow(c, "API Key", "", func() { ui.TextInput(c, &d.PolishAPIKey).Password().Placeholder("sk-…") })
+	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
+		color := c.Theme().TextMuted
+		if a.set.polishTestErr {
+			color = c.Theme().Danger
+		}
+		ui.Text(c, a.set.polishTestMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+		if textButton(c, T("测试润色")).Disabled(a.set.polishTesting).Clicked() {
+			a.testPolishDraft()
+		}
+	})
+}
+
+func (a *App) testPolishDraft() {
+	cfg := a.set.draft
+	cfg.ASRHotwords = splitList(a.set.asrHotwords)
+	a.set.polishTesting, a.set.polishTestMsg, a.set.polishTestErr = true, T("润色中…"), false
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), polishTimeout)
+		defer cancel()
+		started := time.Now()
+		result, err := polish(ctx, cfg, polishSample)
+		elapsed := time.Since(started).Milliseconds()
+		if err == nil && result == "" {
+			err = fmt.Errorf("%s", T("润色结果为空"))
+		}
+		a.setWin.Update(func() {
+			a.set.polishTesting = false
+			a.set.polishTestErr = err != nil
+			if err != nil {
+				result = err.Error()
+			}
+			a.set.polishTestMsg = fmt.Sprintf("%s · %d ms", result, elapsed)
+		})
+	}()
 }
 
 func (a *App) testVoiceDraft() {
