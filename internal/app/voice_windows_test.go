@@ -224,3 +224,20 @@ func TestVoiceHistorySummary(t *testing.T) {
 		t.Fatal("shortDuration")
 	}
 }
+
+func TestVoiceOrbSize(t *testing.T) {
+	for in, want := range map[float64]float64{0: voiceOrbW, -3: voiceOrbW, 20: 40, 200: 96, 63.6: 64} {
+		cfg := defaultConfig()
+		cfg.VoiceOrbSize = in
+		if cfg.normalize(); cfg.VoiceOrbSize != want {
+			t.Fatalf("%v -> %v, want %v", in, cfg.VoiceOrbSize, want)
+		}
+	}
+	a := &App{voiceStyle: "orb", voiceOrbSize: 90}
+	if a.voiceWidth(voiceViewState{recording: true}) != 90 || a.voiceWinHeight() != 102 || a.voiceWidth(voiceViewState{text: "已复制"}) != 96 {
+		t.Fatal("orb layout")
+	}
+	if (&App{voiceStyle: "bars"}).voiceWinHeight() != voiceWinH {
+		t.Fatal("bars height")
+	}
+}

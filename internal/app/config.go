@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,8 +19,9 @@ type Config struct {
 	PolishAPIKeyDPAPI string   `json:"polish_api_key_dpapi,omitempty"`
 	VoiceEnabled      bool     `json:"voice_enabled"`
 	VoiceHotkey       string   `json:"voice_hotkey"`
-	VoiceStyle        string   `json:"voice_style"` // 胶囊样式：bars 渐变波柱 / orb 果冻球
-	VoiceSound        bool     `json:"voice_sound"` // 开始、结束、取消的提示音
+	VoiceStyle        string   `json:"voice_style"`    // 胶囊样式：bars 渐变波柱 / orb 果冻球
+	VoiceOrbSize      float64  `json:"voice_orb_size"` // 果冻球直径（DIP），40~96
+	VoiceSound        bool     `json:"voice_sound"`    // 开始、结束、取消的提示音
 	ASRBaseURL        string   `json:"asr_base_url"`
 	ASRModel          string   `json:"asr_model"`
 	ASRAPIKey         string   `json:"asr_api_key,omitempty"`
@@ -62,6 +64,7 @@ func defaultConfig() Config {
 		VoiceHotkey:      "RAlt",
 		VoiceStyle:       "bars",
 		VoiceSound:       true,
+		VoiceOrbSize:     voiceOrbW,
 		ASRBaseURL:       "https://api.stepfun.com/v1",
 		ASRModel:         "stepaudio-3-asr-max",
 		ASRHotwords:      []string{},
@@ -114,6 +117,10 @@ func (c *Config) normalize() {
 	default:
 		c.VoiceHotkey = "RAlt"
 	}
+	if c.VoiceOrbSize <= 0 {
+		c.VoiceOrbSize = voiceOrbW
+	}
+	c.VoiceOrbSize = math.Round(min(96, max(40, c.VoiceOrbSize)))
 	if c.VoiceStyle != "orb" {
 		c.VoiceStyle = "bars"
 	}

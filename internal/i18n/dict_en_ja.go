@@ -4,6 +4,10 @@ package i18n
 // 新增界面文字时，先在代码里写 T("中文")，再回来补这张表；
 // TestI18nDictComplete 会扫源码，漏了会失败。
 var Dict = map[string][2]string{
+	"语音识别":       {"Speech", "音声認識"},
+	"果冻球大小":      {"Jelly orb size", "ゼリーボールの大きさ"},
+	"右边是实际大小的预览": {"Preview on the right is actual size", "右は実寸のプレビュー"},
+	"语音识别和润色用的接口、模型、Key 在「接口」页。": {"Endpoints, models and keys for speech and polish live on the API page.", "音声認識と整形の接続先・モデル・キーは「API」ページにあります。"},
 	"1月2日":      {"1/2", "1月2日"},
 	"2006年1月2日": {"1/2/2006", "2006年1月2日"},
 	"语音":        {"Voice", "音声"},

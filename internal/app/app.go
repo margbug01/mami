@@ -74,6 +74,7 @@ type App struct {
 	voiceWAt               time.Time
 	voiceWFrom, voiceWTo   float32
 	voiceStyle             string
+	voiceOrbSize           float32
 	voiceFrameAt           time.Time
 	voiceBarH              [voiceBars]float32 // 平滑后的柱高 / 球大小（0~1）
 	voiceOrbLv             float32

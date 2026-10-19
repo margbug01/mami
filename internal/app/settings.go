@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ type settingsState struct {
 	testErr       bool
 	polishTesting bool
 	histTab       int // 「记录」页：0 翻译、1 语音
+	apiTab        int // 「接口」页：0 翻译、1 语音识别、2 润色
 	copiedID      string
 	copiedAt      time.Time
 	polishTestMsg string
@@ -174,7 +176,20 @@ func pageTitle(c *ui.Context, title string) {
 func (a *App) pageConnection(c *ui.Context, d *Config) {
 	s := &a.set
 	t := c.Theme()
-	pageTitle(c, T("接口（OpenAI 兼容）"))
+	pageTitle(c, T("接口"))
+	ui.Row(c).Padding(4, 0, 12, 0).Children(func() {
+		if ui.Segmented(c, &s.apiTab, T("翻译"), T("语音识别"), T("润色")).Label(T("接口")).Changed() {
+			s.testMsg, s.testErr = "", false // 三个 tab 共用一行测试结果，换 tab 就清掉
+		}
+	})
+	switch s.apiTab {
+	case 1:
+		a.apiASR(c, d)
+		return
+	case 2:
+		a.apiPolish(c, d)
+		return
+	}
 	cur := "custom"
 	if !s.custom {
 		cur = providerOf(d.BaseURL)
@@ -265,39 +280,27 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
 		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}})
 	})
+	if d.VoiceStyle == "orb" {
+		settingRow(c, T("果冻球大小"), T("右边是实际大小的预览"), func() {
+			ui.Row(c).Width(controlW).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Slider(c, &d.VoiceOrbSize, 40, 96).Grow(1).Label(T("果冻球大小"))
+				size := float32(math.Round(d.VoiceOrbSize))
+				ui.Box(c).Size(96, 96).Draw(func(p *ui.Painter, r ui.Rect) {
+					now := time.Now()
+					level := float32(0.35 + 0.25*math.Sin(float64(now.UnixMilli()%600000)/1000*2.2))
+					drawOrb(p, ui.Rect{X: r.X + (r.W-size)/2, Y: r.Y + (r.H-size)/2, W: size, H: size}, level, now, false)
+				})
+			})
+		})
+	}
 	switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
-	settingRow(c, T("语音接口地址"), T("语音始终直连，不使用代理"), func() { ui.TextInput(c, &d.ASRBaseURL) })
-	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.ASRModel) })
-	settingRow(c, "API Key", "StepFun", func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
 	settingRow(c, T("热词"), T("逗号或换行分隔"), func() { ui.TextArea(c, &a.set.asrHotwords).Height(64) })
-	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
-		color := c.Theme().TextMuted
-		if a.set.testErr {
-			color = c.Theme().Danger
-		}
-		ui.Text(c, a.set.testMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-		if textButton(c, T("测试语音接口")).Disabled(a.set.testing).Clicked() {
-			a.testVoiceDraft()
-		}
-	})
 	ui.Divider(c)
 	pageTitle(c, T("润色"))
 	settingRow(c, T("档位"), "", func() {
 		optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}})
 	})
-	settingRow(c, T("润色接口地址"), T("润色始终直连，不使用代理"), func() { ui.TextInput(c, &d.PolishBaseURL) })
-	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.PolishModel) })
-	settingRow(c, "API Key", "", func() { ui.TextInput(c, &d.PolishAPIKey).Password().Placeholder("sk-…") })
-	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
-		color := c.Theme().TextMuted
-		if a.set.polishTestErr {
-			color = c.Theme().Danger
-		}
-		ui.Text(c, a.set.polishTestMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-		if textButton(c, T("测试润色")).Disabled(a.set.polishTesting).Clicked() {
-			a.testPolishDraft()
-		}
-	})
+	ui.Text(c, T("语音识别和润色用的接口、模型、Key 在「接口」页。")).FontSize(12).TextColor(c.Theme().TextMuted).Padding(12, 0)
 }
 
 func (a *App) testPolishDraft() {
@@ -783,3 +786,37 @@ const settingsW, settingsH = 732, 480
 const controlPad = sidebarW + 48 + 28
 
 var iconGen = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></svg>`))
+
+// apiASR 「接口」页的语音识别 tab
+func (a *App) apiASR(c *ui.Context, d *Config) {
+	settingRow(c, T("接口地址"), T("语音始终直连，不使用代理"), func() { ui.TextInput(c, &d.ASRBaseURL) })
+	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.ASRModel) })
+	settingRow(c, "API Key", "StepFun", func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
+	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
+		color := c.Theme().TextMuted
+		if a.set.testErr {
+			color = c.Theme().Danger
+		}
+		ui.Text(c, a.set.testMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+		if textButton(c, T("测试语音接口")).Disabled(a.set.testing).Clicked() {
+			a.testVoiceDraft()
+		}
+	})
+}
+
+// apiPolish 「接口」页的润色 tab
+func (a *App) apiPolish(c *ui.Context, d *Config) {
+	settingRow(c, T("接口地址"), T("润色始终直连，不使用代理"), func() { ui.TextInput(c, &d.PolishBaseURL) })
+	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.PolishModel) })
+	settingRow(c, "API Key", "DeepSeek", func() { ui.TextInput(c, &d.PolishAPIKey).Password().Placeholder("sk-…") })
+	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
+		color := c.Theme().TextMuted
+		if a.set.polishTestErr {
+			color = c.Theme().Danger
+		}
+		ui.Text(c, a.set.polishTestMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+		if textButton(c, T("测试润色")).Disabled(a.set.polishTesting).Clicked() {
+			a.testPolishDraft()
+		}
+	})
+}

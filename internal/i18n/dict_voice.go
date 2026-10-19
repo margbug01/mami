@@ -3,6 +3,10 @@ package i18n
 // 语音页的新文案与现有各语言词典保持对应。
 func init() {
 	entries := map[string][6]string{
+		"语音识别":       {"語音辨識", "음성 인식", "Voz", "Voix", "Sprache", "Речь"},
+		"果冻球大小":      {"果凍球大小", "젤리 구슬 크기", "Tamaño de la bola", "Taille de la bulle", "Kugelgröße", "Размер шарика"},
+		"右边是实际大小的预览": {"右邊是實際大小的預覽", "오른쪽은 실제 크기 미리보기", "A la derecha, vista previa a tamaño real", "À droite, aperçu en taille réelle", "Rechts: Vorschau in Originalgröße", "Справа — превью в реальном размере"},
+		"语音识别和润色用的接口、模型、Key 在「接口」页。": {"語音辨識和潤色用的介面、模型、Key 在「API」頁。", "음성 인식과 다듬기의 엔드포인트·모델·키는 API 페이지에 있습니다.", "Los endpoints, modelos y claves de voz y pulido están en la página API.", "Les points d'accès, modèles et clés de la voix et de la reformulation sont sur la page API.", "Endpunkte, Modelle und Schlüssel für Sprache und Glättung findest du auf der Seite API.", "Адреса, модели и ключи для речи и обработки — на странице «API»."},
 		"1月2日":      {"1月2日", "1월 2일", "2/1", "2/1", "2.1.", "02.01"},
 		"2006年1月2日": {"2006年1月2日", "2006년 1월 2일", "2/1/2006", "2/1/2006", "2.1.2006", "02.01.2006"},
 		"语音":        {"語音", "음성", "Voz", "Voix", "Sprache", "Голос"},

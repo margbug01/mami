@@ -169,7 +169,7 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 		appearing := a.voiceShownW == 0
 		if w := scale(max(voiceRecW, a.voiceWidth(state)), a.voiceDPI); appearing || w > a.voiceShownW {
 			a.voiceShownW = w
-			wa, h := a.voiceWA, scale(voiceWinH, a.voiceDPI)
+			wa, h := a.voiceWA, scale(a.voiceWinHeight(), a.voiceDPI)
 			placeAt(a.voiceWin.NativeHandle(), wa.Left+(wa.w()-w)/2, wa.Bottom-h-scale(4, a.voiceDPI), w, h)
 		}
 		now, target := time.Now(), float32(a.voiceWidth(state))
@@ -212,7 +212,7 @@ func (a *App) voiceLeave() {
 const (
 	voiceH     = 32 // 药丸高
 	voiceWinH  = 64 // 果冻球的高度，也给药丸留出上下空间做弹出动画
-	voiceOrbW  = 56
+	voiceOrbW  = 56 // 果冻球默认大小；设置里可以调 40~96
 	voiceRecW  = 112
 	voiceDotsW = 88
 )
@@ -227,16 +227,31 @@ func voiceKind(state voiceViewState) int {
 	return 3
 }
 
-// voiceOrb 果冻球样式只管录音和识别；提示文字两种样式都用黑药丸
+// voiceOrb 果冻球样式的录音和识别；提示文字在果冻样式下是一条果冻（见 drawJelly）
 func (a *App) voiceOrb(state voiceViewState) bool {
 	return a.voiceStyle == "orb" && voiceKind(state) != 3
 }
 
-func (a *App) voiceWidth(state voiceViewState) int32 {
-	if a.voiceOrb(state) {
+func (a *App) orbSize() float32 {
+	if a.voiceOrbSize <= 0 {
 		return voiceOrbW
 	}
+	return a.voiceOrbSize
+}
+
+func (a *App) voiceWidth(state voiceViewState) int32 {
+	if a.voiceOrb(state) {
+		return int32(a.orbSize())
+	}
 	return voiceWidth(state)
+}
+
+// voiceWinHeight 窗口高度要装得下最大的果冻球，上下再留一点给弹出动画
+func (a *App) voiceWinHeight() int32 {
+	if a.voiceStyle == "orb" {
+		return max(voiceWinH, int32(a.orbSize())+12)
+	}
+	return voiceWinH
 }
 
 func voiceWidth(state voiceViewState) int32 {
@@ -302,7 +317,9 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	}
 	pt := cursorPos()
 	dpi, wa := dpiAt(pt), workArea(pt)
-	a.voiceWin.Update(func() { a.voiceWA, a.voiceDPI, a.voiceStyle = wa, dpi, cfg.VoiceStyle })
+	a.voiceWin.Update(func() {
+		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, float32(cfg.VoiceOrbSize)
+	})
 	started := time.Now()
 	last := time.Time{}
 	var levels []float64
@@ -433,7 +450,8 @@ func (a *App) voiceView(c *ui.Context) {
 	ui.Box(c).Fill().Center().Children(func() {
 		if a.voiceOrb(state) {
 			recognizing := state.recognizing
-			orb := ui.ButtonBase(c).Size(voiceOrbW, voiceOrbW).Background(ui.RGBA(0, 0, 0, 0)).Opacity(opacity*(0.4+0.6*kind)).Scale(size, size).Translate(0, dy)
+			sz := a.orbSize()
+			orb := ui.ButtonBase(c).Size(sz, sz).Background(ui.RGBA(0, 0, 0, 0)).Opacity(opacity*(0.4+0.6*kind)).Scale(size, size).Translate(0, dy)
 			orb.Cursor(ui.CursorPointer)
 			if recognizing {
 				orb.Tooltip(T("取消"))
@@ -452,6 +470,9 @@ func (a *App) voiceView(c *ui.Context) {
 		}
 		pill := ui.Row(c).Height(voiceH).AlignItems(ui.Center).Justify(ui.Center).Clip().
 			Background(pillBg).Border(1, pillBorder).Radius(voiceH / 2)
+		if a.voiceStyle == "orb" { // 果冻样式的提示：没有黑底，画一条会抖的渐变果冻
+			pill.Background(ui.RGBA(0, 0, 0, 0)).Border(0, ui.RGBA(0, 0, 0, 0)).Draw(func(p *ui.Painter, r ui.Rect) { drawJelly(p, r, now) })
+		}
 		pill.Width(a.voicePillW(now)).Opacity(opacity).Scale(size, size).Translate(0, dy).Children(func() {
 			row := ui.Row(c).Fill().AlignItems(ui.Center).Opacity(kind).Scale(0.92+0.08*kind, 0.92+0.08*kind)
 			switch voiceKind(state) {
@@ -539,6 +560,7 @@ func drawOrb(p *ui.Painter, r ui.Rect, level float32, now time.Time, recognizing
 	if recognizing {
 		base, wobble, angle = 14+1.5*math.Sin(t*5), 0.04, math.Mod(t*240, 360)
 	}
+	base *= float64(r.W) / voiceOrbW // 半径按框的大小等比缩放
 	cx, cy := float64(r.X+r.W/2), float64(r.Y+r.H/2)
 	path := new(ui.Path)
 	for k := 0; k <= 48; k++ {
@@ -552,6 +574,45 @@ func drawOrb(p *ui.Painter, r ui.Rect, level float32, now time.Time, recognizing
 		}
 	}
 	p.FillPathGradient(path.Close(), ui.LinearGradient{From: orbFrom, To: orbTo, Angle: float32(angle), Oklab: true})
+	p.AnimationFrame()
+}
+
+// drawJelly 果冻条：沿胶囊轮廓走一圈，法线方向叠两道转速不同的小波纹，渐变跟果冻球同色
+func drawJelly(p *ui.Painter, r ui.Rect, now time.Time) {
+	t := float64(now.UnixMilli()%600000) / 1000
+	const amp, n = 1.3, 96
+	h := float64(r.H) - 2*amp
+	rad := h / 2
+	x0, y0, line := float64(r.X)+amp+rad, float64(r.Y)+amp+rad, max(0, float64(r.W)-2*amp-h)
+	per := 2*line + 2*math.Pi*rad
+	path := new(ui.Path)
+	for k := 0; k <= n; k++ {
+		d := per * float64(k) / n
+		var x, y, nx, ny float64
+		switch {
+		case d < line: // 上边，从左往右
+			x, y, nx, ny = x0+d, y0-rad, 0, -1
+		case d < line+math.Pi*rad: // 右半圆
+			a := (d-line)/rad - math.Pi/2
+			nx, ny = math.Cos(a), math.Sin(a)
+			x, y = x0+line+rad*nx, y0+rad*ny
+		case d < 2*line+math.Pi*rad: // 下边，从右往左
+			x, y, nx, ny = x0+line-(d-line-math.Pi*rad), y0+rad, 0, 1
+		default: // 左半圆
+			a := (d-2*line-math.Pi*rad)/rad + math.Pi/2
+			nx, ny = math.Cos(a), math.Sin(a)
+			x, y = x0+rad*nx, y0+rad*ny
+		}
+		u := d / per * 2 * math.Pi
+		off := amp * (0.6*math.Sin(5*u+t*4) + 0.4*math.Sin(9*u-t*5))
+		px, py := float32(x+nx*off), float32(y+ny*off)
+		if k == 0 {
+			path.MoveTo(px, py)
+		} else {
+			path.LineTo(px, py)
+		}
+	}
+	p.FillPathGradient(path.Close(), ui.LinearGradient{From: orbFrom, To: orbTo, Angle: float32(110 + 20*math.Sin(t*0.8)), Oklab: true})
 	p.AnimationFrame()
 }
 
@@ -574,7 +635,7 @@ func (a *App) runVoiceDemo() {
 	dpi, wa := dpiAt(pt), workArea(pt)
 	id := voiceEpoch.Load()
 	for _, style := range []string{"bars", "orb"} {
-		a.voiceWin.Update(func() { a.voiceWA, a.voiceDPI, a.voiceStyle = wa, dpi, style })
+		a.voiceWin.Update(func() { a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceOrbSize = wa, dpi, style, voiceOrbW })
 		playSound(soundStart)
 		var levels []float64
 		for start := time.Now(); time.Since(start) < 3*time.Second; time.Sleep(50 * time.Millisecond) {
