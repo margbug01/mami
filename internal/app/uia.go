@@ -73,8 +73,8 @@ type GUITHREADINFO struct {
 }
 
 func comCall(obj uintptr, idx int, args ...uintptr) uintptr {
-	vtbl := *(*uintptr)(unsafe.Pointer(obj))
-	fn := *(*uintptr)(unsafe.Pointer(vtbl + uintptr(idx)*unsafe.Sizeof(uintptr(0))))
+	vtbl := *(*uintptr)(nativePointer(obj))
+	fn := *(*uintptr)(nativePointer(vtbl + uintptr(idx)*unsafe.Sizeof(uintptr(0))))
 	r, _, _ := syscall.SyscallN(fn, append([]uintptr{obj}, args...)...)
 	return r
 }
@@ -202,7 +202,7 @@ func focusedSelectionText(auto uintptr) string {
 			continue
 		}
 		l, _, _ := pSysStringLen.Call(bstr)
-		parts = append(parts, string(utf16.Decode(unsafe.Slice((*uint16)(unsafe.Pointer(bstr)), l))))
+		parts = append(parts, string(utf16.Decode(unsafe.Slice((*uint16)(nativePointer(bstr)), l))))
 		pSysFreeString.Call(bstr)
 	}
 	return strings.Join(parts, "\n")
@@ -384,7 +384,7 @@ func uiaSelection(el uintptr) (state int, last RECT, hasRect bool) {
 			continue
 		}
 		l, _, _ := pSysStringLen.Call(bstr)
-		text := string(utf16.Decode(unsafe.Slice((*uint16)(unsafe.Pointer(bstr)), l)))
+		text := string(utf16.Decode(unsafe.Slice((*uint16)(nativePointer(bstr)), l)))
 		pSysFreeString.Call(bstr)
 		if strings.TrimSpace(text) != "" {
 			state = selText
@@ -404,7 +404,7 @@ func lastRect(psa uintptr) (rc RECT, ok bool) {
 		return rc, false
 	}
 	defer pSafeArrayUnaccessData.Call(psa)
-	d := unsafe.Slice((*float64)(unsafe.Pointer(p)), int(ub)+1)
+	d := unsafe.Slice((*float64)(nativePointer(p)), int(ub)+1)
 	for i := 0; i+3 < len(d); i += 4 {
 		if d[i+2] > 0 && d[i+3] > 0 {
 			rc, ok = RECT{int32(d[i]), int32(d[i+1]), int32(d[i] + d[i+2]), int32(d[i+1] + d[i+3])}, true

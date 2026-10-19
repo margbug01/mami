@@ -88,7 +88,7 @@ func snapshotClipboard(owner uintptr) ([]clipItem, bool) {
 			continue
 		}
 		buf := make([]byte, size)
-		copy(buf, unsafe.Slice((*byte)(unsafe.Pointer(p)), size))
+		copy(buf, unsafe.Slice((*byte)(nativePointer(p)), size))
 		pGlobalUnlock.Call(h)
 		items = append(items, clipItem{uint32(f), buf})
 	}
@@ -106,7 +106,7 @@ func setGlobal(format uint32, data []byte) {
 	}
 	p, _, _ := pGlobalLock.Call(h)
 	if p != 0 {
-		copy(unsafe.Slice((*byte)(unsafe.Pointer(p)), n), data)
+		copy(unsafe.Slice((*byte)(nativePointer(p)), n), data)
 		pGlobalUnlock.Call(h)
 	}
 	if r, _, _ := pSetClipboardData.Call(uintptr(format), h); r == 0 {
@@ -159,7 +159,7 @@ func getClipboardText(owner uintptr) string {
 		return ""
 	}
 	defer pGlobalUnlock.Call(h)
-	u := unsafe.Slice((*uint16)(unsafe.Pointer(p)), size/2)
+	u := unsafe.Slice((*uint16)(nativePointer(p)), size/2)
 	for i, c := range u {
 		if c == 0 {
 			u = u[:i]

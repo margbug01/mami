@@ -20,6 +20,7 @@ import (
 type settingsState struct {
 	draft       Config
 	exclude     string
+	asrHotwords string
 	openAtLogin bool
 	hotkeysOn   bool // 「启用快捷键」开关，保存时写回 DisableHotkeys 的反面
 	status      string
@@ -43,6 +44,7 @@ func (a *App) openSettings() {
 		a.set = settingsState{
 			draft:       cfg,
 			exclude:     strings.Join(cfg.ExcludeProcesses, ", "),
+			asrHotwords: strings.Join(cfg.ASRHotwords, ", "),
 			openAtLogin: mygo.App.OpenAtLogin(),
 			hotkeysOn:   !cfg.DisableHotkeys,
 		}
@@ -92,6 +94,7 @@ func (a *App) settingsView(c *ui.Context) {
 					ui.SidebarItem(c, pageConn, iconConn, T("接口"))
 					ui.SidebarItem(c, pageTrans, iconTrans, T("翻译"))
 					ui.SidebarItem(c, pageKeys, iconKeys, T("快捷键"))
+					ui.SidebarItem(c, "voice", iconKeys, T("语音输入"))
 					ui.SidebarItem(c, pageBtn, iconBtn, T("划词按钮"))
 					ui.SidebarItem(c, pageGen, iconGen, T("通用"))
 					ui.SidebarItem(c, pageHist, iconHist, T("记录"))
@@ -102,6 +105,8 @@ func (a *App) settingsView(c *ui.Context) {
 					switch s.page {
 					case pageTrans:
 						a.pageTranslate(c, d)
+					case "voice":
+						a.pageVoice(c, d)
 					case pageKeys:
 						a.pageHotkeys(c, d)
 					case pageBtn:
@@ -242,6 +247,52 @@ func providerOf(base string) string {
 		}
 	}
 	return "custom"
+}
+
+func (a *App) pageVoice(c *ui.Context, d *Config) {
+	pageTitle(c, T("语音输入"))
+	switchRow(c, T("启用语音输入"), T("按一下开始说话，再按一下贴入；Esc 取消"), &d.VoiceEnabled)
+	ui.Divider(c)
+	settingRow(c, T("触发键"), T("快捷键总开关关闭时不响应"), func() {
+		optionSelect(c, &d.VoiceHotkey, []option{{"RAlt", "RAlt"}, {"RCtrl", "RCtrl"}, {"RShift", "RShift"}, {"Off", T("关闭")}})
+	})
+	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
+		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}})
+	})
+	switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
+	settingRow(c, T("语音接口地址"), T("语音始终直连，不使用代理"), func() { ui.TextInput(c, &d.ASRBaseURL) })
+	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.ASRModel) })
+	settingRow(c, "API Key", "StepFun", func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
+	settingRow(c, T("热词"), T("逗号或换行分隔"), func() { ui.TextArea(c, &a.set.asrHotwords).Height(64) })
+	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
+		color := c.Theme().TextMuted
+		if a.set.testErr {
+			color = c.Theme().Danger
+		}
+		ui.Text(c, a.set.testMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+		if textButton(c, T("测试语音接口")).Disabled(a.set.testing).Clicked() {
+			a.testVoiceDraft()
+		}
+	})
+}
+
+func (a *App) testVoiceDraft() {
+	cfg := a.set.draft
+	cfg.ASRHotwords = splitList(a.set.asrHotwords)
+	a.set.testing, a.set.testMsg, a.set.testErr = true, T("识别中…"), false
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, err := transcribe(ctx, cfg, make([]byte, 16000))
+		a.setWin.Update(func() {
+			a.set.testing = false
+			if err != nil {
+				a.set.testMsg, a.set.testErr = err.Error(), true
+			} else {
+				a.set.testMsg, a.set.testErr = T("语音接口正常"), false
+			}
+		})
+	}()
 }
 
 func (a *App) pageTranslate(c *ui.Context, d *Config) {
@@ -462,6 +513,7 @@ func (a *App) saveDraft() {
 	cfg.BaseURL, cfg.Model = strings.TrimSpace(cfg.BaseURL), strings.TrimSpace(cfg.Model)
 	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
 	cfg.ExcludeProcesses = splitList(s.exclude)
+	cfg.ASRHotwords = splitList(s.asrHotwords)
 	cfg.DisableHotkeys = !s.hotkeysOn
 	cfg.normalize()
 	if err := a.setConfig(cfg); err != nil {

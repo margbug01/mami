@@ -179,6 +179,12 @@ type INPUT struct {
 	_    [8]byte
 }
 
+// nativePointer 只接收 Win32/COM 拥有的地址，不能用于暂存 Go 指针。
+// 这些地址的生命周期由调用方的 GlobalFree / COM Release / 钩子回调管理。
+func nativePointer(address uintptr) unsafe.Pointer {
+	return *(*unsafe.Pointer)(unsafe.Pointer(&address))
+}
+
 func u16(s string) *uint16 {
 	p, err := syscall.UTF16PtrFromString(s)
 	if err != nil {

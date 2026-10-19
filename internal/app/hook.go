@@ -49,7 +49,7 @@ func hookProc(nCode, wp, lp uintptr) uintptr {
 			kind = mouseWheel
 		}
 		if kind != 0 {
-			ms := (*MSLLHOOKSTRUCT)(unsafe.Pointer(lp))
+			ms := (*MSLLHOOKSTRUCT)(nativePointer(lp))
 			ev := mouseEvent{kind: kind, pt: ms.Pt, time: ms.Time, ibeam: cursorIsIBeam()}
 			if isOursFn != nil {
 				ev.ours = isOursFn(ms.Pt)
@@ -104,8 +104,14 @@ func cardWantsKey(vk uint32) bool {
 }
 
 func kbdProc(nCode, wp, lp uintptr) uintptr {
+	if int32(nCode) == 0 && (wp == wmKeyDown || wp == wmSysKeyDown || wp == 0x0101 || wp == 0x0105) {
+		k := (*kbdLLHook)(nativePointer(lp))
+		if k.ExtraInfo != ourKeyTag && k.Flags&0x10 == 0 && voiceHookKey(k, wp == wmKeyDown || wp == wmSysKeyDown) {
+			return 1
+		}
+	}
 	if int32(nCode) == 0 && (wp == wmKeyDown || wp == wmSysKeyDown) {
-		k := (*kbdLLHook)(unsafe.Pointer(lp))
+		k := (*kbdLLHook)(nativePointer(lp))
 		if wp == wmKeyDown && k.ExtraInfo != ourKeyTag && cardWantsKey(k.VkCode) {
 			go cardKeyFn(k.VkCode)
 			return 1 // 吞掉：别让 Enter 把没翻译的原文发出去

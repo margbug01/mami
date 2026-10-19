@@ -103,10 +103,15 @@ func (w *worker) do(job func(owner uintptr)) {
 
 // paste 用剪贴板 + Ctrl+V 把译文贴进当前焦点，0.7 秒后把原来的剪贴板还回去
 // （期间要是别人又往剪贴板里写了东西，就不还原，免得覆盖掉）。
-func (w *worker) paste(text string) {
+func (w *worker) paste(text string, allow ...func(owner uintptr) bool) {
 	w.do(func(owner uintptr) {
 		snap, ok := snapshotClipboard(owner)
-		setClipboardText(owner, toCRLF(text), true)
+		if len(allow) > 0 && !allow[0](owner) {
+			return
+		}
+		if !setClipboardText(owner, toCRLF(text), true) {
+			return
+		}
 		sendCtrl('V')
 		if !ok {
 			return

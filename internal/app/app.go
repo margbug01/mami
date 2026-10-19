@@ -62,9 +62,26 @@ type App struct {
 	cfg Config
 	tr  *Translator
 
+	voiceWin               *mygo.Window
+	voiceUI                voiceViewState
+	voiceWA                RECT // 以下三个只在界面线程读写：胶囊所在显示器的工作区
+	voiceDPI               uint32
+	voiceShownW            int32
+	voiceLeaving           bool
+	voiceShowAt            time.Time // 弹出、退场、宽度变化、内容切换各自的起点
+	voiceHideAt            time.Time
+	voiceKindAt            time.Time
+	voiceWAt               time.Time
+	voiceWFrom, voiceWTo   float32
+	voiceStyle             string
+	voiceFrameAt           time.Time
+	voiceBarH              [voiceBars]float32 // 平滑后的柱高 / 球大小（0~1）
+	voiceOrbLv             float32
+	voiceHideGen           int
 	btnWin, popWin, setWin *mygo.Window
 	anchorWin              *mygo.Window
 	btnHwnd, popHwnd       atomic.Uintptr
+	voiceHwnd              atomic.Uintptr
 	tray                   *mygo.Tray
 	quitting               bool
 
@@ -101,6 +118,7 @@ func (a *App) config() (Config, *Translator) {
 }
 
 func (a *App) setConfig(cfg Config) error {
+	cfg.normalize()
 	tr, err := newTranslator(cfg)
 	if err != nil {
 		return err
@@ -108,6 +126,11 @@ func (a *App) setConfig(cfg Config) error {
 	a.mu.Lock()
 	a.cfg, a.tr = cfg, tr
 	a.mu.Unlock()
+	voiceTrigger.Store(0)
+	voiceEpoch.Add(1)
+	if cfg.VoiceEnabled && !cfg.DisableHotkeys {
+		voiceTrigger.Store(voiceKey(cfg.VoiceHotkey))
+	}
 	return nil
 }
 
@@ -147,12 +170,14 @@ func (a *App) createWindows() {
 	a.btnHwnd.Store(h)
 	a.popWin, h = a.floatingWindow("mami-popup", popW, 120, toastW, 40, a.popupView)
 	a.popHwnd.Store(h)
+	a.voiceWin, h = a.floatingWindow("mami-voice", voiceRecW, voiceWinH, voiceDotsW, voiceWinH, a.voiceView)
+	a.voiceHwnd.Store(h)
 }
 
 func (a *App) isOurs(p POINT) bool {
 	h, _, _ := pWindowFromPoint.Call(packPt(p))
 	root, _, _ := pGetAncestor.Call(h, GA_ROOT)
-	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load())
+	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load())
 }
 
 // ---------- 鼠标手势 ----------

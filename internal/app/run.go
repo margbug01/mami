@@ -26,10 +26,11 @@ func Run() {
 		return
 	}
 	demo := flag.Bool("demo", false, "只画出按钮和一张示例卡片，8 秒后退出（不挂钩子、不注册快捷键）")
+	demoVoice := flag.Bool("demo-voice", false, "只放一遍语音胶囊的几种状态（假音量，不开麦克风），然后退出")
 	flag.Parse()
 
 	mygo.App.SetName("Mami")
-	if !*demo && !mygo.App.RequestSingleInstanceLock() {
+	if !*demo && !*demoVoice && !mygo.App.RequestSingleInstanceLock() {
 		return // 已经在跑了，那边会打开设置窗口
 	}
 
@@ -91,6 +92,10 @@ func Run() {
 			a.runDemo()
 			return
 		}
+		if *demoVoice {
+			go a.runVoiceDemo()
+			return
+		}
 		a.createTray()
 		probs := a.registerHotkeys(cfg)
 		if len(probs) > 0 {
@@ -106,6 +111,7 @@ func Run() {
 			probs = append(probs, T("鼠标钩子挂载失败，只能用快捷键"))
 		}
 		go a.mouseLoop()
+		go a.voiceLoop()
 		go a.pruneLoop()
 		go a.updateLoop()
 		go cleanupUpdate()
