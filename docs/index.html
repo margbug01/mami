@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mami · Dictate and translate where you type</title>
-<meta name="description" content="Mami is a Windows tray app for voice input and selection translation. Tap Right Alt and talk, and tidy text lands in the box you are typing in. Select text to translate it in place. Bring your own speech, polish and translation APIs.">
+<meta name="description" content="Mami is a Windows tray app for voice input and selection translation. Tap Right Alt and talk, and tidy text lands in the box you are typing in. Select text to translate it in place.">
 <meta property="og:title" content="Mami · Dictate and translate where you type">
 <meta property="og:description" content="Talk instead of typing, translate without leaving the box. Windows tray app, bring your own model.">
 <meta property="og:image" content="https://margbug01.github.io/mami/voice.png">
@@ -18,8 +18,7 @@
 :root {
   --bg: #f4f5f7; --fg: #101114; --muted: #5b616d; --line: #dcdee3;
   --panel: #ffffff; --accent: #2f6fed; --accent-fg: #ffffff; --sel: #cddffd;
-  --display: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-  --body: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -29,110 +28,49 @@
 }
 * { box-sizing: border-box; }
 html { color-scheme: light dark; }
-body {
-  margin: 0; background: var(--bg); color: var(--fg);
-  font: 400 1.0625rem/1.65 var(--body); -webkit-font-smoothing: antialiased;
-}
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 1.0625rem/1.65 var(--font); -webkit-font-smoothing: antialiased; }
 a { color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
 .wrap { max-width: 1080px; margin: 0 auto; padding: 0 clamp(1.25rem, 4vw, 2.5rem); }
 
-/* header */
 header { display: flex; align-items: center; gap: 1.25rem; padding: 1.5rem 0; }
-.brand { display: flex; align-items: center; gap: .7rem; font: 700 1.25rem var(--display); text-decoration: none; letter-spacing: -.01em; }
-.brand svg { width: 34px; height: 27px; }
+.brand { display: flex; align-items: center; gap: .65rem; font: 700 1.25rem var(--font); text-decoration: none; }
+.brand img { width: 34px; height: 34px; border-radius: 8px; }
 header nav { margin-left: auto; display: flex; align-items: center; gap: 1.5rem; font-size: .95rem; }
 header nav a { text-decoration: none; color: var(--muted); }
 header nav a:hover { color: var(--fg); }
 .lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
-.lang button {
-  font: 500 .85rem var(--body); color: var(--muted); background: none; border: 0;
-  padding: .2rem .75rem; border-radius: 999px; cursor: pointer;
-}
+.lang button { font: 500 .85rem var(--font); color: var(--muted); background: none; border: 0; padding: .2rem .75rem; border-radius: 999px; cursor: pointer; }
 .lang button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
 
-/* hero */
-.hero { display: grid; gap: clamp(2rem, 5vw, 4rem); padding: clamp(2rem, 6vw, 4.5rem) 0 clamp(3rem, 8vw, 6rem); align-items: center; }
-@media (min-width: 920px) { .hero { grid-template-columns: 1fr 460px; } }
-h1 { font: 700 clamp(2.6rem, 6.4vw, 4.4rem)/1.04 var(--display); letter-spacing: -.025em; margin: 0 0 1.4rem; text-wrap: balance; }
+.split { display: grid; gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+@media (min-width: 920px) { .split { grid-template-columns: 1fr 460px; } }
+.hero { padding: clamp(2rem, 6vw, 4.5rem) 0 clamp(3rem, 8vw, 5.5rem); }
+h1 { font: 700 clamp(2.6rem, 6.4vw, 4.4rem)/1.06 var(--font); letter-spacing: -.025em; margin: 0 0 1.4rem; text-wrap: balance; }
 :lang(zh-CN) h1, :lang(zh-CN) h2 { letter-spacing: 0; }
 .lead { font-size: 1.15rem; max-width: 33rem; color: var(--muted); margin: 0 0 2rem; }
-kbd {
-  font: 600 .82em var(--body); padding: .08em .45em; border: 1px solid var(--line);
-  border-bottom-width: 2px; border-radius: 5px; background: var(--panel); color: var(--fg);
-}
+kbd { font: 600 .82em var(--font); padding: .08em .45em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--panel); color: var(--fg); white-space: nowrap; }
 .cta { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: center; }
-.btn {
-  display: inline-block; text-decoration: none; font-weight: 600; padding: .8rem 1.4rem;
-  border-radius: 10px; background: var(--accent); color: var(--accent-fg);
-}
+.btn { display: inline-block; text-decoration: none; font-weight: 600; padding: .8rem 1.4rem; border-radius: 10px; background: var(--accent); color: var(--accent-fg); }
 .btn:hover { filter: brightness(1.08); }
 .link { color: var(--fg); font-weight: 500; }
 .meta { margin: 1.1rem 0 0; font-size: .9rem; color: var(--muted); }
 
-/* live demo */
+/* demo window */
 .win { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px -30px rgba(0,0,0,.35); }
 .win-bar { display: flex; align-items: center; gap: .5rem; padding: .7rem 1rem; border-bottom: 1px solid var(--line); font-size: .85rem; color: var(--muted); }
 .win-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
-.composer { padding: 1.4rem 1.25rem 1.5rem; min-height: 9.5rem; font-size: 1.05rem; line-height: 1.9; cursor: text; }
+.composer { padding: 1.4rem 1.25rem 1.5rem; min-height: 8rem; font-size: 1.05rem; line-height: 1.9; cursor: text; }
 .composer p { margin: 0; }
-.sel { background: linear-gradient(var(--sel), var(--sel)) no-repeat left / 0% 100%; border-radius: 3px; }
-.sel.on { background-size: 100% 100%; transition: background-size .9s steps(24, end); }
-.dotbtn {
-  display: none; vertical-align: middle; margin-left: .35rem; width: 36px; height: 30px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--fg); color: var(--bg);
-  cursor: pointer; padding: 0; place-items: center; transform: translateY(-2px);
-}
-.dotbtn svg { width: 22px; height: 18px; }
-.dotbtn.show { display: inline-grid; animation: pop .22s ease-out; }
-.dotbtn.press { transform: translateY(-2px) scale(.9); }
-@keyframes pop { from { transform: translateY(-2px) scale(.4); opacity: 0; } }
-.card { margin: 0 1.25rem 1.25rem; border: 1px solid var(--line); border-radius: 12px; padding: .9rem 1rem 1rem; background: var(--bg); display: none; }
-.card.show { display: block; }
-.card-head { display: flex; justify-content: space-between; font-size: .8rem; color: var(--muted); margin-bottom: .45rem; }
-.card-body { font-size: 1rem; line-height: 1.6; min-height: 3.2rem; }
-.card-body.busy { color: var(--muted); }
-.card-foot { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .8rem; }
-.card-foot button {
-  font: 500 .9rem var(--body); padding: .4rem .95rem; border-radius: 8px; cursor: pointer;
-  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
-}
-.card-foot button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-.card-foot[hidden] { display: none; }
-.demo-note { display: flex; justify-content: space-between; gap: 1rem; margin: .8rem .25rem 0; font-size: .88rem; color: var(--muted); }
+.demo-note { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin: .8rem .25rem 0; font-size: .9rem; color: var(--muted); min-height: 3em; }
+.demo-note b { font-weight: 600; color: var(--fg); }
 .demo-note button { white-space: nowrap; flex-shrink: 0; font: inherit; color: var(--fg); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
-/* sections */
-section { padding: clamp(2.5rem, 6vw, 4.5rem) 0; border-top: 1px solid var(--line); }
-h2 { font: 700 clamp(1.7rem, 3.4vw, 2.4rem)/1.1 var(--display); letter-spacing: -.015em; margin: 0 0 2rem; max-width: 30rem; text-wrap: balance; }
-.points { display: grid; gap: 2rem 3rem; margin: 0; }
-@media (min-width: 760px) { .points { grid-template-columns: 1fr 1fr; } }
-.points dt { font: 700 1.15rem var(--display); margin-bottom: .35rem; }
-.points dd { margin: 0; color: var(--muted); max-width: 30rem; }
-.shot { margin: 2.2rem 0 0; }
-.shot img { display: block; width: 100%; max-width: 760px; height: auto; border-radius: 12px; border: 1px solid var(--line); }
-.shot figcaption { margin-top: .8rem; font-size: .92rem; color: var(--muted); max-width: 40rem; }
-ol.steps { margin: 0 0 2.5rem; padding-left: 1.3rem; max-width: 40rem; }
-ol.steps li { margin-bottom: .6rem; padding-left: .3rem; }
-.table-wrap { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: .95rem; min-width: 640px; }
-th, td { text-align: left; padding: .7rem 1rem .7rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { font-weight: 600; color: var(--muted); }
-td:first-child, th:first-child { white-space: nowrap; }
-code { font: 500 .88em ui-monospace, "Cascadia Code", Consolas, monospace; }
-footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
-
-/* voice demo */
-.vdemo { display: grid; gap: clamp(1.5rem, 4vw, 3rem); align-items: start; }
-@media (min-width: 920px) { .vdemo { grid-template-columns: 1fr 460px; } }
-.vbox { min-height: 7.5rem; }
-.vbox .caret { display: inline-block; width: 2px; height: 1.15em; background: var(--fg); vertical-align: -.2em; animation: blink 1s steps(1) infinite; }
+/* voice pill */
+.caret { display: inline-block; width: 2px; height: 1.15em; background: var(--fg); vertical-align: -.2em; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .pillbar { display: flex; justify-content: center; padding: 0 0 1.3rem; min-height: 3.6rem; }
-.pill {
-  display: none; align-items: center; gap: 8px; height: 40px; padding: 0 6px; border-radius: 20px;
-  background: #1e2026; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 10px 30px -12px rgba(0,0,0,.5);
-}
+.pill { display: none; align-items: center; gap: 8px; height: 40px; padding: 0 6px; border-radius: 20px; background: #1e2026; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 10px 30px -12px rgba(0,0,0,.5); }
 .pill.show { display: flex; animation: pop .25s ease-out; }
 .pill .pb { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.12); color: #fff; font-size: 13px; line-height: 1; }
 .pill .pb.ok { background: #f2f2f4; color: #15161a; }
@@ -147,23 +85,54 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
 @keyframes dot { 50% { opacity: .25; transform: translateY(-2px); } }
 .pill.busy .bars, .pill.busy .ok { display: none; }
 .pill.busy .vdots { display: flex; }
-.said { margin: 1rem .25rem 0; font-size: .92rem; color: var(--muted); min-height: 3em; }
-.said b { font-weight: 600; color: var(--fg); }
-.shots { display: grid; gap: 1.5rem; margin-top: 2.5rem; }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } }
+
+/* translation demo */
+.sel { background: linear-gradient(var(--sel), var(--sel)) no-repeat left / 0% 100%; border-radius: 3px; }
+.sel.on { background-size: 100% 100%; transition: background-size .9s steps(24, end); }
+.dotbtn { display: none; vertical-align: middle; margin-left: .35rem; width: 36px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--fg); color: var(--bg); cursor: pointer; padding: 0; place-items: center; transform: translateY(-2px); }
+.dotbtn svg { width: 22px; height: 18px; }
+.dotbtn.show { display: inline-grid; animation: pop .22s ease-out; }
+.card { margin: 0 1.25rem 1.25rem; border: 1px solid var(--line); border-radius: 12px; padding: .9rem 1rem 1rem; background: var(--bg); display: none; }
+.card.show { display: block; }
+.card-head { font-size: .8rem; color: var(--muted); margin-bottom: .45rem; }
+.card-body { font-size: 1rem; line-height: 1.6; min-height: 3.2rem; }
+.card-body.busy { color: var(--muted); }
+.card-foot { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .8rem; }
+.card-foot button { font: 500 .9rem var(--font); padding: .4rem .95rem; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--fg); }
+.card-foot button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.card-foot[hidden] { display: none; }
+
+/* sections */
+section { padding: clamp(2.5rem, 6vw, 4.5rem) 0; border-top: 1px solid var(--line); }
+.kicker { font-size: .85rem; font-weight: 600; color: var(--accent); margin: 0 0 .6rem; letter-spacing: .04em; }
+h2 { font: 700 clamp(1.8rem, 3.6vw, 2.6rem)/1.12 var(--font); letter-spacing: -.015em; margin: 0 0 1.8rem; text-wrap: balance; }
+.points { display: grid; gap: 1.6rem; margin: 0; }
+.points dt { font: 700 1.12rem var(--font); margin-bottom: .3rem; }
+@media (min-width: 760px) { .points.two { grid-template-columns: 1fr 1fr; gap: 1.6rem 3rem; } }
+.points dd { margin: 0; color: var(--muted); max-width: 30rem; }
+.shots { display: grid; gap: 1.5rem; margin-top: 2.8rem; }
 @media (min-width: 900px) { .shots { grid-template-columns: 1fr 1fr; } }
-.shots .shot { margin: 0; }
+.shot { margin: 0; }
+.shot img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { margin-top: .7rem; font-size: .9rem; color: var(--muted); }
+ol.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 1.2rem; }
+@media (min-width: 820px) { ol.steps { grid-template-columns: repeat(3, 1fr); } }
+ol.steps li { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.2rem 1.25rem; color: var(--muted); }
+ol.steps li b { display: block; color: var(--fg); font-size: 1.05rem; margin-bottom: .35rem; }
+footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .sel.on { transition: none; }
   .dotbtn.show, .pill.show { animation: none; }
-  .bars i, .vdots i, .vbox .caret { animation: none; }
+  .bars i, .vdots i, .caret { animation: none; }
 }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <a class="brand" href="#top" id="top" aria-label="Mami"><span id="logo"></span>Mami</a>
+    <a class="brand" href="#top" id="top"><img src="icon.png" alt="">Mami</a>
     <nav>
       <a href="https://github.com/margbug01/mami">GitHub</a>
       <div class="lang" role="group" aria-label="Language">
@@ -174,127 +143,92 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
   </header>
 
   <main>
-    <div class="hero">
+    <div class="hero split">
       <div>
         <h1 data-i18n="h1">Talk or translate, right where you type.</h1>
-        <p class="lead" data-i18n="lead">Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and a small button translates it, or press <kbd>Alt</kbd> <kbd>T</kbd> to replace it in place. Mami is a Windows tray app that uses the models and API keys you already have.</p>
+        <p class="lead" data-i18n="lead"></p>
         <div class="cta">
           <a class="btn" href="https://github.com/margbug01/mami/releases/latest" data-i18n="download">Download for Windows</a>
           <a class="link" href="https://github.com/margbug01/mami" data-i18n="source">View the source</a>
         </div>
         <p class="meta" data-i18n="meta">Windows 10 and 11, x64. Free and open source under the MIT license.</p>
       </div>
-
       <div>
-        <div class="win" aria-label="Interactive demo">
+        <div class="win" aria-label="Voice input demo">
           <div class="win-bar"><i></i><i></i><i></i><span data-i18n="winTitle">Chat</span></div>
-          <div class="composer" id="composer" tabindex="0">
-            <p><span class="sel" id="sel">这是写给 AI 的提示词：请逐条检查日志，不要直接改代码。</span><button class="dotbtn" id="dot" type="button" aria-label="Translate"></button></p>
-          </div>
-          <div class="card" id="card">
-            <div class="card-head"><span>中文 → English</span></div>
-            <div class="card-body" id="cardBody"></div>
-            <div class="card-foot" id="cardFoot" hidden>
-              <button type="button" id="copyBtn" data-i18n="copy">Copy</button>
-              <button type="button" id="replaceBtn" class="primary" data-i18n="replace">Replace</button>
+          <div class="composer"><p id="vText"></p></div>
+          <div class="pillbar">
+            <div class="pill" id="pill" aria-hidden="true">
+              <span class="pb">✕</span>
+              <span class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+              <span class="vdots"><i></i><i></i><i></i></span>
+              <span class="pb ok">✓</span>
             </div>
           </div>
         </div>
-        <div class="demo-note">
-          <span id="demoHint" data-i18n="hintIdle">Select the text above, or click it.</span>
-          <button type="button" id="replay" data-i18n="replay">Replay</button>
-        </div>
+        <div class="demo-note"><span id="vSaid"></span><button type="button" id="vReplay" data-i18n="replay">Replay</button></div>
       </div>
     </div>
 
     <section id="voice">
+      <p class="kicker" data-i18n="k1">VOICE INPUT</p>
       <h2 data-i18n="h2v">Speak instead of typing</h2>
-      <div class="vdemo">
-        <dl class="points" style="grid-template-columns:1fr">
-          <div><dt data-i18n="v1t">Tap, talk, tap</dt><dd data-i18n="v1d">Right Alt by default, or any key, shortcut or media button. Esc cancels. With Qwen 3.1 streaming, the text is ready about half a second after you stop.</dd></div>
-          <div><dt data-i18n="v2t">Cleaned up, not rewritten</dt><dd data-i18n="v2d">Fillers and "no wait, I mean" are dropped. Questions are not answered and nothing is translated behind your back. Four levels, from off to structured.</dd></div>
-          <div><dt data-i18n="v3t">Learns your words</dt><dd data-i18n="v3d">Add names and product names to the vocabulary. Fix a misheard word twice and Mami fixes it for you from then on. Only sound-alike fixes are learned.</dd></div>
-        </dl>
+      <dl class="points two">
+        <div><dt data-i18n="v1t"></dt><dd data-i18n="v1d"></dd></div>
+        <div><dt data-i18n="v2t"></dt><dd data-i18n="v2d"></dd></div>
+        <div><dt data-i18n="v3t"></dt><dd data-i18n="v3d"></dd></div>
+        <div><dt data-i18n="v4t"></dt><dd data-i18n="v4d"></dd></div>
+      </dl>
+      <div class="shots">
+        <figure class="shot">
+          <picture><source media="(prefers-color-scheme: dark)" srcset="voice.png"><img src="voice-light.png" width="1464" height="960" alt="Dictation settings with pill previews" loading="lazy"></picture>
+          <figcaption data-i18n="capv"></figcaption>
+        </figure>
+        <figure class="shot">
+          <picture><source media="(prefers-color-scheme: dark)" srcset="words.png"><img src="words-light.png" width="1464" height="960" alt="Vocabulary page" loading="lazy"></picture>
+          <figcaption data-i18n="capw"></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="translate">
+      <div class="split">
         <div>
-          <div class="win" aria-label="Voice input demo">
+          <p class="kicker" data-i18n="k2">TRANSLATION</p>
+          <h2 data-i18n="h2t">Select it, translate it</h2>
+          <dl class="points">
+            <div><dt data-i18n="t1t"></dt><dd data-i18n="t1d"></dd></div>
+            <div><dt data-i18n="t2t"></dt><dd data-i18n="t2d"></dd></div>
+            <div><dt data-i18n="t3t"></dt><dd data-i18n="t3d"></dd></div>
+          </dl>
+        </div>
+        <div>
+          <div class="win" aria-label="Translation demo">
             <div class="win-bar"><i></i><i></i><i></i><span data-i18n="winTitle">Chat</span></div>
-            <div class="composer vbox"><p id="vText"></p></div>
-            <div class="pillbar">
-              <div class="pill" id="pill" aria-hidden="true">
-                <span class="pb">✕</span>
-                <span class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-                <span class="vdots"><i></i><i></i><i></i></span>
-                <span class="pb ok">✓</span>
+            <div class="composer" id="composer" tabindex="0">
+              <p><span class="sel" id="sel"></span><button class="dotbtn" id="dot" type="button" aria-label="Translate"></button></p>
+            </div>
+            <div class="card" id="card">
+              <div class="card-head">中文 → English</div>
+              <div class="card-body" id="cardBody"></div>
+              <div class="card-foot" id="cardFoot" hidden>
+                <button type="button" id="copyBtn" data-i18n="copy">Copy</button>
+                <button type="button" id="replaceBtn" class="primary" data-i18n="replace">Replace</button>
               </div>
             </div>
           </div>
-          <div class="demo-note">
-            <span class="said" id="vSaid" style="margin:0"></span>
-            <button type="button" id="vReplay" data-i18n="replay">Replay</button>
-          </div>
+          <div class="demo-note"><span id="demoHint"></span><button type="button" id="replay" data-i18n="replay">Replay</button></div>
         </div>
       </div>
-      <div class="shots">
-        <figure class="shot">
-          <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="voice.png">
-            <img src="voice-light.png" width="1464" height="960" alt="Dictation settings with pill previews" loading="lazy">
-          </picture>
-          <figcaption data-i18n="capv">Seven pill styles, with a dark or light tone of their own.</figcaption>
-        </figure>
-        <figure class="shot">
-          <picture>
-            <source media="(prefers-color-scheme: dark)" srcset="words.png">
-            <img src="words-light.png" width="1464" height="960" alt="Vocabulary page" loading="lazy">
-          </picture>
-          <figcaption data-i18n="capw">The vocabulary. Words you fixed show up here on their own.</figcaption>
-        </figure>
-      </div>
     </section>
 
     <section>
-      <h2 data-i18n="h2a">Built to stay out of the way</h2>
-      <dl class="points">
-        <div><dt data-i18n="p1t">Input boxes only</dt><dd data-i18n="p1d">Web pages and documents are left alone. Before showing anything, Mami asks Windows whether the focus is an editable field.</dd></div>
-        <div><dt data-i18n="p2t">Keeps your selection</dt><dd data-i18n="p2d">The button and the card never take focus, and your clipboard is put back after every translation.</dd></div>
-        <div><dt data-i18n="p3t">Safe in terminals</dt><dd data-i18n="p3d">In Windows Terminal Mami sends no keystrokes, so the program you are running never gets a surprise Ctrl+C.</dd></div>
-        <div><dt data-i18n="p4t">Your model, your key</dt><dd data-i18n="p4d">Pick a provider and the endpoint fills itself in; keys are encrypted with Windows DPAPI and remembered per endpoint. Audio and text go only where you send them.</dd></div>
-      </dl>
-    </section>
-
-    <section>
-      <h2 data-i18n="h2b">Make it yours</h2>
-      <p class="lead" style="margin:0" data-i18n="make">Light and dark themes, nine interface languages, twenty target languages, extra instructions for style and terminology, and a history page that shows how much typing you saved.</p>
-      <figure class="shot">
-        <picture>
-          <source media="(prefers-color-scheme: dark)" srcset="settings.png">
-          <img src="settings-light.png" width="1464" height="960" alt="Mami settings window" loading="lazy">
-        </picture>
-        <figcaption data-i18n="cap">Settings, grouped by what you are doing. Providers are one click away.</figcaption>
-      </figure>
-    </section>
-
-    <section>
-      <h2 data-i18n="h2c">Get started</h2>
+      <h2 data-i18n="h2s">Up and running in a minute</h2>
       <ol class="steps">
-        <li data-i18n="s1">Download the installer from the releases page and run it. Mami opens its settings the first time.</li>
-        <li data-i18n="s2">Translation starts on bilibili's free endpoint, which needs no key. For daily use, pick a provider below and paste your key.</li>
-        <li data-i18n="s3">For voice, turn it on under Dictation, add a speech key and a polish key, then tap <kbd>Right Alt</kbd> anywhere you type.</li>
-        <li data-i18n="s4">Select text in any input box. Press <kbd>Alt</kbd> <kbd>T</kbd> to translate and replace, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> to only see the card.</li>
+        <li><b data-i18n="s1t"></b><span data-i18n="s1"></span></li>
+        <li><b data-i18n="s2t"></b><span data-i18n="s2"></span></li>
+        <li><b data-i18n="s3t"></b><span data-i18n="s3"></span></li>
       </ol>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th data-i18n="th0">For</th><th data-i18n="th1">Provider</th><th>Base URL</th><th data-i18n="th2">Model</th><th data-i18n="th3">Notes</th></tr></thead>
-          <tbody>
-            <tr><td data-i18n="u1">Speech</td><td data-i18n="pq">Alibaba Cloud Model Studio</td><td><code>https://dashscope.aliyuncs.com/compatible-mode/v1</code></td><td><code>qwen-audio-3.1-asr-flash-streaming</code></td><td data-i18n="nq">Streams while you talk, about 0.5 s after you stop.</td></tr>
-            <tr><td data-i18n="u1">Speech</td><td data-i18n="ps">StepFun</td><td><code>https://api.stepfun.com/v1</code></td><td><code>stepaudio-3-asr-max</code></td><td data-i18n="ns">Split at pauses, about 1 s.</td></tr>
-            <tr><td data-i18n="u2">Polish</td><td>DeepSeek</td><td><code>https://api.deepseek.com/v1</code></td><td><code>deepseek-flash</code></td><td data-i18n="nd">Thinking off, 0.5–1 s. Any OpenAI-compatible endpoint works.</td></tr>
-            <tr><td data-i18n="u3">Translate</td><td>Tencent TokenHub</td><td><code>https://tokenhub.tencentmaas.com/v1</code></td><td><code>hy-mt2-pro</code></td><td data-i18n="n1">Paid, stable, about 1 s.</td></tr>
-            <tr><td data-i18n="u3">Translate</td><td>OpenRouter</td><td><code>https://openrouter.ai/api/v1</code></td><td><code>tencent/hy-mt2-30b-a3b</code></td><td data-i18n="n2">Same model family, pay as you go.</td></tr>
-            <tr><td data-i18n="u3">Translate</td><td data-i18n="n3p">bilibili (free)</td><td><code>https://index-translate.bilibili.com/v1</code></td><td><code>Index-Translate-35B-A3B</code></td><td data-i18n="n3">No key. Can be flaky at peak hours.</td></tr>
-          </tbody>
-        </table>
-      </div>
     </section>
   </main>
 
@@ -308,10 +242,10 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
 
 <script>
 (function () {
-  // The 「文A」 dot matrix from the app's own button: 5x5 + 5x5, A offset by (5,3).
+  // the app's own 「文A」 button, drawn as a dot matrix
   var WEN = ["..#..", "#####", ".#.#.", "..#..", "##.##"];
   var A = ["..#..", ".#.#.", "#...#", "#####", "#...#"];
-  function glyph(size) {
+  function glyph() {
     var cells = [];
     function put(rows, ox, oy) {
       rows.forEach(function (row, y) {
@@ -323,105 +257,96 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     put(WEN, 0, 0); put(A, 5, 3);
     return '<svg viewBox="0 0 10 8" fill="currentColor" aria-hidden="true">' + cells.join("") + "</svg>";
   }
-  document.getElementById("logo").innerHTML = glyph();
   document.getElementById("dot").innerHTML = glyph();
 
   var T = {
     en: {
       h1: "Talk or translate, right where you type.",
-      lead: "Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and a small button translates it, or press <kbd>Alt</kbd> <kbd>T</kbd> to replace it in place. Mami is a Windows tray app that uses the models and API keys you already have.",
-      h2v: "Speak instead of typing",
-      v1t: "Tap, talk, tap", v1d: "Right Alt by default, or any key, shortcut or media button. Esc cancels. With Qwen 3.1 streaming, the text is ready about half a second after you stop.",
-      v2t: "Cleaned up, not rewritten", v2d: "Fillers and \"no wait, I mean\" are dropped. Questions are not answered and nothing is translated behind your back. Four levels, from off to structured.",
-      v3t: "Learns your words", v3d: "Add names and product names to the vocabulary. Fix a misheard word twice and Mami fixes it for you from then on. Only sound-alike fixes are learned.",
-      saidLabel: "You said:",
-      capv: "Seven pill styles, with a dark or light tone of their own.",
-      capw: "The vocabulary. Words you fixed show up here on their own.",
-      s4: "Select text in any input box. Press <kbd>Alt</kbd> <kbd>T</kbd> to translate and replace, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> to only see the card.",
-      th0: "For", u1: "Speech", u2: "Polish", u3: "Translate",
-      pq: "Alibaba Cloud Model Studio", ps: "StepFun",
-      nq: "Streams while you talk, about 0.5 s after you stop.", ns: "Split at pauses, about 1 s.", nd: "Thinking off, 0.5–1 s. Any OpenAI-compatible endpoint works.",
+      lead: "Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and one click translates it. A small Windows tray app that uses the models and keys you already have.",
       download: "Download for Windows", source: "View the source",
       meta: "Windows 10 and 11, x64. Free and open source under the MIT license.",
-      winTitle: "Chat", copy: "Copy", replace: "Replace", replay: "Replay",
-      hintIdle: "Select the text above, or click it.",
-      hintBtn: "Click the button.", hintCard: "Replace puts the translation back in the box.",
-      hintDone: "Replaced in place. Alt+T does this without the card.",
-      busy: "Translating…", copied: "Copied",
-      h2a: "Built to stay out of the way",
-      p1t: "Input boxes only", p1d: "Web pages and documents are left alone. Before showing anything, Mami asks Windows whether the focus is an editable field.",
-      p2t: "Keeps your selection", p2d: "The button and the card never take focus, and your clipboard is put back after every translation.",
-      p3t: "Safe in terminals", p3d: "In Windows Terminal Mami sends no keystrokes, so the program you are running never gets a surprise Ctrl+C.",
-      p4t: "Your model, your key", p4d: "Pick a provider and the endpoint fills itself in; keys are encrypted with Windows DPAPI and remembered per endpoint. Audio and text go only where you send them.",
-      h2b: "Make it yours",
-      make: "Light and dark themes, nine interface languages, twenty target languages, extra instructions for style and terminology, and a history page that shows how much typing you saved.",
-      cap: "Settings, grouped by what you are doing. Providers are one click away.",
-      h2c: "Get started",
-      s1: "Download the installer from the releases page and run it. Mami opens its settings the first time.",
-      s2: "Translation starts on bilibili's free endpoint, which needs no key. For daily use, pick a provider below and paste your key.",
-      s3: "For voice, turn it on under Dictation, add a speech key and a polish key, then tap <kbd>Right Alt</kbd> anywhere you type.",
-      th1: "Provider", th2: "Model", th3: "Notes",
-      n1: "Paid, stable, about 1 s.", n2: "Same model family, pay as you go.",
-      n3p: "bilibili (free)", n3: "No key. Can be flaky at peak hours.",
+      winTitle: "Chat", copy: "Copy", replace: "Replace", replay: "Replay", copied: "Copied", busy: "Translating…",
+      saidLabel: "You said:",
+      k1: "VOICE INPUT", h2v: "Speak instead of typing",
+      v1t: "Tap, talk, tap", v1d: "Right Alt by default, or any key, shortcut or media button. Esc cancels. Text is ready about half a second after you stop.",
+      v2t: "Cleaned up, not rewritten", v2d: "Fillers and \"no wait, I mean\" are dropped. Questions are not answered and nothing is translated behind your back.",
+      v3t: "Learns your words", v3d: "Add names and product names to the vocabulary. Fix a misheard word twice and Mami gets it right from then on.",
+      v4t: "Never lost", v4d: "No input box under the cursor? The text waits in the pill with a copy button.",
+      capv: "Seven pill styles, dark or light.", capw: "The vocabulary. Words you fixed show up on their own.",
+      k2: "TRANSLATION", h2t: "Select it, translate it",
+      t1t: "One click, or Alt+T", t1d: "Select text in an input box and a small button appears. Click it for a card, or press Alt+T to replace in place.",
+      t2t: "Only in input boxes", t2d: "Reading a web page never sprinkles buttons around. Your selection and clipboard stay as they were.",
+      t3t: "Prompts stay prompts", t3d: "Multi-line prompts get translated, not carried out. Twenty target languages, with your own glossary.",
+      hintIdle: "Select the text above, or click it.", hintBtn: "Click the button.",
+      hintCard: "Replace puts the translation back in the box.", hintDone: "Replaced in place. Alt+T does this without the card.",
+      h2s: "Up and running in a minute",
+      s1t: "1 · Install", s1: "Download the installer from Releases and run it. Settings open the first time.",
+      s2t: "2 · Pick a provider", s2: "Choose one in settings and paste its key; the endpoint and model fill themselves in. Translation works out of the box on a free endpoint.",
+      s3t: "3 · Use it anywhere", s3: "Tap <kbd>Right Alt</kbd> to talk. Select text and press <kbd>Alt</kbd> <kbd>T</kbd> to translate.",
       foot: "MIT licensed. Built with Go and MyGo. Set in MiSans."
     },
     zh: {
       h1: "在哪打字，就在哪说、在哪翻译。",
-      lead: "按一下 <kbd>右 Alt</kbd> 开口说，整理好的文字直接落进你正在打字的框。选中文字点小按钮就出译文，或者按 <kbd>Alt</kbd> <kbd>T</kbd> 原地替换。Mami 是个 Windows 托盘小工具，用你自己已有的模型和 API Key。",
-      h2v: "能说就别打字",
-      v1t: "按一下，说，再按一下", v1d: "默认右 Alt，也可以换成任意键、组合键或媒体键，Esc 取消。用千问 3.1 流式识别，停下后大约半秒就出字。",
-      v2t: "帮你整理，不帮你改写", v2d: "口头禅和「不对，我是说」会去掉；问句不会被当成问题回答，也不会偷偷翻译。四档可选，从关到结构化。",
-      v3t: "认得你的词", v3d: "人名、产品名加进词库就会照着写。听错的词你改过两次，以后就自动改对。只学读音像的改动。",
-      saidLabel: "你说的：",
-      capv: "七种胶囊样式，底色深浅可以跟主题分开选。",
-      capw: "词库。你改过的词会自己出现在这里。",
-      s4: "在任意输入框里选中文字。按 <kbd>Alt</kbd> <kbd>T</kbd> 翻译并替换，按 <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> 只看卡片。",
-      th0: "用途", u1: "语音识别", u2: "润色", u3: "翻译",
-      pq: "阿里云百炼", ps: "阶跃星辰",
-      nq: "流式，边说边识别，停下约 0.5 秒。", ns: "按停顿分段，约 1 秒。", nd: "自动关掉思考，0.5–1 秒。任何 OpenAI 兼容接口都行。",
+      lead: "按一下 <kbd>右 Alt</kbd> 开口说，整理好的文字直接落进你正在打字的框；选中文字，点一下就翻译。一个 Windows 托盘小工具，用你自己已有的模型和 Key。",
       download: "下载 Windows 版", source: "查看源码",
       meta: "Windows 10 / 11，x64。免费开源，MIT 许可。",
-      winTitle: "聊天", copy: "复制", replace: "替换", replay: "重放",
-      hintIdle: "选中上面的文字，或者点一下它。",
-      hintBtn: "点一下那个按钮。", hintCard: "点「替换」会把译文放回输入框。",
-      hintDone: "已经原地替换。按 Alt+T 可以不弹卡片直接这样做。",
-      busy: "翻译中…", copied: "已复制",
-      h2a: "不碍事，是第一要求",
-      p1t: "只在输入框里弹", p1d: "网页正文、文档里划词不会打扰你。出按钮之前，Mami 会先问 Windows：焦点是不是一个能编辑的输入框。",
-      p2t: "不丢选区", p2d: "按钮和卡片都不抢焦点，每次翻译完还会把你的剪贴板还原。",
-      p3t: "终端里也安全", p3d: "在 Windows Terminal 里 Mami 一个键都不发，你正在跑的程序不会突然收到一个 Ctrl+C。",
-      p4t: "你的模型，你的 Key", p4d: "选一家服务商，地址和模型自动填好；Key 用 Windows DPAPI 加密，每个接口各记一份。录音和文字只发给你选的那家。",
-      h2b: "按你的习惯来",
-      make: "浅色和深色主题、9 种界面语言、20 种目标语言，额外要求管风格和术语，记录页告诉你少打了多少字。",
-      cap: "设置按用途分组，服务商点一下就填好。",
-      h2c: "开始用",
-      s1: "到发布页下载安装包并运行，第一次启动会自动打开设置。",
-      s2: "翻译默认用 B 站的免费接口，不需要 Key。日常使用的话，从下面选一家，填上你的 Key。",
-      s3: "语音输入在「语音识别」里打开，填上识别和润色的 Key，然后在任何打字的地方按一下 <kbd>右 Alt</kbd>。",
-      th1: "服务商", th2: "模型", th3: "说明",
-      n1: "收费，稳定，约 1 秒。", n2: "同一系列模型，按量付费。",
-      n3p: "B 站（免费）", n3: "不用 Key，高峰期可能不稳。",
+      winTitle: "聊天", copy: "复制", replace: "替换", replay: "重放", copied: "已复制", busy: "翻译中…",
+      saidLabel: "你说的：",
+      k1: "语音输入", h2v: "能说就别打字",
+      v1t: "按一下，说，再按一下", v1d: "默认右 Alt，也能换成任意键、组合键或媒体键，Esc 取消。停下大约半秒就出字。",
+      v2t: "帮你整理，不帮你改写", v2d: "口头禅和「不对，我是说」会去掉；问句不会被当成问题回答，也不会偷偷翻译。",
+      v3t: "认得你的词", v3d: "人名、产品名加进词库就照着写。听错的词你改过两次，以后就自动改对。",
+      v4t: "说了就不会丢", v4d: "光标下面没有输入框？这句话会留在胶囊里，点一下就能复制。",
+      capv: "七种胶囊样式，深浅都有。", capw: "词库。你改过的词会自己出现在这里。",
+      k2: "划词翻译", h2t: "选中就翻译",
+      t1t: "点一下，或者 Alt+T", t1d: "在输入框里选中文字，旁边冒出一个小按钮。点它看译文卡片，按 Alt+T 直接原地替换。",
+      t2t: "只在输入框里出现", t2d: "看网页时不会到处冒按钮；你的选区和剪贴板都原样还给你。",
+      t3t: "提示词照样是提示词", t3d: "多行的 AI 提示词会被翻译，而不是被执行。20 种目标语言，可以带自己的术语表。",
+      hintIdle: "选中上面的文字，或者点一下它。", hintBtn: "点一下那个按钮。",
+      hintCard: "点「替换」会把译文放回输入框。", hintDone: "已经原地替换。按 Alt+T 可以不弹卡片直接这样做。",
+      h2s: "一分钟用起来",
+      s1t: "1 · 安装", s1: "到 Releases 下载安装包运行，第一次启动会自动打开设置。",
+      s2t: "2 · 选一家服务商", s2: "在设置里选一家、填上 Key，地址和模型自动填好。翻译自带免费接口，不填也能用。",
+      s3t: "3 · 哪里都能用", s3: "按一下 <kbd>右 Alt</kbd> 说话；选中文字按 <kbd>Alt</kbd> <kbd>T</kbd> 翻译。",
       foot: "MIT 许可。用 Go 和 MyGo 写成，字体 MiSans。"
     }
   };
-  var ORIGINAL = "这是写给 AI 的提示词：请逐条检查日志，不要直接改代码。";
-  var TRANSLATION = "This is a prompt for an AI: check the logs one by one, and don't change the code directly.";
   var lang = (navigator.language || "en").toLowerCase().indexOf("zh") === 0 ? "zh" : "en";
   try { lang = localStorage.getItem("mami-lang") || lang; } catch (e) {}
-
   var $ = function (id) { return document.getElementById(id); };
+  var forced = /[?&]demo=1/.test(location.search);
+  var still = !forced && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- voice demo: pill records, thinks, then the polished line lands in the box
+  var V = {
+    en: { said: "Um, so, can you rewrite this endpoint in Go, and the meeting's at three, no wait, at four.", out: "Can you rewrite this endpoint in Go? The meeting is at four." },
+    zh: { said: "嗯，那个，帮我把这个接口改成用 Go 写，然后三点开会，不对，是四点开会。", out: "帮我把这个接口改成用 Go 写。四点开会。" }
+  };
+  var pill = $("pill"), vText = $("vText"), vSaid = $("vSaid"), vTimers = [], vDone = false;
+  function vShow() {
+    vText.innerHTML = (vDone ? V[lang].out : "") + '<span class="caret"></span>';
+    vSaid.innerHTML = vDone ? "<b>" + T[lang].saidLabel + "</b> " + V[lang].said : "";
+  }
+  function vPlay() {
+    vTimers.forEach(clearTimeout); vTimers = []; vDone = false; vShow();
+    pill.className = "pill";
+    vTimers.push(setTimeout(function () { pill.className = "pill show"; }, 500));
+    vTimers.push(setTimeout(function () { pill.className = "pill show busy"; }, 3300));
+    vTimers.push(setTimeout(function () { pill.className = "pill"; vDone = true; vShow(); }, 4000));
+  }
+  $("vReplay").addEventListener("click", vPlay);
+
+  // ---- translation demo
+  var ORIGINAL = "这是写给 AI 的提示词：请逐条检查日志，不要直接改代码。";
+  var TRANSLATION = "This is a prompt for an AI: check the logs one by one, and don't change the code directly.";
   var sel = $("sel"), dot = $("dot"), card = $("card"), body = $("cardBody"), foot = $("cardFoot"), hint = $("demoHint");
   var state = "idle", timers = [], typing = null;
-
   function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
   function stop() { timers.forEach(clearTimeout); timers = []; if (typing) { clearInterval(typing); typing = null; } }
   function say(key) { hint.setAttribute("data-i18n", key); hint.textContent = T[lang][key]; }
-
   function reset() {
-    stop(); state = "idle";
-    sel.textContent = ORIGINAL; sel.className = "sel";
-    dot.className = "dotbtn"; card.className = "card"; foot.hidden = true; body.textContent = "";
-    say("hintIdle");
+    stop(); state = "idle"; sel.textContent = ORIGINAL; sel.className = "sel";
+    dot.className = "dotbtn"; card.className = "card"; foot.hidden = true; body.textContent = ""; say("hintIdle");
   }
   function select() {
     if (state !== "idle") return;
@@ -429,13 +354,9 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     later(function () { dot.className = "dotbtn show"; }, 950);
   }
   function translate() {
-    if (state !== "selected" && state !== "idle") return;
-    if (state === "idle") { select(); return; }
-    stop(); state = "busy";
-    dot.className = "dotbtn show press";
-    card.className = "card show"; foot.hidden = true;
+    if (state !== "selected") return;
+    stop(); state = "busy"; card.className = "card show"; foot.hidden = true;
     body.className = "card-body busy"; body.textContent = T[lang].busy;
-    later(function () { dot.className = "dotbtn show"; }, 140);
     later(function () {
       body.className = "card-body"; body.textContent = "";
       var words = TRANSLATION.split(" "), i = 0;
@@ -450,24 +371,17 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     state = "done"; card.className = "card"; dot.className = "dotbtn";
     sel.className = "sel"; sel.textContent = TRANSLATION; say("hintDone");
   }
-
+  function tPlay() { reset(); later(select, 500); later(translate, 2700); }
   sel.addEventListener("click", select);
   $("composer").addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(); } });
-  dot.addEventListener("click", function () { if (state === "selected") translate(); });
+  dot.addEventListener("click", translate);
   $("replaceBtn").addEventListener("click", replace);
   $("copyBtn").addEventListener("click", function () {
     var b = $("copyBtn"); b.textContent = T[lang].copied;
     try { navigator.clipboard.writeText(TRANSLATION); } catch (e) {}
     setTimeout(function () { b.textContent = T[lang].copy; }, 1200);
   });
-  $("replay").addEventListener("click", function () { reset(); play(); });
-
-  function play() {
-    var forced = /[?&]demo=1/.test(location.search);
-    if (!forced && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    later(select, 700);
-    later(function () { if (state === "selected") translate(); }, 2900);
-  }
+  $("replay").addEventListener("click", tPlay);
 
   function apply() {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
@@ -477,48 +391,20 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     });
     document.querySelectorAll(".lang button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === lang)); });
     if (state === "busy") body.textContent = T[lang].busy;
+    vShow();
   }
   document.querySelectorAll(".lang button").forEach(function (b) {
-    b.addEventListener("click", function () {
-      lang = b.dataset.lang; try { localStorage.setItem("mami-lang", lang); } catch (e) {}
-      apply();
-    });
+    b.addEventListener("click", function () { lang = b.dataset.lang; try { localStorage.setItem("mami-lang", lang); } catch (e) {} apply(); });
   });
 
-  // voice demo: pill records, thinks, then the polished line lands in the box
-  var V = {
-    en: { said: "Um, so, can you rewrite this endpoint in Go, and the meeting's at three, no wait, at four.", out: "Can you rewrite this endpoint in Go? The meeting is at four." },
-    zh: { said: "嗯，那个，帮我把这个接口改成用 Go 写，然后三点开会，不对，是四点开会。", out: "帮我把这个接口改成用 Go 写。四点开会。" }
-  };
-  var pill = $("pill"), vText = $("vText"), vSaid = $("vSaid"), vTimers = [];
-  function vStop() { vTimers.forEach(clearTimeout); vTimers = []; }
-  function vLater(fn, ms) { vTimers.push(setTimeout(fn, ms)); }
-  function vShow(done) {
-    vText.innerHTML = (done ? V[lang].out : "") + '<span class="caret"></span>';
-    vSaid.innerHTML = done ? "<b>" + T[lang].saidLabel + "</b> " + V[lang].said : "";
-  }
-  var vDone = false;
-  function vPlay() {
-    vStop(); vDone = false; vShow(false);
-    pill.className = "pill";
-    vLater(function () { pill.className = "pill show"; }, 400);
-    vLater(function () { pill.className = "pill show busy"; }, 3200);
-    vLater(function () { pill.className = "pill"; vDone = true; vShow(true); }, 3900);
-  }
-  $("vReplay").addEventListener("click", vPlay);
-  var vStarted = false;
-  function vMaybe() {
-    if (vStarted) return;
-    var forced = /[?&]demo=1/.test(location.search);
-    if (!forced && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { vStarted = true; vDone = true; vShow(true); return; }
-    vStarted = true; vPlay();
-  }
-  if ("IntersectionObserver" in window) {
-    new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); vMaybe(); } }, { threshold: .4 }).observe($("voice"));
-  } else { vMaybe(); }
-  document.querySelectorAll(".lang button").forEach(function (b) { b.addEventListener("click", function () { vShow(vDone); }); });
-
-  apply(); play(); vShow(false);
+  reset(); apply();
+  if (still) { vDone = true; vShow(); return; }
+  vPlay();
+  var tStarted = false;
+  function tMaybe() { if (!tStarted) { tStarted = true; tPlay(); } }
+  if ("IntersectionObserver" in window && !forced) {
+    new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); tMaybe(); } }, { threshold: .4 }).observe($("translate"));
+  } else { tMaybe(); }
 })();
 </script>
 </body>
