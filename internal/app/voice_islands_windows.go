@@ -134,7 +134,7 @@ func drawSweep(p *ui.Painter, r ui.Rect, fg, acc ui.Color) {
 	p.Fill(ui.Rect{X: r.X + inset, Y: y, W: r.W - 2*inset, H: 2}, track, 1)
 	x := r.X + inset + (r.W-2*inset-seg)*float32(0.5+0.5*math.Sin(t*4))
 	p.Fill(ui.Rect{X: x, Y: y - 0.5, W: seg, H: 3}, acc, 1.5)
-	p.AnimationFrame()
+	p.After(voiceFrame)
 }
 
 // drawLEDs 11 格电平，从中间往两边亮；run 在 -1~1 是识别中：中间那块岛变窄了，只画 7 格，亮 run 附近那一两格来回扫；录音时传 -2

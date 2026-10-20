@@ -364,6 +364,10 @@ func voiceWidth(state voiceViewState) int32 {
 	return min(360, max(96, w))
 }
 
+// voiceFrame 胶囊动画的帧间隔。不用 AnimationFrame：它每画完一帧立刻把窗口标脏，
+// 胶囊是置顶窗口、和设置窗口同一个界面线程，WM_PAINT 总先给它，设置窗口就一直轮不到重绘（白屏、点了没反应）
+const voiceFrame = 16 * time.Millisecond
+
 // 动画自己按时间算，不用 mygo 的 Animate/AnimatePose：系统关了「动画效果」时它们会直接跳到终点
 const (
 	voiceInDur   = 280 * time.Millisecond
@@ -709,7 +713,14 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 			finish()
 			return false
 		}
-		switched := foreground() != fg
+		// 贴到现在的前台：开始时没点输入框、说着说着点进去了，也照样贴。
+		// 只有两种情况不跟着走：选中改写（选区在原来的窗口里）、现在前台是 Mami 自己或被排除的程序。
+		target := foreground()
+		switched := target != fg && (selected != "" || target == 0 || a.excluded(target, cfg))
+		if target != fg && !switched {
+			log.Printf("voice: foreground changed during recording, pasting to the new one")
+		}
+		fg = target
 		modsDown := keyDown(VK_CONTROL) || keyDown(VK_MENU) || keyDown(VK_SHIFT) || keyDown(VK_LWIN) || keyDown(VK_RWIN)
 		var in inputState
 		if !switched && !modsDown && !isTerminal(fg) {
@@ -809,7 +820,7 @@ func (a *App) voiceView(c *ui.Context) {
 	}
 	bars, orbLv := a.voiceBarH, a.voiceOrbLv
 	if moving {
-		c.AnimationFrame()
+		c.After(voiceFrame)
 	}
 	ui.Box(c).Fill().Center().Children(func() {
 		if a.voiceOrb(state) {
@@ -1083,7 +1094,7 @@ func drawOrb(p *ui.Painter, r ui.Rect, level float32, now time.Time, recognizing
 		}
 	}
 	p.FillPathGradient(path.Close(), ui.LinearGradient{From: orbFrom, To: orbTo, Angle: float32(angle), Oklab: true})
-	p.AnimationFrame()
+	p.After(voiceFrame)
 }
 
 // drawJelly 果冻条：沿胶囊轮廓走一圈，法线方向叠两道转速不同的小波纹，渐变跟果冻球同色
@@ -1122,12 +1133,12 @@ func drawJelly(p *ui.Painter, r ui.Rect, now time.Time) {
 		}
 	}
 	p.FillPathGradient(path.Close(), ui.LinearGradient{From: orbFrom, To: orbTo, Angle: float32(110 + 20*math.Sin(t*0.8)), Oklab: true})
-	p.AnimationFrame()
+	p.After(voiceFrame)
 }
 
 // drawDotsColor 识别中：三个点依次跳一下
 func drawDotsColor(p *ui.Painter, r ui.Rect, fg ui.Color) {
-	p.AnimationFrame()
+	p.After(voiceFrame)
 	now := float64(time.Now().UnixMilli()) / 1000
 	for i := 0; i < 3; i++ {
 		lift := math.Max(0, math.Sin((now-float64(i)*0.15)*2*math.Pi))
@@ -1266,7 +1277,7 @@ func (sk voiceSkin) dots(p *ui.Painter, r ui.Rect) {
 	case "leds":
 		t := float64(time.Now().UnixMilli()%600000) / 1000
 		drawLEDs(p, r, 0, math.Sin(t*4), sk.fg, sk.okFg)
-		p.AnimationFrame()
+		p.After(voiceFrame)
 		return
 	}
 	drawDotsColor(p, r, sk.fg)
@@ -1453,7 +1464,7 @@ func drawMercuryRec(p *ui.Painter, r ui.Rect, level float32) {
 	t := float64(time.Now().UnixMilli()%600000) / 1000
 	lv := float64(level)
 	drawMercuryDrop(p, float64(r.X+r.W/2), float64(r.Y+r.H/2), 6.5+2.5*lv, 1.15+0.9*lv, 0.03+0.16*lv, t, 1)
-	p.AnimationFrame()
+	p.After(voiceFrame)
 }
 
 // drawMercuryDots 识别中：三颗小水银珠绕着圈转，圈一胀一缩
@@ -1464,5 +1475,5 @@ func drawMercuryDots(p *ui.Painter, r ui.Rect) {
 		a := t*3.4 + float64(k)*2*math.Pi/3
 		drawMercuryDrop(p, cx+math.Cos(a)*d, cy+math.Sin(a)*d*0.6, 3.1, 1, 0.05, t, float64(k))
 	}
-	p.AnimationFrame()
+	p.After(voiceFrame)
 }

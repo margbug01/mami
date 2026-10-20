@@ -881,7 +881,7 @@ func (a *App) voicePreview(c *ui.Context, d *Config) {
 	if style == "orb" {
 		h = max(h, float32(math.Round(d.VoiceOrbSize)))
 	}
-	c.AnimationFrame()
+	c.After(voiceFrame)
 	ui.Row(c).Padding(16, 12).Margin(4, 0, 12, 0).Gap(20).Justify(ui.Center).AlignItems(ui.End).Background(desk).Radius(c.Theme().Radius).Children(func() {
 		for i, st := range states {
 			ui.Column(c).Gap(4).AlignItems(ui.Center).Children(func() {
