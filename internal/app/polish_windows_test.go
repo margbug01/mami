@@ -91,7 +91,7 @@ func TestPolishLive(t *testing.T) {
 	for _, style := range []string{"light", "standard", "structured"} {
 		t.Run(style, func(t *testing.T) {
 			cfg.PolishStyle = style
-			ctx, cancel := context.WithTimeout(context.Background(), polishTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), polishDeadline(polishSample))
 			defer cancel()
 			started := time.Now()
 			result, err := polish(ctx, cfg, polishSample)

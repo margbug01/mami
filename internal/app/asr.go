@@ -47,9 +47,7 @@ func transcribeStepFun(ctx context.Context, cfg Config, pcm []byte) (string, err
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+cfg.ASRAPIKey)
-	client, done := asrClient()
-	defer done()
-	resp, err := client.Do(req)
+	resp, err := directClient(asrTimeout).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -65,11 +63,39 @@ func transcribeStepFun(ctx context.Context, cfg Config, pcm []byte) (string, err
 	return text, nil
 }
 
-// asrClient 语音单独直连，不继承翻译代理或环境代理；不跟随重定向泄露密钥。
-func asrClient() (*http.Client, func()) {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
-	return &http.Client{Transport: transport, Timeout: 90 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, transport.CloseIdleConnections
+const asrTimeout = 90 * time.Second
+
+// directTransport 语音识别和润色共用：不继承翻译代理或环境代理（走代理 ASR 从 0.9s 变 3.5s），
+// 连接一直复用——每句话省一次 TCP+TLS 握手，国内到服务商约 0.2~0.5s。
+var directTransport = func() *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.Proxy = nil
+	return t
+}()
+
+// directClient 不跟随重定向，免得密钥跟着去别的域
+func directClient(timeout time.Duration) *http.Client {
+	return &http.Client{Transport: directTransport, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+}
+
+// warmConnection 录音一开始就把到服务商的连接建好，说完发请求时直接复用。不带密钥，响应内容不看。
+func warmConnection(ctx context.Context, base string) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, base+"/models", nil)
+	if err != nil {
+		return
+	}
+	resp, err := directClient(5 * time.Second).Do(req)
+	if err != nil {
+		return
+	}
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	resp.Body.Close()
+}
+
+// voiceTooQuiet 误触两下或者一句没说：不到 300ms，或者整段最响的 100ms 都没过底噪，
+// 就不发网络、不等那一秒。peak 是录音时各段 RMS 的最大值（waveHeight 把 0.004 当底噪，正常说话 ≥0.02）。
+func voiceTooQuiet(pcm []byte, peak float64) bool {
+	return len(pcm) < 16000*2*3/10 || peak < 0.006
 }
 
 // isStepFunASR 阶跃用自家的 /audio/asr/sse；其余地址按 OpenAI 兼容的 chat 接口发音频（千问 qwen3-asr-flash 这类）
@@ -104,9 +130,7 @@ func transcribeChat(ctx context.Context, cfg Config, pcm []byte) (string, error)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.ASRAPIKey)
-	client, done := asrClient()
-	defer done()
-	resp, err := client.Do(req)
+	resp, err := directClient(asrTimeout).Do(req)
 	if err != nil {
 		return "", err
 	}

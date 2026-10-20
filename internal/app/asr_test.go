@@ -132,6 +132,26 @@ func TestTranscribeChat(t *testing.T) {
 	}
 }
 
+func TestVoiceTooQuiet(t *testing.T) {
+	second := make([]byte, 32000)
+	for _, tc := range []struct {
+		name string
+		pcm  []byte
+		peak float64
+		want bool
+	}{
+		{"empty", nil, 0, true},
+		{"tap", second[:6400], 0.2, true}, // 200ms：误触两下
+		{"silence", second, 0.003, true},  // 一秒底噪
+		{"speech", second, 0.02, false},   // 正常说话
+		{"quiet speech", second, 0.006, false},
+	} {
+		if got := voiceTooQuiet(tc.pcm, tc.peak); got != tc.want {
+			t.Errorf("%s: %v", tc.name, got)
+		}
+	}
+}
+
 func TestIsStepFunASR(t *testing.T) {
 	for base, want := range map[string]bool{
 		"https://api.stepfun.com/v1": true, "https://stepfun.com/v1": true,

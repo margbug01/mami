@@ -11,9 +11,17 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
-const polishTimeout = 2500 * time.Millisecond
+// polishDeadline 润色等多久：2s 起步，每个字再加 15ms（模型按长度吐字，一分钟口述 200 多字光生成就要 3s），
+// 最多 8s；到点就回落原文。
+func polishDeadline(text string) time.Duration {
+	return min(polishMaxWait, 2*time.Second+15*time.Millisecond*time.Duration(utf8.RuneCountInString(text)))
+}
+
+const polishMaxWait = 8 * time.Second
+const polishMinRunes = 5 // 比这短的（「好的」「收到」）没什么可润色，不值得再等一次网络
 const polishSample = "嗯，那个，帮我把这个接口改成用 Go 写，然后三点开会，不对，是四点开会。"
 
 const polishBasePrompt = `你是语音输入法的文字整理器，不是聊天助手。用户消息是语音识别出的原话，你只输出整理后的文字，不加任何解释、引号或前缀。
@@ -71,12 +79,7 @@ func polish(ctx context.Context, cfg Config, text string) (string, error) {
 	req.ContentLength = int64(len(raw))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.PolishAPIKey)
-	// 润色独立直连，不继承翻译或环境代理，也不跟随重定向。
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: polishTimeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	resp, err := client.Do(req)
+	resp, err := directClient(polishMaxWait).Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -119,11 +122,11 @@ func cleanPolishOutput(text string) string {
 
 func polishVoice(ctx context.Context, cfg Config, source string) (string, int64) {
 	cfg.normalize()
-	if cfg.PolishStyle == "off" || cfg.PolishAPIKey == "" {
+	if cfg.PolishStyle == "off" || cfg.PolishAPIKey == "" || utf8.RuneCountInString(strings.TrimSpace(source)) < polishMinRunes {
 		return source, 0
 	}
 	started := time.Now()
-	polishCtx, cancel := context.WithTimeout(ctx, polishTimeout)
+	polishCtx, cancel := context.WithTimeout(ctx, polishDeadline(source))
 	defer cancel()
 	result, err := polish(polishCtx, cfg, source)
 	elapsed := time.Since(started).Milliseconds()
@@ -147,7 +150,7 @@ func polishVoice(ctx context.Context, cfg Config, source string) (string, int64)
 			reason = "empty polish result"
 		}
 		log.Printf("polish: %dms: %s", elapsed, reason)
-		return source, elapsed
+		return source, 0 // 没润色成：耗时记 0，历史和统计就不会把它当成润色过
 	}
 	return result, elapsed
 }

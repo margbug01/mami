@@ -123,6 +123,32 @@ func TestASRLive(t *testing.T) {
 	t.Logf("StepFun recognized expected word (%d characters)", len([]rune(text)))
 }
 
+// 冷连接 vs 预热后的真实耗时；MAMI_ASR_LIVE=1 时跑
+func TestWarmConnectionLive(t *testing.T) {
+	if os.Getenv("MAMI_ASR_LIVE") != "1" {
+		t.Skip("set MAMI_ASR_LIVE=1 to call StepFun")
+	}
+	cfg := defaultConfig()
+	cfg.ASRAPIKey = stepFunCredential(t)
+	wav, err := os.ReadFile(`C:\Users\marg0\.config\alma\scratch\mami-asr\test.wav`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	for _, warm := range []bool{false, true, false, true} {
+		directTransport.CloseIdleConnections()
+		if warm {
+			warmConnection(ctx, cfg.ASRBaseURL)
+		}
+		started := time.Now()
+		if _, err := transcribe(ctx, cfg, wav[44:]); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("warm=%v: %d ms", warm, time.Since(started).Milliseconds())
+	}
+}
+
 func TestVoicePCM(t *testing.T) {
 	if unsafe.Sizeof(waveHeader{}) != 48 || unsafe.Offsetof(waveFormat{}.Extra) != 16 {
 		t.Fatal("unexpected Win64 waveIn ABI layout")

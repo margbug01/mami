@@ -383,7 +383,7 @@ func (a *App) testPolishDraft() {
 	cfg.ASRHotwords = splitList(a.set.asrHotwords)
 	a.set.polishTesting, a.set.polishTestMsg, a.set.polishTestErr = true, T("润色中…"), false
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), polishTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), polishDeadline(polishSample))
 		defer cancel()
 		started := time.Now()
 		result, err := polish(ctx, cfg, polishSample)

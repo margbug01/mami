@@ -390,9 +390,15 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	a.voiceWin.Update(func() {
 		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, cfg.VoiceTone, float32(cfg.VoiceOrbSize)
 	})
+	// 说话的这几秒里先把连接握好，说完直接复用
+	go warmConnection(ctx, cfg.ASRBaseURL)
+	if cfg.PolishStyle != "off" && cfg.PolishAPIKey != "" {
+		go warmConnection(ctx, cfg.PolishBaseURL)
+	}
 	started := time.Now()
 	last := time.Time{}
 	var levels []float64
+	var peak float64
 	pcm, err := recordVoice(ctx, stop, func() {
 		if !valid() {
 			return
@@ -401,6 +407,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		a.voiceBeep(soundStart) // 麦克风真开了才响：听到「嘚嘚」就可以说了
 		a.voiceDisplay(id, voiceViewState{recording: true}, true)
 	}, func(level float64) {
+		peak = max(peak, level)
 		levels = append(levels, level)
 		if len(levels) > voiceBars {
 			levels = levels[len(levels)-voiceBars:]
@@ -419,8 +426,9 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		fail(err)
 		return
 	}
-	if len(pcm) == 0 {
+	if voiceTooQuiet(pcm, peak) {
 		finish()
+		log.Printf("voice: too quiet (peak %.4f, %dms), not sent", peak, len(pcm)/32)
 		a.voiceNotice(id, T("没听清，请再说一次"))
 		return
 	}
@@ -479,7 +487,11 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		}
 		finish()
 		if cfg.History {
-			go a.hist.write(historyEntry{Type: "voice", ID: "voice-" + historyID(started, int64(id)), Time: time.Now().Format(time.RFC3339), Model: cfg.ASRModel, BaseURL: cfg.ASRBaseURL, Source: source, Translation: text, PolishStyle: cfg.PolishStyle, PolishMs: polishMs, TotalMs: time.Since(started).Milliseconds()})
+			style := cfg.PolishStyle
+			if polishMs == 0 { // 没润色（关了、太短、失败回落原文）：记录里不挂档位
+				style = ""
+			}
+			go a.hist.write(historyEntry{Type: "voice", ID: "voice-" + historyID(started, int64(id)), Time: time.Now().Format(time.RFC3339), Model: cfg.ASRModel, BaseURL: cfg.ASRBaseURL, Source: source, Translation: text, PolishStyle: style, PolishMs: polishMs, TotalMs: time.Since(started).Milliseconds()})
 		}
 		return !copied
 	})
