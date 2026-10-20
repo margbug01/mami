@@ -19,8 +19,9 @@ type Config struct {
 	PolishAPIKeyDPAPI string   `json:"polish_api_key_dpapi,omitempty"`
 	VoiceEnabled      bool     `json:"voice_enabled"`
 	VoiceHotkey       string   `json:"voice_hotkey"`
-	VoiceStyle        string   `json:"voice_style"`    // 胶囊样式：bars 渐变波柱 / orb 果冻球
+	VoiceStyle        string   `json:"voice_style"`    // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
 	VoiceOrbSize      float64  `json:"voice_orb_size"` // 果冻球直径（DIP），40~96
+	VoiceTone         string   `json:"voice_tone"`     // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
 	VoiceSound        bool     `json:"voice_sound"`    // 开始、结束、取消的提示音
 	ASRBaseURL        string   `json:"asr_base_url"`
 	ASRModel          string   `json:"asr_model"`
@@ -63,6 +64,7 @@ func defaultConfig() Config {
 		PolishModel:      "deepseek-flash",
 		VoiceHotkey:      "RAlt",
 		VoiceStyle:       "bars",
+		VoiceTone:        "dark",
 		VoiceSound:       true,
 		VoiceOrbSize:     voiceOrbW,
 		ASRBaseURL:       "https://api.stepfun.com/v1",
@@ -120,8 +122,15 @@ func (c *Config) normalize() {
 		c.VoiceOrbSize = voiceOrbW
 	}
 	c.VoiceOrbSize = math.Round(min(96, max(40, c.VoiceOrbSize)))
-	if c.VoiceStyle != "orb" {
+	switch c.VoiceStyle {
+	case "bars", "orb", "glass", "pixel", "mercury", "islands", "leds":
+	default:
 		c.VoiceStyle = "bars"
+	}
+	switch c.VoiceTone {
+	case "light", "auto":
+	default:
+		c.VoiceTone = "dark"
 	}
 	c.ASRBaseURL = strings.TrimRight(strings.TrimSpace(c.ASRBaseURL), "/")
 	if c.ASRBaseURL == "" {

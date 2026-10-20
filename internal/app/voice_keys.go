@@ -118,3 +118,24 @@ func (s *voiceKeys) step(vk uint32, down bool, trigger uint32, busy bool) (actio
 	s.held, s.combo = trigger, false
 	return voiceStart, false
 }
+
+// 识别完的文字怎么交出去
+const (
+	voicePaste     = iota // 贴进输入框，之后还原剪贴板
+	voicePasteKeep        // 认不出是不是输入框：照样贴，文字留在剪贴板里
+	voiceCopyCard         // 没地方贴：复制，弹卡片显示整段文字
+)
+
+// voiceOutput switched=录音期间换了前台窗口，modsDown=修饰键一直没松（发 Ctrl+V 会变成别的组合），
+// input=焦点确定是输入框（UIA 可写文本或终端），caret=有系统输入光标（UIA 说不清的老程序、Qt）
+func voiceOutput(switched, modsDown, input, caret bool) int {
+	switch {
+	case switched || modsDown:
+		return voiceCopyCard
+	case input:
+		return voicePaste
+	case caret:
+		return voicePasteKeep
+	}
+	return voiceCopyCard
+}

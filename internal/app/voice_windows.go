@@ -186,6 +186,7 @@ func (a *App) voiceLoop() {
 
 type voiceViewState struct {
 	text                   string
+	copy                   bool // text 是识别结果、已经在剪贴板里：胶囊右边带一个复制钮
 	recording, recognizing bool
 	levels                 []float64 // 最近的音量，旧的在前
 }
@@ -221,10 +222,14 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 			a.voiceWFrom, a.voiceWTo, a.voiceWAt = a.voicePillW(now), target, now
 		}
 		if !appearing && voiceKind(state) != voiceKind(a.voiceUI) {
+			a.voiceGapL, a.voiceGapR = a.islandGaps(now) // 切到一半又切：从眼下的缝宽接着走
 			a.voiceKindAt = now
 		}
 		if a.voiceLeaving { // 退到一半又要显示：重新弹出来
 			a.voiceLeaving, a.voiceShowAt = false, now
+		}
+		if state.copy && (!a.voiceUI.copy || a.voiceUI.text != state.text) {
+			a.voiceCopiedAt = time.Time{}
 		}
 		a.voiceUI = state
 		a.voiceWin.ShowInactive()
@@ -250,11 +255,13 @@ func (a *App) voiceLeave() {
 }
 
 const (
-	voiceH     = 32 // 药丸高
-	voiceWinH  = 64 // 果冻球的高度，也给药丸留出上下空间做弹出动画
-	voiceOrbW  = 56 // 果冻球默认大小；设置里可以调 40~96
-	voiceRecW  = 112
-	voiceDotsW = 88
+	voiceH     = 36                          // 药丸高
+	voiceBtn   = voiceH - 10                 // 圆钮直径：上下左右都留 5
+	voiceWinH  = 64                          // 果冻球的高度，也给药丸留出上下空间做弹出动画
+	voiceOrbW  = 56                          // 果冻球默认大小；设置里可以调 40~96
+	voiceRecW  = 2*voiceBtn + 10 + 47 + 2*12 // 两颗钮、两边各 5、波形 47、波形左右各空 12
+	voiceDotsW = 5 + voiceBtn + 61 + 5       // 两边各 5、✕、三个点占的地方
+	voiceCopyW = voiceRecW + 48              // 没地方贴时那句话：只比录音时宽一点，多的截掉、悬停看全文
 )
 
 func voiceKind(state voiceViewState) int {
@@ -301,7 +308,11 @@ func voiceWidth(state voiceViewState) int32 {
 	case 2:
 		return voiceDotsW
 	}
-	return min(360, max(96, 28+13*int32(utf8.RuneCountInString(state.text))))
+	w := 28 + 13*int32(utf8.RuneCountInString(state.text))
+	if state.copy {
+		return min(voiceCopyW, max(96, w+voiceBtn+4)) // 加上复制钮
+	}
+	return min(360, max(96, w))
 }
 
 // 动画自己按时间算，不用 mygo 的 Animate/AnimatePose：系统关了「动画效果」时它们会直接跳到终点
@@ -345,6 +356,25 @@ func (a *App) voiceNotice(id uint64, text string) {
 	})
 }
 
+// voiceCopyNotice 没地方贴：胶囊显示这句话和复制钮，6 秒后收起，鼠标停在上面时不收
+func (a *App) voiceCopyNotice(id uint64, text string) {
+	a.voiceDisplay(id, voiceViewState{text: text, copy: true}, true)
+	var check func()
+	check = func() {
+		a.voiceWin.Update(func() {
+			if voiceEpoch.Load() != id || !a.voiceUI.copy {
+				return
+			}
+			if a.voiceHover {
+				time.AfterFunc(time.Second, check)
+				return
+			}
+			a.voiceLeave()
+		})
+	}
+	time.AfterFunc(6*time.Second, check)
+}
+
 func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg uintptr, cfg Config) {
 	// 所有 UI 更新和最终 worker 任务都核对同一代号，过期结果绝不贴入。
 	valid := func() bool { return ctx.Err() == nil && voiceEpoch.Load() == id }
@@ -358,7 +388,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	pt := cursorPos()
 	dpi, wa := dpiAt(pt), workArea(pt)
 	a.voiceWin.Update(func() {
-		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, float32(cfg.VoiceOrbSize)
+		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, cfg.VoiceTone, float32(cfg.VoiceOrbSize)
 	})
 	started := time.Now()
 	last := time.Time{}
@@ -426,15 +456,26 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 			finish()
 			return false
 		}
-		copied := foreground() != fg || keyDown(VK_CONTROL) || keyDown(VK_MENU) || keyDown(VK_SHIFT) || keyDown(VK_LWIN) || keyDown(VK_RWIN)
-		if copied {
-			if setClipboardText(owner, toCRLF(text), false) {
-				a.voiceNotice(id, T("已复制"))
-			} else {
-				a.voiceNotice(id, T("无法写入剪贴板"))
-			}
-		} else {
+		switched := foreground() != fg
+		modsDown := keyDown(VK_CONTROL) || keyDown(VK_MENU) || keyDown(VK_SHIFT) || keyDown(VK_LWIN) || keyDown(VK_RWIN)
+		var in inputState
+		if !switched && !modsDown && !isTerminal(fg) {
+			in = focusedInput()
+		}
+		mode := voiceOutput(switched, modsDown, isTerminal(fg) || in.input, systemCaret(fg))
+		copied := mode != voicePaste
+		switch {
+		case mode == voicePaste:
 			a.voiceDisplay(id, voiceViewState{}, false)
+		case !setClipboardText(owner, toCRLF(text), false):
+			a.voiceNotice(id, T("无法写入剪贴板"))
+		case mode == voicePasteKeep:
+			// 认不出是不是输入框（微信这类）：照样贴，但文字留在剪贴板里，贴空了还能手动 Ctrl+V
+			a.voiceDisplay(id, voiceViewState{}, false)
+			sendCtrl('V')
+		default:
+			log.Printf("voice: no input box (switched=%v modifiers=%v), copied", switched, modsDown)
+			a.voiceCopyNotice(id, text)
 		}
 		finish()
 		if cfg.History {
@@ -446,15 +487,30 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 
 const voiceBars = 9
 
-// 胶囊不跟主题：深浅色桌面上都用同一颗黑药丸
+// 渐变波柱的底：深色是黑药丸，浅色是浅灰药丸（由「浮窗底色」决定，不跟主题）
 var (
-	pillBg     = ui.RGBA(20, 20, 20, 0.96)
-	pillBorder = ui.RGBA(255, 255, 255, 0.12)
-	pillFg     = ui.RGBA(242, 242, 242, 1)
+	pillBg          = ui.RGBA(20, 20, 20, 0.96)
+	pillBorder      = ui.RGBA(255, 255, 255, 0.12)
+	pillFg          = ui.RGBA(242, 242, 242, 1)
+	pillLightBg     = ui.RGBA(244, 245, 247, 0.97)
+	pillLightBorder = ui.RGBA(0, 0, 0, 0.13)
+	pillInk         = ui.RGBA(30, 32, 38, 1)
 )
 
+// toneDark 浮窗用不用深色底：auto 跟 Mami 主题，其余按用户选的来
+func toneDark(tone string, themeDark bool) bool {
+	switch tone {
+	case "light":
+		return false
+	case "auto":
+		return themeDark
+	}
+	return true
+}
+
 func (a *App) voiceView(c *ui.Context) {
-	a.themed(c)
+	dark := toneDark(a.voiceTone, a.themed(c).Dark)
+	sk := skinFor(a.voiceStyle, dark)
 	state := a.voiceUI
 	now := time.Now()
 	dt := min(0.1, max(0, now.Sub(a.voiceFrameAt).Seconds()))
@@ -508,51 +564,136 @@ func (a *App) voiceView(c *ui.Context) {
 			}
 			return
 		}
-		pill := ui.Row(c).Height(voiceH).AlignItems(ui.Center).Justify(ui.Center).Clip().
-			Background(pillBg).Border(1, pillBorder).Radius(voiceH / 2)
-		if a.voiceStyle == "orb" { // 果冻样式的提示：没有黑底，画一条会抖的渐变果冻
-			pill.Background(ui.RGBA(0, 0, 0, 0)).Border(0, ui.RGBA(0, 0, 0, 0)).Draw(func(p *ui.Painter, r ui.Rect) { drawJelly(p, r, now) })
-		}
-		pill.Width(a.voicePillW(now)).Opacity(opacity).Scale(size, size).Translate(0, dy).Children(func() {
-			row := ui.Row(c).Fill().AlignItems(ui.Center).Opacity(kind).Scale(0.92+0.08*kind, 0.92+0.08*kind)
-			switch voiceKind(state) {
-			case 1:
-				row.Padding(0, 5).Gap(4).Children(func() {
-					if pillButton(c, false, T("取消")).Clicked() {
-						go voiceClick(voiceCancel)
-					}
-					ui.Box(c).Grow(1).Height(20).Draw(func(p *ui.Painter, r ui.Rect) { drawWave(p, r, bars) })
-					if pillButton(c, true, T("完成")).Clicked() {
-						go voiceClick(voiceStop)
-					}
-				})
-			case 2:
-				row.Padding(0, 5).Gap(8).Justify(ui.Center).Children(func() {
-					if pillButton(c, false, T("取消")).Clicked() {
-						go voiceClick(voiceCancel)
-					}
-					ui.Box(c).Size(36, 12).Draw(drawDots)
-				})
-			default:
+		gl, gr := a.islandGaps(now)
+		pill := a.voicePill(c, a.voiceStyle, dark, sk, state, bars, orbLv, gl, gr, kind, now, true)
+		a.voiceHover = pill.Hovered()
+		pill.Width(a.voicePillW(now)).Opacity(opacity).Scale(size, size).Translate(0, dy)
+	})
+}
+
+// voicePill 画胶囊本体（不含进出场动画）。live=false 是设置页里的预览：按钮只是样子，点了没反应
+func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, state voiceViewState, bars [voiceBars]float32, orbLv, gl, gr, kind float32, now time.Time, live bool) ui.Element {
+	pill := ui.Row(c).Height(voiceH).AlignItems(ui.Center).Justify(ui.Center).Clip().
+		Background(pillBg).Border(1, pillBorder).Radius(voiceH / 2)
+	if !dark {
+		pill.Background(pillLightBg).Border(1, pillLightBorder)
+	}
+	switch style {
+	case "orb": // 果冻样式的提示：没有黑底，画一条会抖的渐变果冻
+		pill.Background(clearC).Border(0, clearC).Draw(func(p *ui.Painter, r ui.Rect) { drawJelly(p, r, now) })
+	case "glass":
+		halo := voiceKind(state) == 1
+		pill.Background(clearC).Border(0, clearC).Draw(func(p *ui.Painter, r ui.Rect) { drawGlass(p, r, dark, orbLv, halo) })
+	case "pixel":
+		pill.Background(clearC).Border(0, clearC).Radius(0).Draw(drawPixelPill)
+	case "mercury":
+		bg, edge := mercuryShell(dark)
+		pill.Background(bg).Border(1, edge)
+	case "islands", "leds":
+		bridge := style == "islands"
+		pill.Background(clearC).Border(0, clearC).Radius(0).Draw(func(p *ui.Painter, r ui.Rect) { drawIslands(p, r, dark, gl, gr, bridge) })
+	}
+	gap, dotsGap := float32(4), float32(0)
+	if sk.island() {
+		gap, dotsGap = 8, 8 // 钮和中间岛之间：让中间的盒子正好落在中间那块岛上
+	}
+	pill.Children(func() {
+		row := ui.Row(c).Fill().AlignItems(ui.Center).Opacity(kind).Scale(0.92+0.08*kind, 0.92+0.08*kind)
+		switch voiceKind(state) {
+		case 1:
+			row.Padding(0, 5).Gap(gap).Children(func() {
+				if pillButton(c, sk, false, T("取消")).Clicked() && live {
+					go voiceClick(voiceCancel)
+				}
+				ui.Box(c).Grow(1).Height(20).Draw(func(p *ui.Painter, r ui.Rect) { sk.wave(p, r, bars) })
+				if pillButton(c, sk, true, T("完成")).Clicked() && live {
+					go voiceClick(voiceStop)
+				}
+			})
+		case 2:
+			row.Padding(0, 5).Gap(dotsGap).Children(func() { // ✕ 贴左，三个点在 ✕ 和胶囊右边缘之间居中
+				if pillButton(c, sk, false, T("取消")).Clicked() && live {
+					go voiceClick(voiceCancel)
+				}
+				ui.Box(c).Grow(1).Height(20).Draw(sk.dots)
+			})
+		case 3:
+			if !state.copy {
 				row.Padding(0, 14).Justify(ui.Center).Children(func() {
-					ui.Text(c, state.text).FontSize(12).TextColor(pillFg).MaxLines(1).Tooltip(state.text)
+					ui.Text(c, state.text).FontSize(12).TextColor(sk.fg).MaxLines(1).Tooltip(state.text)
 				})
+				break
 			}
-		})
+			done := live && !a.voiceCopiedAt.IsZero()
+			row.Padding(0, 5, 0, 14).Gap(6).Children(func() {
+				ui.Text(c, state.text).FontSize(12).TextColor(sk.fg).MaxLines(1).Grow(1).Shrink(1).Tooltip(state.text)
+				tip := T("已复制，到要用的地方按 Ctrl+V")
+				if pillCopyButton(c, sk, done, tip).Clicked() && !done && live {
+					text, id := state.text, voiceEpoch.Load()
+					theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
+					a.voiceCopiedAt = now
+					time.AfterFunc(700*time.Millisecond, func() { a.voiceDisplay(id, voiceViewState{}, false) })
+				}
+			})
+		}
+	})
+	return pill
+}
+
+// pillCopyButton 胶囊上的复制钮：两个叠着的方框，点过之后变成 ✓
+func pillCopyButton(c *ui.Context, sk voiceSkin, done bool, tip string) ui.Element {
+	rad := float32(voiceBtn / 2)
+	if sk.style == "pixel" {
+		rad = 0
+	}
+	b := ui.ButtonBase(c).Size(voiceBtn, voiceBtn).Radius(rad).Background(sk.btn).Cursor(ui.CursorPointer).Tooltip(tip).Shrink(0)
+	if b.Hovered() {
+		b.Background(sk.btnHover)
+	}
+	return b.DrawOver(func(p *ui.Painter, r ui.Rect) {
+		if sk.style == "pixel" {
+			icon := pixIconCopy
+			if done {
+				icon = pixIconOK
+			}
+			drawPixelIcon(p, r, icon, pixCyan)
+			return
+		}
+		cx, cy := r.X+r.W/2, r.Y+r.H/2
+		path := new(ui.Path)
+		if done {
+			path.MoveTo(cx-4, cy+0.3).LineTo(cx-1.3, cy+3).LineTo(cx+4, cy-2.8)
+		} else {
+			path.MoveTo(cx-1.5, cy-1.5).LineTo(cx+4, cy-1.5).LineTo(cx+4, cy+4).LineTo(cx-1.5, cy+4).Close() // 前面那张
+			path.MoveTo(cx-4, cy+1.5).LineTo(cx-4, cy-4).LineTo(cx+1.5, cy-4)                                // 后面露出的一角
+		}
+		p.StrokePath(path, 1.4, sk.fg)
 	})
 }
 
 // pillButton 24px 圆钮：✕ 是半透明白底，✓ 是实心白底黑勾
-func pillButton(c *ui.Context, ok bool, tip string) ui.Element {
-	bg, hover, fg := ui.RGBA(255, 255, 255, 0.10), ui.RGBA(255, 255, 255, 0.18), pillFg
+func pillButton(c *ui.Context, sk voiceSkin, ok bool, tip string) ui.Element {
+	bg, hover, fg := sk.btn, sk.btnHover, sk.fg
 	if ok {
-		bg, hover, fg = pillFg, ui.RGBA(255, 255, 255, 1), pillBg
+		bg, hover, fg = sk.ok, sk.okHover, sk.okFg
 	}
-	b := ui.ButtonBase(c).Size(22, 22).Radius(11).Background(bg).Cursor(ui.CursorPointer).Tooltip(tip)
+	rad := float32(voiceBtn / 2)
+	if sk.style == "pixel" {
+		rad = 0
+	}
+	b := ui.ButtonBase(c).Size(voiceBtn, voiceBtn).Radius(rad).Background(bg).Cursor(ui.CursorPointer).Tooltip(tip)
 	if b.Hovered() {
 		b.Background(hover)
 	}
 	return b.DrawOver(func(p *ui.Painter, r ui.Rect) {
+		if sk.style == "pixel" {
+			if ok {
+				drawPixelIcon(p, r, pixIconOK, fg)
+			} else {
+				drawPixelIcon(p, r, pixIconX, pixPink)
+			}
+			return
+		}
 		cx, cy := r.X+r.W/2, r.Y+r.H/2
 		path := new(ui.Path)
 		if ok {
@@ -565,10 +706,11 @@ func pillButton(c *ui.Context, ok bool, tip string) ui.Element {
 }
 
 var (
-	waveFrom = ui.RGBA(175, 169, 236, 1) // 淡紫
-	waveTo   = ui.RGBA(93, 202, 165, 1)  // 青绿
-	orbFrom  = ui.RGBA(127, 119, 221, 1) // 紫
-	orbTo    = ui.RGBA(239, 159, 39, 1)  // 橙
+	waveFrom    = ui.RGBA(175, 169, 236, 1) // 淡紫
+	waveTo      = ui.RGBA(93, 202, 165, 1)  // 青绿
+	waveToLight = ui.RGBA(29, 158, 117, 1)
+	orbFrom     = ui.RGBA(127, 119, 221, 1) // 紫
+	orbTo       = ui.RGBA(239, 159, 39, 1)  // 橙
 )
 
 func mix(a, b ui.Color, t float32) ui.Color {
@@ -577,7 +719,7 @@ func mix(a, b ui.Color, t float32) ui.Color {
 }
 
 // drawWave 上下对称的柱子，从左到右紫变青；最新的音量在最右边往左流，中间高两头矮
-func drawWave(p *ui.Painter, r ui.Rect, heights [voiceBars]float32) {
+func drawWave(p *ui.Painter, r ui.Rect, heights [voiceBars]float32, from, to ui.Color) {
 	const bw, gap = 3, 2.5
 	half := float32(voiceBars-1) / 2
 	x := r.X + (r.W-(voiceBars*bw+(voiceBars-1)*gap))/2
@@ -587,7 +729,7 @@ func drawWave(p *ui.Painter, r ui.Rect, heights [voiceBars]float32) {
 			d = -d
 		}
 		h := 3 + (r.H-3)*v*(1-0.5*d/half)
-		p.Fill(ui.Rect{X: x, Y: r.Y + (r.H-h)/2, W: bw, H: h}, mix(waveFrom, waveTo, float32(i)/(voiceBars-1)), bw/2)
+		p.Fill(ui.Rect{X: x, Y: r.Y + (r.H-h)/2, W: bw, H: h}, mix(from, to, float32(i)/(voiceBars-1)), bw/2)
 		x += bw + gap
 	}
 }
@@ -656,26 +798,33 @@ func drawJelly(p *ui.Painter, r ui.Rect, now time.Time) {
 	p.AnimationFrame()
 }
 
-// drawDots 识别中：三个点依次跳一下
-func drawDots(p *ui.Painter, r ui.Rect) {
+// drawDotsColor 识别中：三个点依次跳一下
+func drawDotsColor(p *ui.Painter, r ui.Rect, fg ui.Color) {
 	p.AnimationFrame()
 	now := float64(time.Now().UnixMilli()) / 1000
 	for i := 0; i < 3; i++ {
 		lift := math.Max(0, math.Sin((now-float64(i)*0.15)*2*math.Pi))
-		color := pillFg
-		color.A = uint8(80 + 175*lift)
+		color := fg
+		color.A = uint8(float64(fg.A) * (0.3 + 0.7*lift))
 		x := r.X + r.W/2 + float32(i-1)*10 - 2.5
 		p.Fill(ui.Rect{X: x, Y: r.Y + r.H/2 - 2.5 - float32(lift)*3, W: 5, H: 5}, color, 2.5)
 	}
 }
 
 // runVoiceDemo 截图和调样式用：两种样式各放一遍（录音 3 秒假音量 → 识别 1.5 秒 → 提示 1.5 秒 → 退场），然后退出。会响提示音，不开麦克风
-func (a *App) runVoiceDemo() {
+func (a *App) runVoiceDemo(only string) {
 	pt := cursorPos()
 	dpi, wa := dpiAt(pt), workArea(pt)
 	id := voiceEpoch.Load()
-	for _, style := range []string{"bars", "orb"} {
-		a.voiceWin.Update(func() { a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceOrbSize = wa, dpi, style, voiceOrbW })
+	cfg, _ := a.config()
+	styles := []string{"bars", "orb", "glass", "pixel", "mercury", "islands", "leds"}
+	if only != "" {
+		styles = strings.Split(only, ",")
+	}
+	for _, style := range styles {
+		a.voiceWin.Update(func() {
+			a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, style, cfg.VoiceTone, voiceOrbW
+		})
 		playSound(soundStart)
 		var levels []float64
 		for start := time.Now(); time.Since(start) < 3*time.Second; time.Sleep(50 * time.Millisecond) {
@@ -693,10 +842,291 @@ func (a *App) runVoiceDemo() {
 		time.Sleep(1500 * time.Millisecond)
 		a.voiceDisplay(id, voiceViewState{text: T("没听清，请再说一次")}, true)
 		time.Sleep(1500 * time.Millisecond)
+		a.voiceDisplay(id, voiceViewState{text: "帮我把这个接口改成用 Go 写，然后四点开会。", copy: true}, true)
+		time.Sleep(2500 * time.Millisecond)
 		a.voiceDisplay(id, voiceViewState{}, false)
 		time.Sleep(600 * time.Millisecond)
 	}
 	playSound(soundAbort)
 	time.Sleep(400 * time.Millisecond)
 	a.quit()
+}
+
+// voiceSkin 胶囊每种样式的配色；果冻球样式的提示条用黑胶囊这套
+type voiceSkin struct {
+	style             string
+	fg                ui.Color // 文字、✕ 图标
+	btn, btnHover     ui.Color
+	ok, okHover, okFg ui.Color
+}
+
+var (
+	pixBg     = ui.RGBA(27, 16, 54, 1)
+	pixEdge   = ui.RGBA(61, 42, 122, 1)
+	pixEdgeHi = ui.RGBA(92, 66, 170, 1)
+	pixCyan   = ui.RGBA(127, 246, 255, 1)
+	pixPink   = ui.RGBA(255, 62, 165, 1)
+	clearC    = ui.RGBA(0, 0, 0, 0)
+)
+
+// skinFor 磨砂玻璃跟着深浅色走；像素和黑胶囊不跟主题
+func skinFor(style string, dark bool) voiceSkin {
+	switch {
+	case style == "pixel":
+		return voiceSkin{style, pixCyan, pixEdge, pixEdgeHi, pixCyan, ui.RGBA(190, 252, 255, 1), pixBg}
+	case style == "glass" && !dark:
+		ink := ui.RGBA(31, 37, 51, 1)
+		return voiceSkin{style, ink, ui.RGBA(255, 255, 255, 0.75), ui.RGBA(255, 255, 255, 1), ink, ui.RGBA(58, 66, 86, 1), ui.RGBA(255, 255, 255, 1)}
+	case style == "mercury" && !dark:
+		ink := ui.RGBA(28, 31, 38, 1)
+		return voiceSkin{style, ink, ui.RGBA(0, 0, 0, 0.07), ui.RGBA(0, 0, 0, 0.12), ink, ui.RGBA(58, 63, 74, 1), ui.RGBA(236, 238, 242, 1)}
+	case style == "mercury":
+		return voiceSkin{style, pillFg, ui.RGBA(255, 255, 255, 0.09), ui.RGBA(255, 255, 255, 0.17), ui.RGBA(232, 235, 240, 1), ui.RGBA(255, 255, 255, 1), ui.RGBA(30, 32, 38, 1)}
+	case (style == "islands" || style == "leds") && !dark:
+		return voiceSkin{style, ui.RGBA(30, 32, 38, 1), clearC, ui.RGBA(0, 0, 0, 0.07), clearC, ui.RGBA(0, 0, 0, 0.07), islandAccentLight}
+	case style == "islands" || style == "leds":
+		return voiceSkin{style, ui.RGBA(232, 234, 240, 1), clearC, ui.RGBA(255, 255, 255, 0.09), clearC, ui.RGBA(255, 255, 255, 0.09), islandAccentDark}
+	case style == "glass":
+		return voiceSkin{style, pillFg, ui.RGBA(255, 255, 255, 0.14), ui.RGBA(255, 255, 255, 0.26), ui.RGBA(255, 255, 255, 1), ui.RGBA(255, 255, 255, 1), ui.RGBA(27, 32, 48, 1)}
+	}
+	if !dark {
+		return voiceSkin{style, pillInk, ui.RGBA(0, 0, 0, 0.07), ui.RGBA(0, 0, 0, 0.12), pillInk, ui.RGBA(58, 63, 74, 1), ui.RGBA(244, 245, 247, 1)}
+	}
+	return voiceSkin{style, pillFg, ui.RGBA(255, 255, 255, 0.10), ui.RGBA(255, 255, 255, 0.18), pillFg, ui.RGBA(255, 255, 255, 1), pillBg}
+}
+
+func (sk voiceSkin) wave(p *ui.Painter, r ui.Rect, h [voiceBars]float32) {
+	switch sk.style {
+	case "pixel":
+		drawPixelWave(p, r, h)
+	case "glass":
+		drawWaveMono(p, r, h, sk.fg)
+	case "mercury":
+		drawMercuryRec(p, r, h[voiceBars-1])
+	case "islands":
+		drawEnvelope(p, r, h, sk.okFg)
+	case "leds":
+		drawLEDs(p, r, h[voiceBars-1], -2, sk.fg, sk.okFg)
+	default:
+		if sk.fg == pillInk { // 浅色底上原来的淡紫淡青太浅，换深一档
+			drawWave(p, r, h, orbFrom, waveToLight)
+			return
+		}
+		drawWave(p, r, h, waveFrom, waveTo)
+	}
+}
+
+func (sk voiceSkin) dots(p *ui.Painter, r ui.Rect) {
+	switch sk.style {
+	case "pixel":
+		drawPixelDots(p, r)
+		return
+	case "mercury":
+		drawMercuryDots(p, r)
+		return
+	case "islands":
+		drawSweep(p, r, sk.fg, sk.okFg)
+		return
+	case "leds":
+		t := float64(time.Now().UnixMilli()%600000) / 1000
+		drawLEDs(p, r, 0, math.Sin(t*4), sk.fg, sk.okFg)
+		p.AnimationFrame()
+		return
+	}
+	drawDotsColor(p, r, sk.fg)
+}
+
+// drawGlass 磨砂玻璃：半透明底、一圈亮边、顶上一道高光；录音时中间垫一团随音量变大的紫青光晕。
+// 没有背景模糊：mygo 的 Acrylic 只能整窗开，语音窗口比胶囊大，开了就是一整块模糊的长方形
+func drawGlass(p *ui.Painter, r ui.Rect, dark bool, level float32, halo bool) {
+	rad := r.H / 2
+	bg, edge, hi := ui.RGBA(40, 44, 60, 0.82), ui.RGBA(255, 255, 255, 0.16), ui.RGBA(255, 255, 255, 0.14)
+	if !dark {
+		bg, edge, hi = ui.RGBA(244, 246, 252, 0.86), ui.RGBA(120, 130, 160, 0.22), ui.RGBA(255, 255, 255, 0.55)
+	}
+	p.Fill(r, bg, rad)
+	if halo {
+		cx, cy := r.X+r.W/2, r.Y+r.H/2
+		w, h := 28+30*level, 6+8*level
+		p.Shadow(ui.Rect{X: cx - w/2, Y: cy - h/2, W: w, H: h}, h/2, 0, 0, 12, 2, ui.RGBA(150, 140, 255, 0.45+0.5*level))
+		p.Shadow(ui.Rect{X: cx - w/4, Y: cy - h/2, W: w / 2, H: h}, h/2, 0, 0, 10, 0, ui.RGBA(93, 202, 165, 0.30+0.45*level))
+	}
+	// 高光是上半截的渐变，跟胶囊同一个圆角，两头顺着弧线淡掉（以前是一条直线，两端突兀）
+	clear := hi
+	clear.A = 0
+	p.FillGradient(r, ui.LinearGradient{From: hi, To: clear, Angle: 180, Start: 0, End: 0.55}, rad)
+	p.Stroke(ui.Rect{X: r.X + 0.5, Y: r.Y + 0.5, W: r.W - 1, H: r.H - 1}, edge, rad-0.5, 1)
+}
+
+// drawWaveMono 玻璃样式的波形：单色细柱，越响越不透明
+func drawWaveMono(p *ui.Painter, r ui.Rect, heights [voiceBars]float32, c ui.Color) {
+	const bw, gap = 3, 2.5
+	half := float32(voiceBars-1) / 2
+	x := r.X + (r.W-(voiceBars*bw+(voiceBars-1)*gap))/2
+	for i, v := range heights {
+		d := float32(i) - half
+		if d < 0 {
+			d = -d
+		}
+		h := 3 + (r.H-3)*v*(1-0.5*d/half)
+		col := c
+		col.A = uint8(float32(c.A) * (0.55 + 0.45*v))
+		p.Fill(ui.Rect{X: x, Y: r.Y + (r.H-h)/2, W: bw, H: h}, col, bw/2)
+		x += bw + gap
+	}
+}
+
+// stepPath 四个角各缩两级台阶的矩形，像素风的「圆角」
+func stepPath(r ui.Rect, s float32) *ui.Path {
+	x0, y0, x1, y1 := r.X, r.Y, r.X+r.W, r.Y+r.H
+	path := new(ui.Path)
+	path.MoveTo(x0, y0+2*s).LineTo(x0+s, y0+2*s).LineTo(x0+s, y0+s).LineTo(x0+2*s, y0+s).LineTo(x0+2*s, y0).
+		LineTo(x1-2*s, y0).LineTo(x1-2*s, y0+s).LineTo(x1-s, y0+s).LineTo(x1-s, y0+2*s).LineTo(x1, y0+2*s).
+		LineTo(x1, y1-2*s).LineTo(x1-s, y1-2*s).LineTo(x1-s, y1-s).LineTo(x1-2*s, y1-s).LineTo(x1-2*s, y1).
+		LineTo(x0+2*s, y1).LineTo(x0+2*s, y1-s).LineTo(x0+s, y1-s).LineTo(x0+s, y1-2*s).LineTo(x0, y1-2*s)
+	return path.Close()
+}
+
+// drawPixelPill 深紫底、3px 亮紫边、阶梯角
+func drawPixelPill(p *ui.Painter, r ui.Rect) {
+	p.FillPath(stepPath(r, 3), pixEdge)
+	p.FillPath(stepPath(ui.Rect{X: r.X + 3, Y: r.Y + 3, W: r.W - 6, H: r.H - 6}, 3), pixBg)
+}
+
+// drawPixelWave 9 列方块往上叠，每列 5 格，颜色从品红渐到青
+func drawPixelWave(p *ui.Painter, r ui.Rect, heights [voiceBars]float32) {
+	const cw, gap, cell, cgap, n = 3, 2, 3, 1, 5
+	x := r.X + (r.W-(voiceBars*cw+(voiceBars-1)*gap))/2
+	bottom := r.Y + (r.H+n*cell+(n-1)*cgap)/2
+	for i, v := range heights {
+		col := mix(pixPink, pixCyan, float32(i)/(voiceBars-1))
+		lit := max(1, int(math.Round(float64(v*n))))
+		for k := 0; k < n; k++ {
+			c := col
+			if k >= lit {
+				c.A = 30
+			}
+			p.Fill(ui.Rect{X: x, Y: bottom - float32(k+1)*cell - float32(k)*cgap, W: cw, H: cell}, c, 0)
+		}
+		x += cw + gap
+	}
+}
+
+// drawPixelDots 识别中：三个方块一格一格亮起来
+func drawPixelDots(p *ui.Painter, r ui.Rect) {
+	p.After(60 * time.Millisecond)
+	step := int(time.Now().UnixMilli()/250) % 4
+	for i := 0; i < 3; i++ {
+		c := pixCyan
+		if i >= step {
+			c.A = 40
+		}
+		p.Fill(ui.Rect{X: r.X + r.W/2 + float32(i-1)*10 - 2, Y: r.Y + r.H/2 - 2, W: 4, H: 4}, c, 0)
+	}
+}
+
+// 8×8 像素图标，# 是亮的格子
+var (
+	pixIconX = [8]string{
+		"........",
+		".#....#.",
+		"..#..#..",
+		"...##...",
+		"...##...",
+		"..#..#..",
+		".#....#.",
+		"........",
+	}
+	pixIconOK = [8]string{
+		"........",
+		"........",
+		"......#.",
+		".....#..",
+		".#..#...",
+		"..##....",
+		"........",
+		"........",
+	}
+	pixIconCopy = [8]string{
+		"........",
+		".####...",
+		".#..#...",
+		".#.####.",
+		".###..#.",
+		"...#..#.",
+		"...####.",
+		"........",
+	}
+)
+
+func drawPixelIcon(p *ui.Painter, r ui.Rect, rows [8]string, c ui.Color) {
+	const cell = 3
+	x0, y0 := r.X+(r.W-8*cell)/2, r.Y+(r.H-8*cell)/2
+	for y, row := range rows {
+		for x, ch := range row {
+			if ch == '#' {
+				p.Fill(ui.Rect{X: x0 + float32(x)*cell, Y: y0 + float32(y)*cell, W: cell, H: cell}, c, 0)
+			}
+		}
+	}
+}
+
+// mercuryShell 水银样式的底：深浅色各一套灰，水银珠本身是镜面，两种底上都看得清
+func mercuryShell(dark bool) (bg, edge ui.Color) {
+	if dark {
+		return ui.RGBA(30, 32, 38, 0.96), ui.RGBA(255, 255, 255, 0.14)
+	}
+	return ui.RGBA(236, 238, 242, 0.97), ui.RGBA(0, 0, 0, 0.13)
+}
+
+// blobPath 一圈带波纹的闭合曲线：rx/ry 是两个方向的半径，wobble 是边缘颤动的幅度
+func blobPath(cx, cy, rx, ry, wobble, t, seed float64) *ui.Path {
+	path := new(ui.Path)
+	for k := 0; k <= 48; k++ {
+		th := float64(k) / 48 * 2 * math.Pi
+		f := 1 + wobble*(0.5*math.Sin(3*th+t*5+seed)+0.3*math.Sin(5*th-t*7+seed)+0.2*math.Sin(2*th+t*3))
+		x, y := float32(cx+rx*f*math.Cos(th)), float32(cy+ry*f*math.Sin(th))
+		if k == 0 {
+			path.MoveTo(x, y)
+		} else {
+			path.LineTo(x, y)
+		}
+	}
+	return path.Close()
+}
+
+var (
+	hgLight = ui.RGBA(250, 251, 254, 1)
+	hgDark  = ui.RGBA(40, 45, 54, 1)
+	hgBack  = ui.RGBA(178, 186, 200, 1)
+)
+
+// drawMercuryDrop 一颗镜面水银珠：上亮下暗的主体，底部一道反光，左上一点高光
+func drawMercuryDrop(p *ui.Painter, cx, cy, r, stretch, wobble, t, seed float64) {
+	body := blobPath(cx, cy, r*stretch, r, wobble, t, seed)
+	p.FillPathGradient(body, ui.LinearGradient{From: hgLight, To: hgDark, Angle: 180, Start: 0.1, End: 0.62})
+	p.StrokePath(body, 0.6, ui.RGBA(0, 0, 0, 0.22)) // 顶上是近白的，浅色底上靠这圈细边分出轮廓
+	clear := hgBack
+	clear.A = 0
+	p.FillPathGradient(blobPath(cx, cy+r*0.42, r*stretch*0.72, r*0.5, wobble, t, seed), ui.LinearGradient{From: clear, To: hgBack, Angle: 180})
+	p.FillPath(blobPath(cx-r*stretch*0.35, cy-r*0.48, r*stretch*0.28, r*0.17, 0, t, 0), ui.RGBA(255, 255, 255, 0.85))
+}
+
+// drawMercuryRec 录音中：一颗水银珠，声音越大越大、越扁、边缘颤得越厉害
+func drawMercuryRec(p *ui.Painter, r ui.Rect, level float32) {
+	t := float64(time.Now().UnixMilli()%600000) / 1000
+	lv := float64(level)
+	drawMercuryDrop(p, float64(r.X+r.W/2), float64(r.Y+r.H/2), 6.5+2.5*lv, 1.15+0.9*lv, 0.03+0.16*lv, t, 1)
+	p.AnimationFrame()
+}
+
+// drawMercuryDots 识别中：三颗小水银珠绕着圈转，圈一胀一缩
+func drawMercuryDots(p *ui.Painter, r ui.Rect) {
+	t := float64(time.Now().UnixMilli()%600000) / 1000
+	cx, cy, d := float64(r.X+r.W/2), float64(r.Y+r.H/2), 5.5+1.5*math.Sin(t*3)
+	for k := 0; k < 3; k++ {
+		a := t*3.4 + float64(k)*2*math.Pi/3
+		drawMercuryDrop(p, cx+math.Cos(a)*d, cy+math.Sin(a)*d*0.6, 3.1, 1, 0.05, t, float64(k))
+	}
+	p.AnimationFrame()
 }

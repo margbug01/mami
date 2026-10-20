@@ -300,8 +300,14 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 // voiceLook 「语音识别」页的外观 tab：录音时的样式
 func (a *App) voiceLook(c *ui.Context, d *Config) {
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
-		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}})
+		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}})
 	})
+	if d.VoiceStyle != "pixel" && d.VoiceStyle != "orb" { // 像素和果冻球的配色是固定的
+		settingRow(c, T("浮窗底色"), T("跟界面主题分开选"), func() {
+			optionSelect(c, &d.VoiceTone, []option{{"dark", T("深色")}, {"light", T("浅色")}, {"auto", T("跟随主题")}})
+		})
+	}
+	a.voicePreview(c, d)
 	if d.VoiceStyle == "orb" {
 		settingRow(c, T("果冻球大小"), T("右边是实际大小的预览"), func() {
 			ui.Row(c).Width(controlW).Gap(12).AlignItems(ui.Center).Children(func() {
@@ -314,6 +320,52 @@ func (a *App) voiceLook(c *ui.Context, d *Config) {
 				})
 			})
 		})
+	}
+}
+
+// voicePreview 外观 tab 的预览：在一块假桌面上把三种状态并排画出来，选了就能看到，不用保存。
+// 用的是跟真浮窗同一个 voicePill，音量是假的
+func (a *App) voicePreview(c *ui.Context, d *Config) {
+	dark := c.Theme().Dark
+	desk, label := ui.RGBA(221, 226, 234, 1), ui.RGBA(30, 32, 38, 0.55)
+	if dark {
+		desk, label = ui.RGBA(22, 24, 29, 1), ui.RGBA(232, 234, 240, 0.55)
+	}
+	now := time.Now()
+	t := float64(now.UnixMilli()%600000) / 1000
+	var bars [voiceBars]float32
+	for i := range bars {
+		v := 0.45 + 0.35*math.Sin(t*3.1-float64(i)*0.8) + 0.15*math.Sin(t*7.3+float64(i))
+		bars[i] = float32(min(1, max(0, v)))
+	}
+	themeDark := dark
+	dark = toneDark(d.VoiceTone, themeDark) // 假桌面跟主题，浮窗按「浮窗底色」
+	style, sk := d.VoiceStyle, skinFor(d.VoiceStyle, dark)
+	states := []voiceViewState{{recording: true}, {recognizing: true}, {text: T("明天三点开会"), copy: true}}
+	captions := []string{T("录音中"), T("识别中…"), T("没地方贴时")}
+	h := float32(voiceOrbW) // 图形区固定高度：切到果冻球时预览框不跳
+	if style == "orb" {
+		h = max(h, float32(math.Round(d.VoiceOrbSize)))
+	}
+	c.AnimationFrame()
+	ui.Row(c).Padding(16, 12).Gap(20).Justify(ui.Center).AlignItems(ui.End).Background(desk).Radius(8).Children(func() {
+		for i, st := range states {
+			ui.Column(c).Gap(4).AlignItems(ui.Center).Children(func() {
+				ui.Box(c).Height(h).Center().Children(func() { a.previewShape(c, d, style, dark, sk, st, bars, now) })
+				ui.Text(c, captions[i]).FontSize(11).TextColor(label)
+			})
+		}
+	})
+}
+
+// previewShape 预览里的一个状态：果冻球样式录音/识别时是球，其余是胶囊
+func (a *App) previewShape(c *ui.Context, d *Config, style string, dark bool, sk voiceSkin, st voiceViewState, bars [voiceBars]float32, now time.Time) {
+	if style == "orb" && voiceKind(st) != 3 {
+		sz, rec := float32(math.Round(d.VoiceOrbSize)), st.recognizing
+		ui.Box(c).Size(sz, sz).Draw(func(p *ui.Painter, r ui.Rect) { drawOrb(p, r, bars[voiceBars-1], now, rec) })
+	} else {
+		gl, gr := islandGapsFor(st)
+		a.voicePill(c, style, dark, sk, st, bars, bars[voiceBars-1], gl, gr, 1, now, false).Width(float32(min(voiceWidth(st), voiceRecW))) // 预览框放不下全宽的提示，句子长了就截断
 	}
 }
 

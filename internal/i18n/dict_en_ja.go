@@ -4,6 +4,17 @@ package i18n
 // 新增界面文字时，先在代码里写 T("中文")，再回来补这张表；
 // TestI18nDictComplete 会扫源码，漏了会失败。
 var Dict = map[string][2]string{
+	"磨砂玻璃":     {"Frosted glass", "すりガラス"},
+	"水银":       {"Mercury", "水銀"},
+	"三岛连桥":     {"Islands", "連結アイランド"},
+	"浮窗底色":     {"Overlay color", "オーバーレイの色"},
+	"跟界面主题分开选": {"Independent of the app theme", "アプリのテーマとは別に選べます"},
+	"跟随主题":     {"Match app theme", "テーマに合わせる"},
+	"分段电平":     {"LED meter", "LEDメーター"},
+	"没地方贴时":    {"Nowhere to paste", "貼り付け先がないとき"},
+	"明天三点开会":   {"Meeting at 3 tomorrow", "明日3時に会議"},
+	"复古像素":     {"Retro pixel", "レトロピクセル"},
+	"已复制，到要用的地方按 Ctrl+V":                 {"Copied. Press Ctrl+V where you need it", "コピーしました。使う場所で Ctrl+V"},
 	"阶跃星辰 StepFun":                       {"StepFun", "StepFun"},
 	"阿里云百炼 · 千问 ASR":                     {"Alibaba Model Studio · Qwen ASR", "Alibaba Model Studio · Qwen ASR"},
 	"换服务商要重新填":                           {"Re-enter when you switch provider", "サービスを変えたら入れ直してください"},

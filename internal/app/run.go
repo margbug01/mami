@@ -27,6 +27,7 @@ func Run() {
 	}
 	demo := flag.Bool("demo", false, "只画出按钮和一张示例卡片，8 秒后退出（不挂钩子、不注册快捷键）")
 	demoVoice := flag.Bool("demo-voice", false, "只放一遍语音胶囊的几种状态（假音量，不开麦克风），然后退出")
+	demoStyle := flag.String("demo-style", "", "配合 -demo-voice：只放这几种样式（逗号分隔，如 mercury），空着就全放")
 	flag.Parse()
 
 	mygo.App.SetName("Mami")
@@ -93,7 +94,7 @@ func Run() {
 			return
 		}
 		if *demoVoice {
-			go a.runVoiceDemo()
+			go a.runVoiceDemo(*demoStyle)
 			return
 		}
 		a.createTray()

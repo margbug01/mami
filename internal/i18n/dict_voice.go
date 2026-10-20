@@ -3,6 +3,17 @@ package i18n
 // 语音页的新文案与现有各语言词典保持对应。
 func init() {
 	entries := map[string][6]string{
+		"磨砂玻璃":     {"磨砂玻璃", "반투명 유리", "Cristal esmerilado", "Verre dépoli", "Milchglas", "Матовое стекло"},
+		"水银":       {"水銀", "수은", "Mercurio", "Mercure", "Quecksilber", "Ртуть"},
+		"三岛连桥":     {"三島連橋", "연결 아일랜드", "Islas", "Îlots", "Inseln", "Острова"},
+		"没地方贴时":    {"沒地方貼時", "붙여넣을 곳이 없을 때", "Sin dónde pegar", "Rien où coller", "Kein Eingabefeld", "Некуда вставить"},
+		"明天三点开会":   {"明天三點開會", "내일 3시 회의", "Reunión mañana a las 3", "Réunion demain à 15 h", "Morgen um 15 Uhr Meeting", "Завтра в 15:00 встреча"},
+		"浮窗底色":     {"浮窗底色", "오버레이 색상", "Color del panel", "Couleur du panneau", "Overlay-Farbe", "Цвет панели"},
+		"跟界面主题分开选": {"跟介面主題分開選", "앱 테마와 별도로 선택", "Independiente del tema", "Indépendant du thème", "Unabhängig vom App-Design", "Не зависит от темы"},
+		"跟随主题":     {"跟隨主題", "테마에 맞춤", "Según el tema", "Selon le thème", "Wie App-Design", "Как тема"},
+		"分段电平":     {"分段電平", "LED 미터", "Medidor LED", "VU-mètre LED", "LED-Pegel", "LED-индикатор"},
+		"复古像素":     {"復古像素", "레트로 픽셀", "Píxel retro", "Pixel rétro", "Retro-Pixel", "Ретро-пиксели"},
+		"已复制，到要用的地方按 Ctrl+V":                 {"已複製，到要用的地方按 Ctrl+V", "복사됨. 원하는 곳에서 Ctrl+V", "Copiado. Pulsa Ctrl+V donde lo necesites", "Copié. Appuyez sur Ctrl+V là où vous en avez besoin", "Kopiert. Mit Strg+V dort einfügen, wo du es brauchst", "Скопировано. Нажмите Ctrl+V там, где нужно"},
 		"阶跃星辰 StepFun":                       {"階躍星辰 StepFun", "StepFun", "StepFun", "StepFun", "StepFun", "StepFun"},
 		"阿里云百炼 · 千问 ASR":                     {"阿里雲百煉 · 千問 ASR", "Alibaba Model Studio · Qwen ASR", "Alibaba Model Studio · Qwen ASR", "Alibaba Model Studio · Qwen ASR", "Alibaba Model Studio · Qwen ASR", "Alibaba Model Studio · Qwen ASR"},
 		"换服务商要重新填":                           {"換服務商要重新填", "서비스를 바꾸면 다시 입력하세요", "Vuelve a introducirla al cambiar de proveedor", "À ressaisir en changeant de fournisseur", "Bei Anbieterwechsel neu eingeben", "При смене провайдера введите заново"},

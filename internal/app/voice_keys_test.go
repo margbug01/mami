@@ -83,3 +83,59 @@ func TestVoiceKeysHeal(t *testing.T) {
 		t.Fatal("real key cleared")
 	}
 }
+
+func TestVoiceOutput(t *testing.T) {
+	for _, c := range []struct {
+		switched, mods, input, caret bool
+		want                         int
+	}{
+		{false, false, true, false, voicePaste},
+		{false, false, true, true, voicePaste},
+		{false, false, false, true, voicePasteKeep},
+		{false, false, false, false, voiceCopyCard},
+		{true, false, true, true, voiceCopyCard},
+		{false, true, true, true, voiceCopyCard},
+	} {
+		if got := voiceOutput(c.switched, c.mods, c.input, c.caret); got != c.want {
+			t.Errorf("%+v: got %d", c, got)
+		}
+	}
+}
+
+func TestVoiceSkins(t *testing.T) {
+	for _, icon := range [][8]string{pixIconX, pixIconOK, pixIconCopy} {
+		for _, row := range icon {
+			if len(row) != 8 {
+				t.Fatalf("pixel icon row %q", row)
+			}
+		}
+	}
+	if !toneDark("dark", false) || toneDark("light", true) || !toneDark("auto", true) || toneDark("auto", false) {
+		t.Error("toneDark")
+	}
+	for in, want := range map[string]string{"": "dark", "x": "dark", "light": "light", "auto": "auto"} {
+		cfg := defaultConfig()
+		cfg.VoiceTone = in
+		cfg.normalize()
+		if cfg.VoiceTone != want {
+			t.Errorf("tone %q → %q", in, cfg.VoiceTone)
+		}
+	}
+	gaps := func(s voiceViewState) [2]float32 { l, r := islandGapsFor(s); return [2]float32{l, r} }
+	if gaps(voiceViewState{recording: true}) != [2]float32{4, 4} || gaps(voiceViewState{recognizing: true}) != [2]float32{4, 0} ||
+		gaps(voiceViewState{text: "x", copy: true}) != [2]float32{0, 4} || gaps(voiceViewState{text: "x"}) != [2]float32{0, 0} {
+		t.Error("island gaps")
+	}
+	for _, style := range []string{"bars", "orb", "glass", "pixel", "mercury", "islands", "leds", "nope", ""} {
+		cfg := defaultConfig()
+		cfg.VoiceStyle = style
+		cfg.normalize()
+		want := style
+		if style == "nope" || style == "" {
+			want = "bars"
+		}
+		if cfg.VoiceStyle != want {
+			t.Errorf("%q → %q", style, cfg.VoiceStyle)
+		}
+	}
+}
