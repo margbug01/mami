@@ -27,7 +27,7 @@ func islandGapsFor(state voiceViewState) (l, r float32) {
 	case 2:
 		return islandGap, 0
 	}
-	if state.copy || state.retry {
+	if state.copy || state.retry || state.undo {
 		return 0, islandGap
 	}
 	return 0, 0

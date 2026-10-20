@@ -18,7 +18,8 @@ type Config struct {
 	PolishAPIKey      string  `json:"polish_api_key,omitempty"`
 	PolishAPIKeyDPAPI string  `json:"polish_api_key_dpapi,omitempty"`
 	VoiceEnabled      bool    `json:"voice_enabled"`
-	PolishAuto        bool    `json:"polish_auto"` // 按程序自动换润色档位（AI 工具用提示词档、聊天软件用轻润色）
+	VoiceRewrite      bool    `json:"voice_rewrite"` // 选中文字再说话：按说的要求改写选中的那段
+	PolishAuto        bool    `json:"polish_auto"`   // 按程序自动换润色档位（AI 工具用提示词档、聊天软件用轻润色）
 	VoiceHotkey       string  `json:"voice_hotkey"`
 	VoiceStyle        string  `json:"voice_style"`     // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
 	VoiceOrbSize      float64 `json:"voice_orb_size"`  // 果冻球直径（DIP），40~96
@@ -66,6 +67,7 @@ func defaultConfig() Config {
 	return Config{
 		PolishStyle:      "standard",
 		PolishAuto:       true,
+		VoiceRewrite:     true,
 		PolishBaseURL:    "https://api.deepseek.com/v1",
 		PolishModel:      "deepseek-flash",
 		VoiceHotkey:      "RAlt",

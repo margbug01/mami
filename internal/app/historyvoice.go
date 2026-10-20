@@ -125,6 +125,8 @@ func polishLabel(style string) string {
 		return T("结构化")
 	case "prompt":
 		return T("提示词")
+	case "rewrite":
+		return T("改写")
 	}
 	return ""
 }
