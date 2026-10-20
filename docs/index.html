@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mami · Translate where you type</title>
-<meta name="description" content="Mami is a Windows tray app. Select text in any input box, click a small button for the translation, or press Alt+T to replace it in place. Works with any OpenAI-compatible API.">
-<meta property="og:title" content="Mami · Translate where you type">
-<meta property="og:description" content="Select text in any input box, click a small button, get the translation. Windows tray app, bring your own model.">
-<meta property="og:image" content="https://margbug01.github.io/mami/card.png">
+<title>Mami · Dictate and translate where you type</title>
+<meta name="description" content="Mami is a Windows tray app for voice input and selection translation. Tap Right Alt and talk, and tidy text lands in the box you are typing in. Select text to translate it in place. Bring your own speech, polish and translation APIs.">
+<meta property="og:title" content="Mami · Dictate and translate where you type">
+<meta property="og:description" content="Talk instead of typing, translate without leaving the box. Windows tray app, bring your own model.">
+<meta property="og:image" content="https://margbug01.github.io/mami/voice.png">
 <link rel="icon" href="icon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Regular.min.css">
@@ -100,7 +100,7 @@ kbd {
 .card-foot button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .card-foot[hidden] { display: none; }
 .demo-note { display: flex; justify-content: space-between; gap: 1rem; margin: .8rem .25rem 0; font-size: .88rem; color: var(--muted); }
-.demo-note button { font: inherit; color: var(--fg); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.demo-note button { white-space: nowrap; flex-shrink: 0; font: inherit; color: var(--fg); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 
 /* sections */
 section { padding: clamp(2.5rem, 6vw, 4.5rem) 0; border-top: 1px solid var(--line); }
@@ -118,12 +118,45 @@ ol.steps li { margin-bottom: .6rem; padding-left: .3rem; }
 table { border-collapse: collapse; width: 100%; font-size: .95rem; min-width: 640px; }
 th, td { text-align: left; padding: .7rem 1rem .7rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-weight: 600; color: var(--muted); }
+td:first-child, th:first-child { white-space: nowrap; }
 code { font: 500 .88em ui-monospace, "Cascadia Code", Consolas, monospace; }
 footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
 
+/* voice demo */
+.vdemo { display: grid; gap: clamp(1.5rem, 4vw, 3rem); align-items: start; }
+@media (min-width: 920px) { .vdemo { grid-template-columns: 1fr 460px; } }
+.vbox { min-height: 7.5rem; }
+.vbox .caret { display: inline-block; width: 2px; height: 1.15em; background: var(--fg); vertical-align: -.2em; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.pillbar { display: flex; justify-content: center; padding: 0 0 1.3rem; min-height: 3.6rem; }
+.pill {
+  display: none; align-items: center; gap: 8px; height: 40px; padding: 0 6px; border-radius: 20px;
+  background: #1e2026; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 10px 30px -12px rgba(0,0,0,.5);
+}
+.pill.show { display: flex; animation: pop .25s ease-out; }
+.pill .pb { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.12); color: #fff; font-size: 13px; line-height: 1; }
+.pill .pb.ok { background: #f2f2f4; color: #15161a; }
+.bars { display: flex; align-items: center; gap: 3px; height: 22px; width: 54px; justify-content: center; }
+.bars i { width: 3px; height: 30%; border-radius: 2px; background: linear-gradient(#afa9ec, #5dcaa5); animation: lv .7s ease-in-out infinite alternate; }
+.bars i:nth-child(2n) { animation-duration: .55s; } .bars i:nth-child(3n) { animation-duration: .9s; animation-delay: -.3s; }
+.bars i:nth-child(4n) { animation-delay: -.5s; } .bars i:nth-child(5n) { animation-duration: .45s; }
+@keyframes lv { to { height: 100%; } }
+.vdots { display: none; gap: 5px; width: 54px; justify-content: center; }
+.vdots i { width: 5px; height: 5px; border-radius: 50%; background: #c9cbd2; animation: dot 1s ease-in-out infinite; }
+.vdots i:nth-child(2) { animation-delay: .15s; } .vdots i:nth-child(3) { animation-delay: .3s; }
+@keyframes dot { 50% { opacity: .25; transform: translateY(-2px); } }
+.pill.busy .bars, .pill.busy .ok { display: none; }
+.pill.busy .vdots { display: flex; }
+.said { margin: 1rem .25rem 0; font-size: .92rem; color: var(--muted); min-height: 3em; }
+.said b { font-weight: 600; color: var(--fg); }
+.shots { display: grid; gap: 1.5rem; margin-top: 2.5rem; }
+@media (min-width: 900px) { .shots { grid-template-columns: 1fr 1fr; } }
+.shots .shot { margin: 0; }
+
 @media (prefers-reduced-motion: reduce) {
   .sel.on { transition: none; }
-  .dotbtn.show { animation: none; }
+  .dotbtn.show, .pill.show { animation: none; }
+  .bars i, .vdots i, .vbox .caret { animation: none; }
 }
 </style>
 </head>
@@ -143,8 +176,8 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
   <main>
     <div class="hero">
       <div>
-        <h1 data-i18n="h1">Translate where you type.</h1>
-        <p class="lead" data-i18n="lead">Select text in any input box and a small button appears. Click it for the translation, or press <kbd>Alt</kbd> <kbd>T</kbd> to replace the text in place. Mami is a Windows tray app that uses the model and API key you already have.</p>
+        <h1 data-i18n="h1">Talk or translate, right where you type.</h1>
+        <p class="lead" data-i18n="lead">Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and a small button translates it, or press <kbd>Alt</kbd> <kbd>T</kbd> to replace it in place. Mami is a Windows tray app that uses the models and API keys you already have.</p>
         <div class="cta">
           <a class="btn" href="https://github.com/margbug01/mami/releases/latest" data-i18n="download">Download for Windows</a>
           <a class="link" href="https://github.com/margbug01/mami" data-i18n="source">View the source</a>
@@ -174,25 +207,70 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       </div>
     </div>
 
+    <section id="voice">
+      <h2 data-i18n="h2v">Speak instead of typing</h2>
+      <div class="vdemo">
+        <dl class="points" style="grid-template-columns:1fr">
+          <div><dt data-i18n="v1t">Tap, talk, tap</dt><dd data-i18n="v1d">Right Alt by default, or any key, shortcut or media button. Esc cancels. With Qwen 3.1 streaming, the text is ready about half a second after you stop.</dd></div>
+          <div><dt data-i18n="v2t">Cleaned up, not rewritten</dt><dd data-i18n="v2d">Fillers and "no wait, I mean" are dropped. Questions are not answered and nothing is translated behind your back. Four levels, from off to structured.</dd></div>
+          <div><dt data-i18n="v3t">Learns your words</dt><dd data-i18n="v3d">Add names and product names to the vocabulary. Fix a misheard word twice and Mami fixes it for you from then on. Only sound-alike fixes are learned.</dd></div>
+        </dl>
+        <div>
+          <div class="win" aria-label="Voice input demo">
+            <div class="win-bar"><i></i><i></i><i></i><span data-i18n="winTitle">Chat</span></div>
+            <div class="composer vbox"><p id="vText"></p></div>
+            <div class="pillbar">
+              <div class="pill" id="pill" aria-hidden="true">
+                <span class="pb">✕</span>
+                <span class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                <span class="vdots"><i></i><i></i><i></i></span>
+                <span class="pb ok">✓</span>
+              </div>
+            </div>
+          </div>
+          <div class="demo-note">
+            <span class="said" id="vSaid" style="margin:0"></span>
+            <button type="button" id="vReplay" data-i18n="replay">Replay</button>
+          </div>
+        </div>
+      </div>
+      <div class="shots">
+        <figure class="shot">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="voice.png">
+            <img src="voice-light.png" width="1464" height="960" alt="Dictation settings with pill previews" loading="lazy">
+          </picture>
+          <figcaption data-i18n="capv">Seven pill styles, with a dark or light tone of their own.</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="words.png">
+            <img src="words-light.png" width="1464" height="960" alt="Vocabulary page" loading="lazy">
+          </picture>
+          <figcaption data-i18n="capw">The vocabulary. Words you fixed show up here on their own.</figcaption>
+        </figure>
+      </div>
+    </section>
+
     <section>
       <h2 data-i18n="h2a">Built to stay out of the way</h2>
       <dl class="points">
         <div><dt data-i18n="p1t">Input boxes only</dt><dd data-i18n="p1d">Web pages and documents are left alone. Before showing anything, Mami asks Windows whether the focus is an editable field.</dd></div>
         <div><dt data-i18n="p2t">Keeps your selection</dt><dd data-i18n="p2d">The button and the card never take focus, and your clipboard is put back after every translation.</dd></div>
         <div><dt data-i18n="p3t">Safe in terminals</dt><dd data-i18n="p3d">In Windows Terminal Mami sends no keystrokes, so the program you are running never gets a surprise Ctrl+C.</dd></div>
-        <div><dt data-i18n="p4t">Your model, your key</dt><dd data-i18n="p4d">Any OpenAI-compatible endpoint. Tencent Hy-MT2 and bilibili Index-Translate get prompt formats of their own.</dd></div>
+        <div><dt data-i18n="p4t">Your model, your key</dt><dd data-i18n="p4d">Pick a provider and the endpoint fills itself in; keys are encrypted with Windows DPAPI and remembered per endpoint. Audio and text go only where you send them.</dd></div>
       </dl>
     </section>
 
     <section>
       <h2 data-i18n="h2b">Make it yours</h2>
-      <p class="lead" style="margin:0" data-i18n="make">Light and dark themes, nine interface languages, twenty target languages, and extra instructions for style and terminology.</p>
+      <p class="lead" style="margin:0" data-i18n="make">Light and dark themes, nine interface languages, twenty target languages, extra instructions for style and terminology, and a history page that shows how much typing you saved.</p>
       <figure class="shot">
         <picture>
           <source media="(prefers-color-scheme: dark)" srcset="settings.png">
-          <img src="settings-light.png" width="1400" height="960" alt="Mami settings window" loading="lazy">
+          <img src="settings-light.png" width="1464" height="960" alt="Mami settings window" loading="lazy">
         </picture>
-        <figcaption data-i18n="cap">The extra-instructions box grows with what you type. Drag the handle at its corner to size it yourself.</figcaption>
+        <figcaption data-i18n="cap">Settings, grouped by what you are doing. Providers are one click away.</figcaption>
       </figure>
     </section>
 
@@ -200,16 +278,20 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       <h2 data-i18n="h2c">Get started</h2>
       <ol class="steps">
         <li data-i18n="s1">Download the installer from the releases page and run it. Mami opens its settings the first time.</li>
-        <li data-i18n="s2">It starts on bilibili's free endpoint, which needs no key. For daily use, pick one of the endpoints below and paste your key.</li>
-        <li data-i18n="s3">Select text in any input box. Press <kbd>Alt</kbd> <kbd>T</kbd> to translate and replace, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> to only see the card.</li>
+        <li data-i18n="s2">Translation starts on bilibili's free endpoint, which needs no key. For daily use, pick a provider below and paste your key.</li>
+        <li data-i18n="s3">For voice, turn it on under Dictation, add a speech key and a polish key, then tap <kbd>Right Alt</kbd> anywhere you type.</li>
+        <li data-i18n="s4">Select text in any input box. Press <kbd>Alt</kbd> <kbd>T</kbd> to translate and replace, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> to only see the card.</li>
       </ol>
       <div class="table-wrap">
         <table>
-          <thead><tr><th data-i18n="th1">Provider</th><th>Base URL</th><th data-i18n="th2">Model</th><th data-i18n="th3">Notes</th></tr></thead>
+          <thead><tr><th data-i18n="th0">For</th><th data-i18n="th1">Provider</th><th>Base URL</th><th data-i18n="th2">Model</th><th data-i18n="th3">Notes</th></tr></thead>
           <tbody>
-            <tr><td>Tencent TokenHub</td><td><code>https://tokenhub.tencentmaas.com/v1</code></td><td><code>hy-mt2-pro</code></td><td data-i18n="n1">Paid, stable, about 1 s.</td></tr>
-            <tr><td>OpenRouter</td><td><code>https://openrouter.ai/api/v1</code></td><td><code>tencent/hy-mt2-30b-a3b</code></td><td data-i18n="n2">Same model family, pay as you go.</td></tr>
-            <tr><td data-i18n="n3p">bilibili (free)</td><td><code>https://index-translate.bilibili.com/v1</code></td><td><code>Index-Translate-35B-A3B</code></td><td data-i18n="n3">No key. Can be flaky at peak hours.</td></tr>
+            <tr><td data-i18n="u1">Speech</td><td data-i18n="pq">Alibaba Cloud Model Studio</td><td><code>https://dashscope.aliyuncs.com/compatible-mode/v1</code></td><td><code>qwen-audio-3.1-asr-flash-streaming</code></td><td data-i18n="nq">Streams while you talk, about 0.5 s after you stop.</td></tr>
+            <tr><td data-i18n="u1">Speech</td><td data-i18n="ps">StepFun</td><td><code>https://api.stepfun.com/v1</code></td><td><code>stepaudio-3-asr-max</code></td><td data-i18n="ns">Split at pauses, about 1 s.</td></tr>
+            <tr><td data-i18n="u2">Polish</td><td>DeepSeek</td><td><code>https://api.deepseek.com/v1</code></td><td><code>deepseek-flash</code></td><td data-i18n="nd">Thinking off, 0.5–1 s. Any OpenAI-compatible endpoint works.</td></tr>
+            <tr><td data-i18n="u3">Translate</td><td>Tencent TokenHub</td><td><code>https://tokenhub.tencentmaas.com/v1</code></td><td><code>hy-mt2-pro</code></td><td data-i18n="n1">Paid, stable, about 1 s.</td></tr>
+            <tr><td data-i18n="u3">Translate</td><td>OpenRouter</td><td><code>https://openrouter.ai/api/v1</code></td><td><code>tencent/hy-mt2-30b-a3b</code></td><td data-i18n="n2">Same model family, pay as you go.</td></tr>
+            <tr><td data-i18n="u3">Translate</td><td data-i18n="n3p">bilibili (free)</td><td><code>https://index-translate.bilibili.com/v1</code></td><td><code>Index-Translate-35B-A3B</code></td><td data-i18n="n3">No key. Can be flaky at peak hours.</td></tr>
           </tbody>
         </table>
       </div>
@@ -246,8 +328,19 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
 
   var T = {
     en: {
-      h1: "Translate where you type.",
-      lead: "Select text in any input box and a small button appears. Click it for the translation, or press <kbd>Alt</kbd> <kbd>T</kbd> to replace the text in place. Mami is a Windows tray app that uses the model and API key you already have.",
+      h1: "Talk or translate, right where you type.",
+      lead: "Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and a small button translates it, or press <kbd>Alt</kbd> <kbd>T</kbd> to replace it in place. Mami is a Windows tray app that uses the models and API keys you already have.",
+      h2v: "Speak instead of typing",
+      v1t: "Tap, talk, tap", v1d: "Right Alt by default, or any key, shortcut or media button. Esc cancels. With Qwen 3.1 streaming, the text is ready about half a second after you stop.",
+      v2t: "Cleaned up, not rewritten", v2d: "Fillers and \"no wait, I mean\" are dropped. Questions are not answered and nothing is translated behind your back. Four levels, from off to structured.",
+      v3t: "Learns your words", v3d: "Add names and product names to the vocabulary. Fix a misheard word twice and Mami fixes it for you from then on. Only sound-alike fixes are learned.",
+      saidLabel: "You said:",
+      capv: "Seven pill styles, with a dark or light tone of their own.",
+      capw: "The vocabulary. Words you fixed show up here on their own.",
+      s4: "Select text in any input box. Press <kbd>Alt</kbd> <kbd>T</kbd> to translate and replace, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> to only see the card.",
+      th0: "For", u1: "Speech", u2: "Polish", u3: "Translate",
+      pq: "Alibaba Cloud Model Studio", ps: "StepFun",
+      nq: "Streams while you talk, about 0.5 s after you stop.", ns: "Split at pauses, about 1 s.", nd: "Thinking off, 0.5–1 s. Any OpenAI-compatible endpoint works.",
       download: "Download for Windows", source: "View the source",
       meta: "Windows 10 and 11, x64. Free and open source under the MIT license.",
       winTitle: "Chat", copy: "Copy", replace: "Replace", replay: "Replay",
@@ -259,22 +352,33 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       p1t: "Input boxes only", p1d: "Web pages and documents are left alone. Before showing anything, Mami asks Windows whether the focus is an editable field.",
       p2t: "Keeps your selection", p2d: "The button and the card never take focus, and your clipboard is put back after every translation.",
       p3t: "Safe in terminals", p3d: "In Windows Terminal Mami sends no keystrokes, so the program you are running never gets a surprise Ctrl+C.",
-      p4t: "Your model, your key", p4d: "Any OpenAI-compatible endpoint. Tencent Hy-MT2 and bilibili Index-Translate get prompt formats of their own.",
+      p4t: "Your model, your key", p4d: "Pick a provider and the endpoint fills itself in; keys are encrypted with Windows DPAPI and remembered per endpoint. Audio and text go only where you send them.",
       h2b: "Make it yours",
-      make: "Light and dark themes, nine interface languages, twenty target languages, and extra instructions for style and terminology.",
-      cap: "The extra-instructions box grows with what you type. Drag the handle at its corner to size it yourself.",
+      make: "Light and dark themes, nine interface languages, twenty target languages, extra instructions for style and terminology, and a history page that shows how much typing you saved.",
+      cap: "Settings, grouped by what you are doing. Providers are one click away.",
       h2c: "Get started",
       s1: "Download the installer from the releases page and run it. Mami opens its settings the first time.",
-      s2: "It starts on bilibili's free endpoint, which needs no key. For daily use, pick one of the endpoints below and paste your key.",
-      s3: "Select text in any input box. Press <kbd>Alt</kbd> <kbd>T</kbd> to translate and replace, or <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> to only see the card.",
+      s2: "Translation starts on bilibili's free endpoint, which needs no key. For daily use, pick a provider below and paste your key.",
+      s3: "For voice, turn it on under Dictation, add a speech key and a polish key, then tap <kbd>Right Alt</kbd> anywhere you type.",
       th1: "Provider", th2: "Model", th3: "Notes",
       n1: "Paid, stable, about 1 s.", n2: "Same model family, pay as you go.",
       n3p: "bilibili (free)", n3: "No key. Can be flaky at peak hours.",
       foot: "MIT licensed. Built with Go and MyGo. Set in MiSans."
     },
     zh: {
-      h1: "在哪打字，就在哪翻译。",
-      lead: "在任何输入框里选中文字，旁边会冒出一个小按钮。点它看译文，或者按 <kbd>Alt</kbd> <kbd>T</kbd> 直接原地替换。Mami 是个 Windows 托盘小工具，用你自己已有的模型和 API Key。",
+      h1: "在哪打字，就在哪说、在哪翻译。",
+      lead: "按一下 <kbd>右 Alt</kbd> 开口说，整理好的文字直接落进你正在打字的框。选中文字点小按钮就出译文，或者按 <kbd>Alt</kbd> <kbd>T</kbd> 原地替换。Mami 是个 Windows 托盘小工具，用你自己已有的模型和 API Key。",
+      h2v: "能说就别打字",
+      v1t: "按一下，说，再按一下", v1d: "默认右 Alt，也可以换成任意键、组合键或媒体键，Esc 取消。用千问 3.1 流式识别，停下后大约半秒就出字。",
+      v2t: "帮你整理，不帮你改写", v2d: "口头禅和「不对，我是说」会去掉；问句不会被当成问题回答，也不会偷偷翻译。四档可选，从关到结构化。",
+      v3t: "认得你的词", v3d: "人名、产品名加进词库就会照着写。听错的词你改过两次，以后就自动改对。只学读音像的改动。",
+      saidLabel: "你说的：",
+      capv: "七种胶囊样式，底色深浅可以跟主题分开选。",
+      capw: "词库。你改过的词会自己出现在这里。",
+      s4: "在任意输入框里选中文字。按 <kbd>Alt</kbd> <kbd>T</kbd> 翻译并替换，按 <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> 只看卡片。",
+      th0: "用途", u1: "语音识别", u2: "润色", u3: "翻译",
+      pq: "阿里云百炼", ps: "阶跃星辰",
+      nq: "流式，边说边识别，停下约 0.5 秒。", ns: "按停顿分段，约 1 秒。", nd: "自动关掉思考，0.5–1 秒。任何 OpenAI 兼容接口都行。",
       download: "下载 Windows 版", source: "查看源码",
       meta: "Windows 10 / 11，x64。免费开源，MIT 许可。",
       winTitle: "聊天", copy: "复制", replace: "替换", replay: "重放",
@@ -286,14 +390,14 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       p1t: "只在输入框里弹", p1d: "网页正文、文档里划词不会打扰你。出按钮之前，Mami 会先问 Windows：焦点是不是一个能编辑的输入框。",
       p2t: "不丢选区", p2d: "按钮和卡片都不抢焦点，每次翻译完还会把你的剪贴板还原。",
       p3t: "终端里也安全", p3d: "在 Windows Terminal 里 Mami 一个键都不发，你正在跑的程序不会突然收到一个 Ctrl+C。",
-      p4t: "你的模型，你的 Key", p4d: "任何 OpenAI 兼容接口都行。腾讯 Hy-MT2、B 站 Index-Translate 有各自专用的提示词格式。",
+      p4t: "你的模型，你的 Key", p4d: "选一家服务商，地址和模型自动填好；Key 用 Windows DPAPI 加密，每个接口各记一份。录音和文字只发给你选的那家。",
       h2b: "按你的习惯来",
-      make: "浅色和深色主题、9 种界面语言、20 种目标语言，还能写额外要求来管风格和术语。",
-      cap: "「额外要求」输入框会随你输入的内容长高，也可以拖右下角的把手自己调。",
+      make: "浅色和深色主题、9 种界面语言、20 种目标语言，额外要求管风格和术语，记录页告诉你少打了多少字。",
+      cap: "设置按用途分组，服务商点一下就填好。",
       h2c: "开始用",
       s1: "到发布页下载安装包并运行，第一次启动会自动打开设置。",
-      s2: "默认用 B 站的免费接口，不需要 Key。日常使用的话，从下面选一个接口，填上你的 Key。",
-      s3: "在任意输入框里选中文字。按 <kbd>Alt</kbd> <kbd>T</kbd> 翻译并替换，按 <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>T</kbd> 只看卡片。",
+      s2: "翻译默认用 B 站的免费接口，不需要 Key。日常使用的话，从下面选一家，填上你的 Key。",
+      s3: "语音输入在「语音识别」里打开，填上识别和润色的 Key，然后在任何打字的地方按一下 <kbd>右 Alt</kbd>。",
       th1: "服务商", th2: "模型", th3: "说明",
       n1: "收费，稳定，约 1 秒。", n2: "同一系列模型，按量付费。",
       n3p: "B 站（免费）", n3: "不用 Key，高峰期可能不稳。",
@@ -381,7 +485,40 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     });
   });
 
-  apply(); play();
+  // voice demo: pill records, thinks, then the polished line lands in the box
+  var V = {
+    en: { said: "Um, so, can you rewrite this endpoint in Go, and the meeting's at three, no wait, at four.", out: "Can you rewrite this endpoint in Go? The meeting is at four." },
+    zh: { said: "嗯，那个，帮我把这个接口改成用 Go 写，然后三点开会，不对，是四点开会。", out: "帮我把这个接口改成用 Go 写。四点开会。" }
+  };
+  var pill = $("pill"), vText = $("vText"), vSaid = $("vSaid"), vTimers = [];
+  function vStop() { vTimers.forEach(clearTimeout); vTimers = []; }
+  function vLater(fn, ms) { vTimers.push(setTimeout(fn, ms)); }
+  function vShow(done) {
+    vText.innerHTML = (done ? V[lang].out : "") + '<span class="caret"></span>';
+    vSaid.innerHTML = done ? "<b>" + T[lang].saidLabel + "</b> " + V[lang].said : "";
+  }
+  var vDone = false;
+  function vPlay() {
+    vStop(); vDone = false; vShow(false);
+    pill.className = "pill";
+    vLater(function () { pill.className = "pill show"; }, 400);
+    vLater(function () { pill.className = "pill show busy"; }, 3200);
+    vLater(function () { pill.className = "pill"; vDone = true; vShow(true); }, 3900);
+  }
+  $("vReplay").addEventListener("click", vPlay);
+  var vStarted = false;
+  function vMaybe() {
+    if (vStarted) return;
+    var forced = /[?&]demo=1/.test(location.search);
+    if (!forced && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { vStarted = true; vDone = true; vShow(true); return; }
+    vStarted = true; vPlay();
+  }
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); vMaybe(); } }, { threshold: .4 }).observe($("voice"));
+  } else { vMaybe(); }
+  document.querySelectorAll(".lang button").forEach(function (b) { b.addEventListener("click", function () { vShow(vDone); }); });
+
+  apply(); play(); vShow(false);
 })();
 </script>
 </body>

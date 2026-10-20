@@ -277,6 +277,24 @@ func TestSnapDocs(t *testing.T) {
 		tt.SetDark(d.dark)
 		tt.SetScale(2)
 		save("settings"+d.suffix+".png", tt)
+
+		// 语音：外观页（样式下拉 + 三种状态的胶囊预览）和词库页
+		a3 := &App{avatar: loadAvatar(), learn: newLearner(filepath.Join(t.TempDir(), "learned.json"))}
+		a3.learn.add([]learnedWord{{Right: "Claude", Manual: true}, {Right: "Mami", Manual: true}, {Right: "DeepSeek", Manual: true}, {Right: "MyGo", Manual: true}, {Right: "Remotion", Manual: true}})
+		a3.learn.add([]learnedWord{{Wrong: "张伟", Right: "章炜"}, {Wrong: "张伟", Right: "章炜"}, {Wrong: "扣持", Right: "蔻驰"}, {Wrong: "阶越", Right: "阶跃"}, {Wrong: "阶越", Right: "阶跃"}})
+		cfg.VoiceStyle = "bars"
+		a3.set = settingsState{draft: cfg, page: pageVoice, voiceTab: 1}
+		tt = ui.NewTester(a3.settingsView, settingsW, settingsH)
+		tt.SetDark(d.dark)
+		tt.SetScale(2)
+		tt.Frame()
+		save("voice"+d.suffix+".png", tt)
+		a3.set = settingsState{draft: cfg, page: pageWords}
+		tt = ui.NewTester(a3.settingsView, settingsW, settingsH)
+		tt.SetDark(d.dark)
+		tt.SetScale(2)
+		tt.Frame()
+		save("words"+d.suffix+".png", tt)
 	}
 	// 日文深色，选择按钮页
 	cfg := defaultConfig()
