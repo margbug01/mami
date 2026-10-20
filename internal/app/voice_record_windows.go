@@ -53,7 +53,8 @@ func waveError(op string, code uintptr) error {
 }
 
 // 驱动异步持有的头和 PCM 都用系统内存，不让 Go GC 移动或提前回收。
-func recordVoice(ctx context.Context, stop <-chan struct{}, started func(), level func(float64)) (pcm []byte, err error) {
+// chunk 每收到一块（100ms）就调一次，data 指向驱动缓冲区，回调里要用就得拷走。
+func recordVoice(ctx context.Context, stop <-chan struct{}, started func(), chunk func(data []byte, level float64)) (pcm []byte, err error) {
 	format := waveFormat{Tag: 1, Channels: 1, Rate: 16000, BytesPerSec: 32000, Align: 2, Bits: 16}
 	var handle uintptr
 	if code, _, _ := pWaveInOpen.Call(uintptr(unsafe.Pointer(&handle)), ^uintptr(0)&0xffffffff, uintptr(unsafe.Pointer(&format)), 0, 0, 0); code != 0 {
@@ -133,8 +134,8 @@ func recordVoice(ctx context.Context, stop <-chan struct{}, started func(), leve
 			next = (next + 1) % len(buffers)
 			data := unsafe.Slice((*byte)(nativePointer(header.Data)), min(header.Recorded, header.Length))
 			pcm = append(pcm, data...)
-			if level != nil {
-				level(pcmRMS(data))
+			if chunk != nil {
+				chunk(data, pcmRMS(data))
 			}
 			if requeue {
 				if code, _, _ := pWaveInAdd.Call(handle, buffer.memory, unsafe.Sizeof(waveHeader{})); code != 0 {

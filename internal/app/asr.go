@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 func transcribe(ctx context.Context, cfg Config, pcm []byte) (string, error) {
@@ -90,6 +91,46 @@ func warmConnection(ctx context.Context, base string) {
 	}
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 	resp.Body.Close()
+}
+
+// voiceSegmenter 录音时按停顿切段：一段攒够 3 秒、里面至少 1 秒有声音、结尾又静了 0.7 秒，
+// 就把这段先送去识别，停止时只剩最后一段要等。吵的环境里切不出来，就退回整段识别。
+// shortcut: 阈值写死，revisit when 真人用下来切得太碎或者切不动
+type voiceSegmenter struct {
+	total, speech, silence int // 当前段的块数、有声块数、结尾连续安静块数（每块 100ms）
+}
+
+const voiceSilenceRMS = 0.01
+
+func (s *voiceSegmenter) feed(level float64) (cut bool) {
+	s.total++
+	if level < voiceSilenceRMS {
+		s.silence++
+	} else {
+		s.speech++
+		s.silence = 0
+	}
+	if s.total >= 30 && s.speech >= 10 && s.silence >= 7 {
+		*s = voiceSegmenter{}
+		return true
+	}
+	return false
+}
+
+// joinSegments 把各段识别结果接起来：两边都是西文（ASCII）才补空格，中文直接相连
+func joinSegments(parts []string) string {
+	var b strings.Builder
+	for _, part := range parts {
+		if b.Len() > 0 {
+			prev, _ := utf8.DecodeLastRuneInString(b.String())
+			next, _ := utf8.DecodeRuneInString(part)
+			if prev < utf8.RuneSelf && next < utf8.RuneSelf {
+				b.WriteByte(' ')
+			}
+		}
+		b.WriteString(part)
+	}
+	return b.String()
 }
 
 // voiceTooQuiet 误触两下或者一句没说：不到 300ms，或者整段最响的 100ms 都没过底噪，

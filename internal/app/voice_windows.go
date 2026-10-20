@@ -398,16 +398,38 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	started := time.Now()
 	last := time.Time{}
 	var levels []float64
-	var peak float64
-	pcm, err := recordVoice(ctx, stop, func() {
+	// 按停顿分段：说到一半停顿时先把前面的送去识别，停止时只剩最后一段要等
+	type asrJob struct {
+		text string
+		err  error
+		done chan struct{}
+	}
+	var jobs []*asrJob
+	submit := func(pcm []byte) {
+		job := &asrJob{done: make(chan struct{})}
+		jobs = append(jobs, job)
+		go func() {
+			job.text, job.err = transcribe(ctx, cfg, pcm)
+			close(job.done)
+		}()
+	}
+	var seg []byte
+	var segPeak float64
+	var segmenter voiceSegmenter
+	_, err := recordVoice(ctx, stop, func() {
 		if !valid() {
 			return
 		}
 		started = time.Now()
 		a.voiceBeep(soundStart) // 麦克风真开了才响：听到「嘚嘚」就可以说了
 		a.voiceDisplay(id, voiceViewState{recording: true}, true)
-	}, func(level float64) {
-		peak = max(peak, level)
+	}, func(data []byte, level float64) {
+		seg = append(seg, data...)
+		segPeak = max(segPeak, level)
+		if segmenter.feed(level) {
+			submit(seg)
+			seg, segPeak = nil, 0
+		}
 		levels = append(levels, level)
 		if len(levels) > voiceBars {
 			levels = levels[len(levels)-voiceBars:]
@@ -426,23 +448,34 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		fail(err)
 		return
 	}
-	if voiceTooQuiet(pcm, peak) {
+	if !voiceTooQuiet(seg, segPeak) {
+		submit(seg)
+	} else if len(jobs) == 0 {
 		finish()
-		log.Printf("voice: too quiet (peak %.4f, %dms), not sent", peak, len(pcm)/32)
+		log.Printf("voice: too quiet (peak %.4f, %dms), not sent", segPeak, len(seg)/32)
 		a.voiceNotice(id, T("没听清，请再说一次"))
 		return
 	}
+	stopped := time.Now()
 	a.voiceDisplay(id, voiceViewState{recognizing: true, text: T("识别中…")}, true)
-	text, err := transcribe(ctx, cfg, pcm)
-	if !valid() {
-		finish()
-		return
+	var parts []string
+	for _, job := range jobs {
+		<-job.done
+		if !valid() {
+			finish()
+			return
+		}
+		if job.err != nil {
+			fail(job.err)
+			return
+		}
+		if part := strings.TrimSpace(job.text); part != "" {
+			parts = append(parts, part)
+		}
 	}
-	if err != nil {
-		fail(err)
-		return
-	}
-	if strings.TrimSpace(text) == "" {
+	log.Printf("voice: %d segment(s), waited %dms after stop", len(jobs), time.Since(stopped).Milliseconds())
+	text := joinSegments(parts)
+	if text == "" {
 		finish()
 		a.voiceNotice(id, T("没听清，请再说一次"))
 		return

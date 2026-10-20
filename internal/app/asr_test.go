@@ -152,6 +152,44 @@ func TestVoiceTooQuiet(t *testing.T) {
 	}
 }
 
+func TestVoiceSegmenter(t *testing.T) {
+	// 一个字符一块（100ms）：s=说话 .=安静；| 标在应该切的那一块后面
+	for _, script := range []string{
+		"ssssssssssssssssssssssssssssss.......|",                       // 3s 说话 + 0.7s 停顿
+		"..........ssssssssssssssssssss.......|ssssssssss",             // 前面安静也算在 3s 里
+		"ssssssssss...............",                                    // 不足 3s 就停顿：不切
+		"..........................ssss.......",                        // 3s 里声音不到 1s：不切
+		"ssssssssssssssssssssssssssssssssssssssss.......|sssss.......", // 切完重新计
+	} {
+		var s voiceSegmenter
+		var got, want string
+		for _, c := range script {
+			if c == '|' {
+				want += "|"
+				continue
+			}
+			level := 0.001
+			if c == 's' {
+				level = 0.05
+			}
+			if s.feed(level) {
+				got += "|"
+			} else if want != got {
+				t.Fatalf("%q: cut at the wrong block", script)
+			}
+		}
+		if got != want {
+			t.Errorf("%q: cuts %q want %q", script, got, want)
+		}
+	}
+	if got := joinSegments([]string{"第一段。", "第二段", "hello world.", "Next one", "中文", "x"}); got != "第一段。第二段hello world. Next one中文x" {
+		t.Fatal(got)
+	}
+	if joinSegments(nil) != "" {
+		t.Fatal("empty")
+	}
+}
+
 func TestIsStepFunASR(t *testing.T) {
 	for base, want := range map[string]bool{
 		"https://api.stepfun.com/v1": true, "https://stepfun.com/v1": true,
