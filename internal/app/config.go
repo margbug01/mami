@@ -12,50 +12,52 @@ import (
 )
 
 type Config struct {
-	PolishStyle       string   `json:"polish_style"`
-	PolishBaseURL     string   `json:"polish_base_url"`
-	PolishModel       string   `json:"polish_model"`
-	PolishAPIKey      string   `json:"polish_api_key,omitempty"`
-	PolishAPIKeyDPAPI string   `json:"polish_api_key_dpapi,omitempty"`
-	VoiceEnabled      bool     `json:"voice_enabled"`
-	VoiceHotkey       string   `json:"voice_hotkey"`
-	VoiceStyle        string   `json:"voice_style"`    // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
-	VoiceOrbSize      float64  `json:"voice_orb_size"` // 果冻球直径（DIP），40~96
-	VoiceTone         string   `json:"voice_tone"`     // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
-	VoiceSound        bool     `json:"voice_sound"`    // 开始、结束、取消的提示音
-	VoiceLearn        bool     `json:"voice_learn"`    // 贴入后用户手改的词自动记成热词和纠错表
-	ASRBaseURL        string   `json:"asr_base_url"`
-	ASRModel          string   `json:"asr_model"`
-	ASRAPIKey         string   `json:"asr_api_key,omitempty"`
-	ASRAPIKeyDPAPI    string   `json:"asr_api_key_dpapi,omitempty"`
-	ASRHotwords       []string `json:"asr_hotwords"`
-	BaseURL           string   `json:"base_url"`
-	APIKey            string   `json:"api_key,omitempty"` // 只在内存里是明文；存盘时加密进 api_key_dpapi
-	APIKeyDPAPI       string   `json:"api_key_dpapi,omitempty"`
-	Model             string   `json:"model"`
-	TargetForChinese  string   `json:"target_for_chinese"`
-	TargetForOther    string   `json:"target_for_other"`
-	Hotkey            string   `json:"hotkey"`
-	PopupHotkey       string   `json:"popup_hotkey"`
-	ShowButton        bool     `json:"show_button"`
-	RequireIBeam      bool     `json:"require_ibeam"`
-	OnlyInInputs      bool     `json:"only_in_inputs"`
-	ShowInBlindApps   bool     `json:"show_in_blind_apps"` // 微信这类认不出输入框的程序：照样弹
-	ButtonAction      string   `json:"button_action"`      // 点翻译按钮后：card / result / replace
-	ButtonTimeoutMs   int      `json:"button_timeout_ms"`
-	SelectAllIfEmpty  bool     `json:"select_all_if_empty"`
-	MaxChars          int      `json:"max_chars"`
-	TimeoutSec        int      `json:"timeout_sec"`
-	Proxy             string   `json:"proxy"`
-	Temperature       *float64 `json:"temperature"`
-	ExtraPrompt       string   `json:"extra_prompt"`
-	ExcludeProcesses  []string `json:"exclude_processes"`
-	DisableHotkeys    bool     `json:"disable_hotkeys"` // 总开关：true 时一个全局快捷键都不注册
-	Language          string   `json:"language"`        // 界面语言：auto / zh / en / ja
-	Theme             string   `json:"theme"`           // 外观：auto / light / dark
-	StreamCard        bool     `json:"stream_card"`     // 卡片里边翻边显示（关掉就整段出来再显示）
-	History           bool     `json:"history"`         // 保存翻译记录到 history/*.jsonl
-	HistoryDays       int      `json:"history_days"`    // 记录保留几天，0 = 永久
+	PolishStyle       string  `json:"polish_style"`
+	PolishBaseURL     string  `json:"polish_base_url"`
+	PolishModel       string  `json:"polish_model"`
+	PolishAPIKey      string  `json:"polish_api_key,omitempty"`
+	PolishAPIKeyDPAPI string  `json:"polish_api_key_dpapi,omitempty"`
+	VoiceEnabled      bool    `json:"voice_enabled"`
+	VoiceHotkey       string  `json:"voice_hotkey"`
+	VoiceStyle        string  `json:"voice_style"`    // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
+	VoiceOrbSize      float64 `json:"voice_orb_size"` // 果冻球直径（DIP），40~96
+	VoiceTone         string  `json:"voice_tone"`     // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
+	VoiceSound        bool    `json:"voice_sound"`    // 开始、结束、取消的提示音
+	VoiceLearn        bool    `json:"voice_learn"`    // 贴入后用户手改的词自动记成热词和纠错表
+	ASRBaseURL        string  `json:"asr_base_url"`
+	ASRModel          string  `json:"asr_model"`
+	ASRAPIKey         string  `json:"asr_api_key,omitempty"`
+	ASRAPIKeyDPAPI    string  `json:"asr_api_key_dpapi,omitempty"`
+	// SavedKeys 各接口地址用过的 Key（keyFor 归一），切服务商再切回来能自动填上；内存里明文，存盘逐个 DPAPI
+	SavedKeys        map[string]string `json:"saved_keys_dpapi,omitempty"`
+	ASRHotwords      []string          `json:"asr_hotwords"`
+	BaseURL          string            `json:"base_url"`
+	APIKey           string            `json:"api_key,omitempty"` // 只在内存里是明文；存盘时加密进 api_key_dpapi
+	APIKeyDPAPI      string            `json:"api_key_dpapi,omitempty"`
+	Model            string            `json:"model"`
+	TargetForChinese string            `json:"target_for_chinese"`
+	TargetForOther   string            `json:"target_for_other"`
+	Hotkey           string            `json:"hotkey"`
+	PopupHotkey      string            `json:"popup_hotkey"`
+	ShowButton       bool              `json:"show_button"`
+	RequireIBeam     bool              `json:"require_ibeam"`
+	OnlyInInputs     bool              `json:"only_in_inputs"`
+	ShowInBlindApps  bool              `json:"show_in_blind_apps"` // 微信这类认不出输入框的程序：照样弹
+	ButtonAction     string            `json:"button_action"`      // 点翻译按钮后：card / result / replace
+	ButtonTimeoutMs  int               `json:"button_timeout_ms"`
+	SelectAllIfEmpty bool              `json:"select_all_if_empty"`
+	MaxChars         int               `json:"max_chars"`
+	TimeoutSec       int               `json:"timeout_sec"`
+	Proxy            string            `json:"proxy"`
+	Temperature      *float64          `json:"temperature"`
+	ExtraPrompt      string            `json:"extra_prompt"`
+	ExcludeProcesses []string          `json:"exclude_processes"`
+	DisableHotkeys   bool              `json:"disable_hotkeys"` // 总开关：true 时一个全局快捷键都不注册
+	Language         string            `json:"language"`        // 界面语言：auto / zh / en / ja
+	Theme            string            `json:"theme"`           // 外观：auto / light / dark
+	StreamCard       bool              `json:"stream_card"`     // 卡片里边翻边显示（关掉就整段出来再显示）
+	History          bool              `json:"history"`         // 保存翻译记录到 history/*.jsonl
+	HistoryDays      int               `json:"history_days"`    // 记录保留几天，0 = 永久
 }
 
 func defaultConfig() Config {
@@ -210,6 +212,13 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 		}
 	}
 	cfg.ASRAPIKeyDPAPI = ""
+	saved := map[string]string{}
+	for b, enc := range cfg.SavedKeys {
+		if k, err := unprotectKey(enc); err == nil {
+			saved[b] = k
+		}
+	}
+	cfg.SavedKeys = saved
 	plainInFile := strings.TrimSpace(cfg.APIKey) != ""
 	if !plainInFile && cfg.APIKeyDPAPI != "" {
 		// 手动往 api_key 里填了明文的话以明文为准；解不开（配置是从别的电脑/账户拷来的）就当没填
@@ -238,9 +247,30 @@ func loadConfig(path string) (cfg Config, created bool, err error) {
 	return cfg, created, nil
 }
 
+// keyFor 记 Key 用的地址：去空白、去尾斜杠、小写
+func keyFor(base string) string {
+	return strings.ToLower(strings.TrimRight(strings.TrimSpace(base), "/"))
+}
+
 // saveConfig 先写临时文件再改名，写一半崩了也不会留下坏配置。
 func saveConfig(path string, cfg Config) error {
 	cfg.normalize()
+	// 正在用的三把也记进去；新建 map，不改调用方手里那份
+	saved := map[string]string{}
+	for b, k := range cfg.SavedKeys {
+		saved[b] = k
+	}
+	for _, p := range [][2]string{{cfg.BaseURL, cfg.APIKey}, {cfg.ASRBaseURL, cfg.ASRAPIKey}, {cfg.PolishBaseURL, cfg.PolishAPIKey}} {
+		if k := strings.TrimSpace(p[1]); k != "" && keyFor(p[0]) != "" {
+			saved[keyFor(p[0])] = k
+		}
+	}
+	cfg.SavedKeys = map[string]string{}
+	for b, k := range saved {
+		if enc, err := protectKey(k); err == nil {
+			cfg.SavedKeys[b] = enc
+		}
+	}
 	cfg.PolishAPIKeyDPAPI = ""
 	if cfg.PolishAPIKey != "" {
 		enc, err := protectKey(cfg.PolishAPIKey)
@@ -282,7 +312,7 @@ func saveConfig(path string, cfg Config) error {
 // splitList 把设置窗口里「a.exe, b.exe」这种写法拆成列表
 func splitList(s string) []string {
 	out := []string{}
-	for _, p := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == '，' || r == ';' || r == '\n' }) {
+	for _, p := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == '，' || r == '、' || r == ';' || r == '\n' }) {
 		if p = strings.TrimSpace(p); p != "" {
 			out = append(out, p)
 		}

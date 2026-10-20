@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -234,5 +235,69 @@ func TestObserveRevert(t *testing.T) {
 	l.observe([]learnedWord{{Wrong: "Mami", Right: "马米"}}) // 手动加的不动，反向也不记
 	if got := l.all(); len(got) != 1 || got[0].Right != "Mami" {
 		t.Fatalf("manual: %+v", got)
+	}
+}
+
+func TestLearnerEdit(t *testing.T) {
+	l := newLearner(filepath.Join(t.TempDir(), "l.json"))
+	l.add([]learnedWord{{Right: "Mami"}})
+	l.observe([]learnedWord{{Wrong: "克劳得", Right: "Claude"}})
+	l.observe([]learnedWord{{Wrong: "云", Right: "Claude"}})
+	l.add([]learnedWord{{Right: "阶跃"}})
+	// 改写法、删掉一个听法、加一个听法、加不换词
+	l.edit("Claude", "Claude", []string{"克劳得", "克劳德"}, []string{"天气"})
+	g := groupWords(l.all())
+	if len(g) != 3 || g[1].Right != "Claude" {
+		t.Fatalf("order/groups: %+v", g)
+	}
+	if !reflect.DeepEqual(g[1].Blocks, []string{"天气"}) || len(g[1].Wrongs) != 2 || !slices.Contains(g[1].Wrongs, "克劳德") || slices.Contains(g[1].Wrongs, "云") || !g[1].active() {
+		t.Fatalf("claude: %+v", g[1])
+	}
+	l.edit("Claude", "Claude Code", nil, nil)
+	g = groupWords(l.all())
+	if g[1].Right != "Claude Code" || len(g[1].Wrongs) != 0 || len(g[1].Blocks) != 0 || len(g[1].Words) != 1 {
+		t.Fatalf("rename+clear: %+v", g[1])
+	}
+}
+
+func TestGuardPolishAliasBlock(t *testing.T) {
+	learned := []learnedWord{{Right: "Claude", Manual: true, Block: []string{"天气"}}, {Wrong: "克劳德", Right: "Claude", Manual: true}, {Wrong: "Cloud", Right: "Claude", Manual: true}}
+	for _, c := range [][3]string{
+		{"我用克劳德写代码", "我用 Claude 写代码。", "我用 Claude 写代码。"},           // 听法：读音不像也认
+		{"今天天气不错Cloud很白", "今天天气不错，Claude 很白。", "今天天气不错，Cloud 很白。"}, // 旁边有「天气」换回
+		{"我用克劳德查天气", "我用 Claude 查天气。", "我用克劳德查天气。"},
+	} {
+		if got := guardPolish(c[0], c[1], learned); got != c[2] {
+			t.Errorf("%s → %s: got %s want %s", c[0], c[1], got, c[2])
+		}
+	}
+}
+
+func TestWordListBlock(t *testing.T) {
+	w := parseWordList("Claude ~~~ 天气, sky\n克劳德 → Claude ~~~ weather")
+	want := []learnedWord{{Right: "Claude", Block: []string{"天气", "sky"}}, {Wrong: "克劳德", Right: "Claude"}}
+	want[0].Block = append(want[0].Block, "weather")
+	if !reflect.DeepEqual(w, want) {
+		t.Fatalf("parse: %+v", w)
+	}
+	if out := formatWordList(w[:2]); !strings.Contains(out, "Claude ~~~ 天气, sky, weather\n") {
+		t.Fatalf("format: %s", out)
+	}
+}
+
+func TestParseAliases(t *testing.T) {
+	got := parseAliases("```json\n[\"克劳德\", \"claude\", \"克劳德\", \"\", \"克劳得\", \"克劳特\", \"可劳德\"]\n```", "Claude")
+	if !reflect.DeepEqual(got, []string{"克劳德", "克劳得", "克劳特"}) {
+		t.Fatalf("got %v", got)
+	}
+	if parseAliases("没有", "x") != nil || parseAliases("[]", "x") != nil {
+		t.Fatal("garbage must give nothing")
+	}
+	l := newLearner(filepath.Join(t.TempDir(), "l.json"))
+	l.add([]learnedWord{{Right: "Claude"}})
+	l.addAliases("Claude", got)
+	l.addAliases("Claude", got[:1])
+	if g := groupWords(l.active()); len(g) != 1 || len(g[0].Wrongs) != 3 {
+		t.Fatalf("groups %+v", g)
 	}
 }

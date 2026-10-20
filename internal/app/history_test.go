@@ -157,3 +157,12 @@ func TestHistoryStats(t *testing.T) {
 		t.Fatalf("ms %d/%d first %d", s.sumMs, s.nMs, s.nFirst)
 	}
 }
+
+func TestVoiceActivity(t *testing.T) {
+	loc := time.FixedZone("CST", 8*3600)
+	list := []historyEntry{{Time: "2026-10-20T01:30:00Z"}, {Time: "2026-10-20T02:10:00Z"}, {Time: "2026-10-19T15:59:00Z"}, {Time: "bad"}}
+	days, hours := voiceActivity(list, loc)
+	if days["2026-10-20"] != 2 || days["2026-10-19"] != 1 || hours[9] != 1 || hours[10] != 1 || hours[23] != 1 || len(days) != 2 {
+		t.Fatalf("days %v hours %v", days, hours)
+	}
+}

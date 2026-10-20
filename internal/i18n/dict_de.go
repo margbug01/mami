@@ -5,10 +5,9 @@ var dictDE = map[string]string{
 	"接口": "API", "翻译": "Übersetzung", "快捷键": "Tastenkürzel", "划词按钮": "Auswahl-Schaltfläche", "通用": "Allgemein", "保存": "Speichern",
 	"接口（OpenAI 兼容）": "API (OpenAI-kompatibel)",
 
-	"接口地址": "Endpunkt", "会自动拼上 /chat/completions": "/chat/completions wird automatisch angehängt", "免费接口留空": "Bei kostenlosen APIs leer lassen",
-	"模型": "Modell", "测试连接": "Verbindung testen", "代理": "Proxy",
+	"接口地址": "Endpunkt", "会自动拼上 /chat/completions": "/chat/completions wird automatisch angehängt", "模型": "Modell", "测试连接": "Verbindung testen", "代理": "Proxy",
 	"Go 不读系统代理，要走 Clash 得填这里": "Go ignoriert den Systemproxy; für Clash hier eintragen",
-	
+
 	"正在请求 ": "Anfrage an ", "连接失败：": "Verbindung fehlgeschlagen: ", "连接正常（%s）：你好，世界 → %s": "Verbindung OK (%s): 你好，世界 → %s",
 
 	"中文翻成": "Chinesisch nach", "选中的文字里有汉字时": "Wenn die Auswahl chinesische Schriftzeichen enthält",
@@ -17,9 +16,9 @@ var dictDE = map[string]string{
 	"比如：技术文档风格，术语保留英文": "z. B. Stil technischer Dokumentation, Fachbegriffe auf Englisch lassen",
 	"拖动调整高度，点一下恢复自动":   "Ziehen, um die Höhe zu ändern; Klick setzt auf automatisch zurück",
 
-	"原地替换": "Direkt ersetzen",
-	"只弹卡片": "Nur Karte anzeigen",
-	"快捷键没选中就全选":                  "Alles markieren, wenn nichts markiert ist",
+	"原地替换":      "Direkt ersetzen",
+	"只弹卡片":      "Nur Karte anzeigen",
+	"快捷键没选中就全选": "Alles markieren, wenn nichts markiert ist",
 	"按 Alt+T 时没选中文字，先全选整个输入框再翻译": "Wenn bei Alt+T nichts markiert ist, wird zuerst das ganze Eingabefeld markiert und dann übersetzt",
 	"开机自启": "Beim Anmelden starten",
 	"登录 Windows 后在托盘里自动运行": "Läuft nach der Windows-Anmeldung im Infobereich",
@@ -32,10 +31,9 @@ var dictDE = map[string]string{
 	"直接替换出错时仍会弹卡片说明原因":     "Schlägt das direkte Ersetzen fehl, erklärt eine Karte den Grund",
 	"不弹按钮的程序":              "Programme ohne Schaltfläche",
 	"进程名，逗号分隔":             "Prozessnamen, durch Kommas getrennt",
-	"▸ 兼容性":                "▸ Kompatibilität", "▾ 兼容性": "▾ Kompatibilität",
-	"认不出输入框的程序也弹":                  "Auch in Programmen anzeigen, deren Eingabefelder nicht erkannt werden",
-	"微信这类程序开着能用，但聊天记录里划词也会弹":       "Funktioniert in Programmen wie WeChat, die Schaltfläche erscheint aber auch bei Auswahl im Chatverlauf",
-	"只认文本光标":                       "Nur Textcursor",
+	"兼容性":                  "Kompatibilität", "认不出输入框的程序也弹": "Auch in Programmen anzeigen, deren Eingabefelder nicht erkannt werden",
+	"微信这类程序开着能用，但聊天记录里划词也会弹": "Funktioniert in Programmen wie WeChat, die Schaltfläche erscheint aber auch bei Auswahl im Chatverlauf",
+	"只认文本光标": "Nur Textcursor",
 	"按下鼠标时光标是 I 形才算划词，拖窗口、拖文件不会误弹": "Zählt nur als Auswahl, wenn der Mauszeiger beim Drücken ein I-Cursor ist; Ziehen von Fenstern oder Dateien löst nichts aus",
 	"显示卡片（先显示「翻译中…」）":              "Karte (zuerst „Wird übersetzt …“)",
 	"不显示「翻译中」，出结果再弹":               "Karte erst mit dem Ergebnis",
@@ -74,10 +72,7 @@ var dictDE = map[string]string{
 	" · 连接中断，译文不完整": " · Verbindung abgebrochen, Übersetzung unvollständig",
 	"服务商":           "Anbieter",
 	"自定义":           "Benutzerdefiniert",
-	"选一个会自动填好接口地址和模型":             "Auswählen, um Endpunkt und Modell auszufüllen",
 	"免费、不用 Key，但高峰期常超时":           "Kostenlos, ohne Schlüssel, aber zu Stoßzeiten oft Zeitüberschreitungen",
-	"B 站 Index-Translate（免费）":     "Bilibili Index-Translate (kostenlos)",
-	"腾讯 TokenHub · Hy-MT2":        "Tencent TokenHub · Hy-MT2",
 	"先在「服务商」里选一家，点「测试连接」确认能用，再保存": "Anbieter wählen, mit „Verbindung testen“ prüfen, dann speichern",
 
 	// 边翻边显示、翻译记录

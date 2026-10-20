@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -36,16 +37,18 @@ type settingsState struct {
 	wordAdd       bool   // 词库：「+ 添加」点开成了输入框
 	editWord      string // 词库：正在原地改的那个词
 	editText      string
-	editSeen      bool // 输入框拿到过焦点，之后失焦就算提交
+	editSeen      bool     // 输入框拿到过焦点，之后失焦就算提交
+	editAliases   []string // 词库编辑面板里还留着的听法，点 ✕ 去掉
 	wordsMsg      string
 	wordsErr      bool
-	compat        bool
 	stats         *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
-	custom        bool          // 「服务商」手动选了自定义（地址还是某家预设的也不跳回去）
+	customTrans   bool          // 接口区手动选了自定义（地址还是某家预设的也不跳回去）
+	customASR     bool
+	customPolish  bool
 	testMsg       string
 	testErr       bool
 	polishTesting bool
-	histTab       int // 「记录」页：0 翻译、1 语音
+	histTab       int // 「记录」页：0 语音、1 翻译
 	voiceTesting  bool
 	voiceTestMsg  string
 	voiceTestErr  bool
@@ -80,6 +83,7 @@ func (a *App) openSettings() {
 			MinHeight:       420,
 			DisableMaximize: true,
 			Frameless:       true,
+			StateKey:        "settings", // 记住上次的大小和位置（mygo 存在 window-state.json，退出时写盘），下次打开还是那么大
 			Content:         ui.View(a.settingsView),
 		})
 		a.setWin.SetIcon(iconPNG)
@@ -120,12 +124,12 @@ func (a *App) settingsView(c *ui.Context) {
 					})
 					ui.SidebarSection(c, T("语音输入"), nil, func() {
 						ui.SidebarItem(c, pageVoice, iconMic, T("语音识别"))
-						ui.SidebarItem(c, pageWords, iconWords, T("词库"))
 						ui.SidebarItem(c, pagePolish, iconPolish, T("润色"))
+						ui.SidebarItem(c, pageWords, iconWords, T("词库"))
 					})
 					ui.Box(c).Height(12)
-					ui.SidebarItem(c, pageGen, iconGen, T("通用"))
 					ui.SidebarItem(c, pageHist, iconHist, T("记录"))
+					ui.SidebarItem(c, pageGen, iconGen, T("通用"))
 				}).Grow(1)
 			})
 			ui.Scroll(c).Grow(1).Children(func() {
@@ -176,8 +180,12 @@ const (
 	pageGen    = "gen"
 )
 
-// settingRow 一行设置：左边名字+一句说明，右边控件，行与行之间一条细线
+// settingRow 一行设置：左边名字+一句说明，右边控件。放在 settingGroup 卡片里，行之间不画线
 func settingRow(c *ui.Context, title, desc string, ctl func()) {
+	settingRowW(c, title, desc, controlW, ctl)
+}
+
+func settingRowW(c *ui.Context, title, desc string, w float32, ctl func()) {
 	t := c.Theme()
 	ui.Row(c).Gap(16).Padding(12, 0).Children(func() {
 		ui.Column(c).Grow(1).Gap(3).Children(func() {
@@ -186,16 +194,29 @@ func settingRow(c *ui.Context, title, desc string, ctl func()) {
 				ui.Text(c, desc).FontSize(12).TextColor(t.TextMuted)
 			}
 		})
-		ui.Box(c).Width(controlW).Children(ctl)
+		ui.Box(c).Width(w).Children(ctl)
 	})
-	ui.Divider(c)
 }
 
-// controlW 右侧控件的宽度
-const controlW = 280
+// settingGroup 一组相关设置：上面一个小灰字组名，下面一块圆角卡片；页里只有一组时组名留空
+func settingGroup(c *ui.Context, title string, fn func()) {
+	t := c.Theme()
+	if title == "" {
+		ui.Box(c).Height(8)
+	} else {
+		ui.Text(c, title).FontSize(12).TextColor(t.TextMuted).Padding(16, 4, 6, 4)
+	}
+	ui.Column(c).Padding(2, 16).Radius(t.Radius).Border(1, t.Border).Children(fn)
+}
+
+// selectW 只放几个字的下拉框用这个宽度
+const selectW = 180
+
+// controlW 右侧控件的宽度（卡片两边各占 16，再宽左边说明就挤成好几行）
+const controlW = 240
 
 func pageTitle(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(16).Bold().Padding(10, 0, 4, 0)
+	ui.Text(c, title).FontSize(20).Bold().Padding(10, 0, 4, 0)
 }
 
 // pageTabs 页标题下的分段切换，页面太长时按用途拆开
@@ -205,86 +226,224 @@ func pageTabs(c *ui.Context, selected *int, labels ...string) {
 	})
 }
 
-// subTitle 页内分区的小标题，比页标题轻一档
-func subTitle(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(13).Bold().TextColor(c.Theme().TextMuted).Padding(20, 0, 2, 0)
+// apiPreset 接口区的一家服务商：点一下填好地址和模型；noKey 的不用填 Key，note 是选中后下面那行小字
+type apiPreset struct {
+	id, label, base, model, keyURL, note string
+	noKey                                bool
+	logo                                 *ui.SVG // 名字前面的厂商 logo，自定义没有
 }
 
-// translateAPI 「翻译」页的接口区：服务商、地址、Key、模型、测试、代理
+// custom 是最后一格：地址自己填
+func customPreset() apiPreset { return apiPreset{id: "custom", label: T("自定义")} }
+
+var translatePresets = func() []apiPreset {
+	return []apiPreset{
+		{id: "bilibili", label: T("B 站"), logo: logoBilibili, base: "https://index-translate.bilibili.com/v1", model: "Index-Translate-35B-A3B", note: T("免费、不用 Key，但高峰期常超时"), noKey: true},
+		{id: "tokenhub", label: "TokenHub", logo: logoTencent, base: "https://tokenhub.tencentmaas.com/v1", model: "hy-mt2-pro"},
+		{id: "openrouter", label: "OpenRouter", logo: logoOpenRouter, base: "https://openrouter.ai/api/v1", model: "tencent/hy-mt2-30b-a3b", keyURL: "https://openrouter.ai/keys"},
+		{id: "deepseek", label: "DeepSeek", logo: logoDeepSeek, base: "https://api.deepseek.com/v1", model: "deepseek-flash", keyURL: "https://platform.deepseek.com/api_keys"},
+		customPreset(),
+	}
+}
+
+// asrPresets 不是阶跃的地址都按 OpenAI 兼容 chat 接口发音频（见 transcribeChat）
+var asrPresets = func() []apiPreset {
+	return []apiPreset{
+		{id: "stepfun", label: T("阶跃星辰"), logo: logoStepFun, base: "https://api.stepfun.com/v1", model: "stepaudio-3-asr-max", keyURL: "https://platform.stepfun.com/interface-key"},
+		{id: "qwen", label: T("阿里云百炼"), logo: logoBailian, base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen3-asr-flash", keyURL: "https://bailian.console.aliyun.com/"},
+		customPreset(),
+	}
+}
+
+var polishPresets = func() []apiPreset {
+	return []apiPreset{
+		{id: "deepseek", label: "DeepSeek", logo: logoDeepSeek, base: "https://api.deepseek.com/v1", model: "deepseek-flash", keyURL: "https://platform.deepseek.com/api_keys"},
+		{id: "qwen", label: T("阿里云百炼"), logo: logoBailian, base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-flash", keyURL: "https://bailian.console.aliyun.com/"},
+		customPreset(),
+	}
+}
+
+// presetOf 按接口地址认出是哪一家，认不出或者手动选了自定义就是 custom
+func presetOf(ps []apiPreset, base string, custom bool) apiPreset {
+	b := strings.TrimRight(strings.TrimSpace(base), "/")
+	for _, p := range ps {
+		if !custom && p.base != "" && strings.EqualFold(b, p.base) {
+			return p
+		}
+	}
+	return customPreset()
+}
+
+// apiFields 一块接口卡片的上半截：服务商分段条 → 地址 → Key（带「获取 Key」）→ 模型。
+// 换一家时地址、模型跟着换；地址变了 Key 换成那家以前用过的（没有就空），切走前的 Key 记进 saved
+func (a *App) apiFields(c *ui.Context, ps []apiPreset, custom *bool, base, model, key *string, saved *map[string]string, urlDesc string, switched func()) {
+	t := c.Theme()
+	cur := presetOf(ps, *base, *custom)
+	if id := providerPicker(c, ps, cur.id); id != "" && id != cur.id {
+		*custom = id == "custom"
+		for _, p := range ps {
+			if p.id == id && p.base != "" {
+				if keyFor(*base) != keyFor(p.base) {
+					*saved = rememberKey(*saved, *base, *key)
+					*key = (*saved)[keyFor(p.base)]
+				}
+				*base, *model = p.base, p.model
+			}
+		}
+		cur = presetOf(ps, *base, *custom)
+		switched()
+	}
+	if cur.note != "" {
+		ui.Text(c, cur.note).FontSize(12).TextColor(t.TextMuted).Padding(8, 2, 0, 2)
+	}
+	// 预设也显示地址，填好了能直接看到、能改；改成认不出的地址就自动算自定义
+	settingRow(c, T("接口地址"), urlDesc, func() { ui.TextInput(c, base).Placeholder("https://…/v1") })
+	if !cur.noKey {
+		ui.Row(c).Gap(16).Padding(12, 0).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Grow(1).Gap(3).Children(func() {
+				ui.Text(c, "API Key").FontSize(14)
+				if cur.keyURL != "" && smallLink(c, T("获取 Key")+" ↗").AlignSelf(ui.Start).Clicked() {
+					go mygo.Shell.OpenExternal(cur.keyURL)
+				}
+			})
+			ui.Box(c).Width(controlW).Children(func() { ui.TextInput(c, key).Password().Placeholder("sk-…") })
+		})
+	}
+	settingRow(c, T("模型"), "", func() { ui.TextInput(c, model).Placeholder(cur.model) })
+}
+
+// rememberKey 返回记上 base→key 的新 map（不改原来那份：草稿和正在用的配置共用同一个 map）
+func rememberKey(m map[string]string, base, key string) map[string]string {
+	key = strings.TrimSpace(key)
+	if key == "" || keyFor(base) == "" {
+		return m
+	}
+	out := make(map[string]string, len(m)+1)
+	for b, k := range m {
+		out[b] = k
+	}
+	out[keyFor(base)] = key
+	return out
+}
+
+// logoW 分段里 logo 占的宽：14 的图 + 6 的间距
+const logoW = 20
+
+// providerPicker 服务商：跟页顶 tab 同款的分段条，铺满卡片宽、每段等分；
+// 某些语言名字太长放不下时退回下拉框。返回这一帧点中的那家
+func providerPicker(c *ui.Context, ps []apiPreset, cur string) (picked string) {
+	t := c.Theme()
+	idx := len(ps) - 1
+	labels := make([]string, len(ps))
+	need := float32(0)
+	for i, p := range ps {
+		labels[i] = p.label
+		if p.id == cur {
+			idx = i
+		}
+		w, _ := c.MeasureText(10000, ui.Span{Text: p.label, Size: 13})
+		if p.logo != nil {
+			w += logoW
+		}
+		need += w + 2*t.Space(1.5) + 4 + t.Space(0.5)
+	}
+	winW, _ := c.Size()
+	if need > winW-sidebarW-48-34 {
+		v := cur
+		settingRow(c, T("服务商"), "", func() {
+			opts := make([]option, len(ps))
+			for i, p := range ps {
+				opts[i] = option{p.id, p.label}
+			}
+			optionSelect(c, &v, opts)
+		})
+		if v != cur {
+			return v
+		}
+		return ""
+	}
+	ui.Text(c, T("服务商")).FontSize(14).Padding(14, 0, 8, 0)
+	// 不能拿局部变量当 selected：mygo 在这一帧画完后才写进去，写进局部变量就丢了，所以按每段的 Clicked 认
+	sel := idx
+	parts := ui.SegmentedBase(c, &sel, len(ps))
+	parts.Track.AlignItems(ui.Stretch).Padding(t.Space(0.5)).Gap(t.Space(0.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Label(T("服务商"))
+	chosen := t.Background
+	if t.Dark {
+		chosen = t.SurfacePressed
+	}
+	parts.Track.Children(func() {
+		for i, label := range labels {
+			w, _ := c.MeasureText(10000, ui.Span{Text: label, Size: 13})
+			if ps[i].logo != nil {
+				w += logoW
+			}
+			s := parts.Segment(i).Grow(1).Padding(t.Space(1.5), t.Space(1.5)).Justify(ui.Center).Radius(max(t.Radius-t.Space(0.5), 0)).MinWidth(w + 2*t.Space(1.5) + 4)
+			color := t.TextMuted // 没选中的字淡一档，选中那段才是正文色，条子看着轻
+			switch {
+			case i == idx:
+				s.Background(chosen).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12))
+				color = t.Text
+			case s.Hovered():
+				s.Background(t.SurfaceHover)
+				color = t.Text
+			}
+			s.Children(func() {
+				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					if lg := ps[i].logo; lg != nil {
+						ui.Image(c, lg).Size(14, 14).Shrink(0)
+					}
+					lw, _ := c.MeasureText(10000, ui.Span{Text: label, Size: 13})
+					ui.Text(c, label).FontSize(13).TextColor(color).SingleLine().Shrink(0).MinWidth(lw + 2) // 同 fitLabel，不然被截成省略号
+				})
+			})
+			if s.Clicked() && i != idx {
+				picked = ps[i].id
+			}
+		}
+	})
+	return picked
+}
+
+// testRow 接口卡片最下面：左边测试结果，右边测试按钮
+func testRow(c *ui.Context, msg string, isErr, busy bool, label string, run func()) {
+	ui.Row(c).Gap(12).Padding(12, 0).AlignItems(ui.Center).Children(func() {
+		color := c.Theme().TextMuted
+		if isErr {
+			color = c.Theme().Danger
+		}
+		ui.Text(c, msg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+		if textButton(c, label).Disabled(busy).Clicked() {
+			run()
+		}
+	})
+}
+
+// translateAPI 「翻译」页的接口 tab
 func (a *App) translateAPI(c *ui.Context, d *Config) {
 	s := &a.set
-	t := c.Theme()
-	cur := "custom"
-	if !s.custom {
-		cur = providerOf(d.BaseURL)
-	}
-	desc := T("选一个会自动填好接口地址和模型")
-	if cur == "bilibili" {
-		desc = T("免费、不用 Key，但高峰期常超时")
-	}
-	settingRow(c, T("服务商"), desc, func() {
-		v := cur
-		optionSelect(c, &v, providerOptions())
-		if v != cur {
-			s.custom = v == "custom"
-			for _, p := range providers {
-				if p.id == v && p.base != "" {
-					d.BaseURL, d.Model = p.base, p.model
-				}
-			}
-			s.testMsg, s.testErr = "", false
-		}
+	settingGroup(c, "", func() {
+		a.apiFields(c, translatePresets(), &s.customTrans, &d.BaseURL, &d.Model, &d.APIKey, &d.SavedKeys, T("会自动拼上 /chat/completions"), func() { s.testMsg, s.testErr = "", false })
+		testRow(c, s.testMsg, s.testErr, s.testing, T("测试连接"), a.testDraft)
 	})
-	settingRow(c, T("接口地址"), T("会自动拼上 /chat/completions"), func() {
-		ui.TextInput(c, &d.BaseURL).Placeholder("https://api.deepseek.com/v1")
-	})
-	settingRow(c, "API Key", T("免费接口留空"), func() {
-		ui.TextInput(c, &d.APIKey).Password().Placeholder("sk-…")
-	})
-	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.Model).Placeholder("deepseek-flash") })
-	settingRow(c, T("代理"), T("Go 不读系统代理，要走 Clash 得填这里"), func() {
-		ui.TextInput(c, &d.Proxy).Placeholder("http://127.0.0.1:7890")
-	})
-	ui.Row(c).Gap(12).Padding(12, 0).Children(func() {
-		color := t.TextMuted
-		if s.testErr {
-			color = t.Danger
-		}
-		ui.Text(c, s.testMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-		if textButton(c, T("测试连接")).Disabled(s.testing).Clicked() {
-			a.testDraft()
-		}
+	settingGroup(c, T("网络"), func() {
+		settingRow(c, T("代理"), T("Go 不读系统代理，要走 Clash 得填这里"), func() {
+			ui.TextInput(c, &d.Proxy).Placeholder("http://127.0.0.1:7890")
+		})
 	})
 }
 
-// providers 是「服务商」下拉框里的预设：选中后填好接口地址和模型。
-// 按接口地址认出当前用的是哪一家，认不出就是自定义。
-var providers = []struct{ id, base, model string }{
-	{"bilibili", "https://index-translate.bilibili.com/v1", "Index-Translate-35B-A3B"},
-	{"tokenhub", "https://tokenhub.tencentmaas.com/v1", "hy-mt2-pro"},
-	{"openrouter", "https://openrouter.ai/api/v1", "tencent/hy-mt2-30b-a3b"},
-	{"deepseek", "https://api.deepseek.com/v1", "deepseek-flash"},
-	{"custom", "", ""},
+// apiASR 「语音识别」页的接口 tab
+func (a *App) apiASR(c *ui.Context, d *Config) {
+	s := &a.set
+	a.apiFields(c, asrPresets(), &s.customASR, &d.ASRBaseURL, &d.ASRModel, &d.ASRAPIKey, &d.SavedKeys, T("语音始终直连，不使用代理"), func() { s.voiceTestMsg, s.voiceTestErr = "", false })
+	testRow(c, s.voiceTestMsg, s.voiceTestErr, s.voiceTesting, T("测试语音接口"), a.testVoiceDraft)
 }
 
-func providerOptions() []option {
-	return []option{
-		{"bilibili", T("B 站 Index-Translate（免费）")},
-		{"tokenhub", T("腾讯 TokenHub · Hy-MT2")},
-		{"openrouter", "OpenRouter · Hy-MT2"},
-		{"deepseek", "DeepSeek"},
-		{"custom", T("自定义")},
-	}
-}
-
-func providerOf(base string) string {
-	b := strings.TrimRight(strings.TrimSpace(base), "/")
-	for _, p := range providers {
-		if p.base != "" && strings.EqualFold(b, p.base) {
-			return p.id
-		}
-	}
-	return "custom"
+// apiPolish 「润色」页的接口区
+func (a *App) apiPolish(c *ui.Context, d *Config) {
+	s := &a.set
+	a.apiFields(c, polishPresets(), &s.customPolish, &d.PolishBaseURL, &d.PolishModel, &d.PolishAPIKey, &d.SavedKeys, T("润色始终直连，不使用代理"), func() { s.polishTestMsg, s.polishTestErr = "", false })
+	testRow(c, s.polishTestMsg, s.polishTestErr, s.polishTesting, T("测试润色"), a.testPolishDraft)
 }
 
 func (a *App) pageVoice(c *ui.Context, d *Config) {
@@ -292,16 +451,17 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 	pageTabs(c, &a.set.voiceTab, T("通用"), T("外观"), T("接口"))
 	switch a.set.voiceTab {
 	case 1:
-		a.voiceLook(c, d)
+		settingGroup(c, "", func() { a.voiceLook(c, d) })
 		return
 	case 2:
-		a.apiASR(c, d)
+		settingGroup(c, "", func() { a.apiASR(c, d) })
 		return
 	}
-	switchRow(c, T("启用语音输入"), T("按一下开始说话，再按一下贴入；Esc 取消"), &d.VoiceEnabled)
-	ui.Divider(c)
-	settingRow(c, T("触发键"), T("点一下再按键，Backspace 关闭"), func() { a.hotkeyBox(c, "voice", &d.VoiceHotkey, true) })
-	switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
+	settingGroup(c, "", func() {
+		switchRow(c, T("启用语音输入"), T("按一下开始说话，再按一下贴入；Esc 取消"), &d.VoiceEnabled)
+		settingRowW(c, T("触发键"), T("点一下再按键，Backspace 关闭"), selectW, func() { a.hotkeyBox(c, "voice", &d.VoiceHotkey, true) })
+		switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
+	})
 }
 
 // pageWords 「词库」页：识别和润色要认得的词。自动纠正学到的对子也只按正确写法显示成一个词，
@@ -310,7 +470,9 @@ func (a *App) pageWords(c *ui.Context, d *Config) {
 	t := c.Theme()
 	s := &a.set
 	pageTitle(c, T("词库"))
-	switchRow(c, T("自动学习"), T("贴入后你手改过的词会记住，下次识别和润色都用对的写法"), &d.VoiceLearn)
+	settingGroup(c, "", func() {
+		switchRow(c, T("自动学习"), T("贴入后你手改过的词会记住，下次识别和润色都用对的写法"), &d.VoiceLearn)
+	})
 	groups := groupWords(a.learn.all())
 	ui.Row(c).Gap(12).AlignItems(ui.End).Padding(16, 0, 10, 0).Children(func() {
 		ui.Column(c).Grow(1).Shrink(1).Gap(3).Children(func() {
@@ -351,6 +513,11 @@ func (a *App) pageWords(c *ui.Context, d *Config) {
 				}
 			}
 		})
+		for i := row; i < min(row+cols, len(groups)); i++ {
+			if groups[i].Right == s.editWord {
+				a.wordEditor(c, groups[i])
+			}
+		}
 	}
 	if len(groups) == 0 {
 		ui.Text(c, T("你改过两次的词会自动加进来，也可以自己添加")).FontSize(12).TextColor(t.TextMuted).Padding(12, 0, 0, 0)
@@ -362,6 +529,7 @@ type wordGroup struct {
 	Right  string
 	Words  []learnedWord
 	Wrongs []string
+	Blocks []string
 	Count  int
 	Manual bool
 }
@@ -388,6 +556,7 @@ func groupWords(words []learnedWord) []wordGroup {
 		if w.Wrong != "" {
 			g.Wrongs = append(g.Wrongs, w.Wrong)
 		}
+		g.Blocks = append(g.Blocks, w.Block...)
 	}
 	return out
 }
@@ -397,15 +566,22 @@ func (g wordGroup) tip() string {
 	if len(g.Wrongs) > 0 {
 		parts = append(parts, fmt.Sprintf(T("曾听成 %s"), strings.Join(g.Wrongs, "、")))
 	}
+	if len(g.Blocks) > 0 {
+		parts = append(parts, fmt.Sprintf(T("旁边有 %s 时不换"), strings.Join(g.Blocks, "、")))
+	}
+	return strings.Join(append(parts, g.status()), " · ")
+}
+
+// status 这个词是怎么来的、生效没有
+func (g wordGroup) status() string {
 	switch {
 	case !g.active():
-		parts = append(parts, T("再遇到一次就生效"))
+		return T("再遇到一次就生效")
 	case g.Manual:
-		parts = append(parts, T("手动添加"))
+		return T("手动添加")
 	default:
-		parts = append(parts, fmt.Sprintf(T("学到 %d 次"), g.Count))
+		return fmt.Sprintf(T("学到 %d 次"), g.Count)
 	}
-	return strings.Join(parts, " · ")
 }
 
 // smallLink 次要操作用的小号文字链接（导入导出一年点一次，不配做成按钮）
@@ -423,10 +599,7 @@ func smallLink(c *ui.Context, label string) ui.Element {
 func (a *App) wordCell(c *ui.Context, g wordGroup) {
 	t := c.Theme()
 	s := &a.set
-	if s.editWord == g.Right {
-		a.wordInput(c, g.Right, "", func(text string) { a.learn.rename(g.Right, text) })
-		return
-	}
+	editing := s.editWord == g.Right
 	cell := ui.Row(c).Key(g.Right).Grow(1).Basis(0).Shrink(1).Height(40).Gap(8).AlignItems(ui.Center).Padding(0, 10, 0, 12).Radius(t.Radius).Border(1, t.Border).Cursor(ui.CursorText).Tooltip(g.tip())
 	hover := cell.Hovered()
 	bg, ink := t.Surface, t.Text
@@ -436,6 +609,9 @@ func (a *App) wordCell(c *ui.Context, g wordGroup) {
 	}
 	if hover {
 		bg = t.SurfaceHover
+	}
+	if editing {
+		cell.Border(1, t.Accent)
 	}
 	removed := false
 	cell.Background(bg).Children(func() {
@@ -455,7 +631,96 @@ func (a *App) wordCell(c *ui.Context, g wordGroup) {
 		}
 	})
 	if cell.Clicked() && !removed {
+		if editing { // 再点一下收起，不保存
+			s.editWord = ""
+			return
+		}
 		s.editWord, s.editText, s.editSeen, s.wordAdd = g.Right, g.Right, false, false
+		s.editAliases = slices.Clone(g.Wrongs)
+	}
+}
+
+// wordEditor 点开一格后在它那一行下面展开：改写法，看一眼系统猜的/学到的听法，错的点 ✕。不用自己写规则
+// （「旁边有这些词时不换」只留在导入导出里给想手调的人，界面上不出现；换错了改回来系统自己会忘掉那条）
+func (a *App) wordEditor(c *ui.Context, g wordGroup) {
+	t := c.Theme()
+	s := &a.set
+	save, cancel := false, false
+	ui.Column(c).Key("edit:"+g.Right).Gap(12).Padding(14, 16).Margin(0, 0, 8, 0).Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Children(func() {
+		ui.Column(c).Gap(6).Children(func() {
+			ui.Text(c, T("写法")).FontSize(12).TextColor(t.TextMuted)
+			if ui.TextInput(c, &s.editText).Height(34).AutoFocus().Submitted() {
+				save = true
+			}
+		})
+		ui.Column(c).Gap(6).Children(func() {
+			ui.Text(c, T("也可能听成")).FontSize(12).TextColor(t.TextMuted)
+			if len(s.editAliases) == 0 {
+				ui.Text(c, T("还没有。加词时会自动猜几种，你改过的也会记下来")).FontSize(12).TextColor(t.TextMuted)
+				return
+			}
+			ui.Row(c).Wrap().Gap(6).Children(func() {
+				for i, w := range s.editAliases {
+					ui.Row(c).Key(w).Gap(6).Height(28).Padding(0, 8, 0, 10).AlignItems(ui.Center).Radius(t.Radius).Background(t.Background).Border(1, t.Border).Children(func() {
+						ui.Text(c, w).FontSize(13).SingleLine()
+						x := ui.Text(c, "✕").FontSize(11).TextColor(t.TextMuted).Cursor(ui.CursorPointer)
+						if x.Hovered() {
+							x.TextColor(t.Danger)
+						}
+						if x.Clicked() {
+							s.editAliases = slices.Delete(slices.Clone(s.editAliases), i, i+1)
+						}
+					})
+				}
+			})
+		})
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, g.status()).FontSize(12).TextColor(t.TextMuted).Grow(1).Shrink(1).MaxLines(2) // 听法上面已经列着了，这里只说来历
+			if textButton(c, T("取消")).Clicked() {
+				cancel = true
+			}
+			if accentButton(c, T("完成")).Clicked() {
+				save = true
+			}
+		})
+	})
+	if save {
+		if to := strings.TrimSpace(s.editText); to != "" {
+			a.learn.edit(g.Right, to, s.editAliases, g.Blocks)
+		}
+		cancel = true
+	}
+	if cancel {
+		s.editWord, s.editText, s.editAliases = "", "", nil
+	}
+}
+
+// guessAliases 手动加的词在后台让润色模型猜几种听错的写法，挂进「也可能听成」，用户什么都不用填。
+// 一次最多猜 5 个词，没配润色 Key 就不猜
+func (a *App) guessAliases(words []learnedWord) {
+	cfg, _ := a.config()
+	if cfg.PolishAPIKey == "" {
+		return
+	}
+	n := 0
+	for _, w := range words {
+		if w.Wrong != "" || n == 5 {
+			continue
+		}
+		n++
+		ctx, cancel := context.WithTimeout(context.Background(), polishMaxWait)
+		out, err := chatOnce(ctx, cfg, aliasPrompt, w.Right)
+		cancel()
+		if err != nil {
+			reason, _, _ := strings.Cut(err.Error(), ":")
+			log.Printf("aliases: %s", reason)
+			continue
+		}
+		if al := parseAliases(out, w.Right); len(al) > 0 {
+			a.learn.addAliases(w.Right, al)
+			log.Printf("aliases: %d for one word", len(al))
+			a.setWin.Update(func() {})
+		}
 	}
 }
 
@@ -464,7 +729,11 @@ func (a *App) addCell(c *ui.Context) {
 	t := c.Theme()
 	s := &a.set
 	if s.wordAdd {
-		a.wordInput(c, "+", T("回车添加，逗号隔开多个"), func(text string) { a.learn.add(parseWordList(text)) })
+		a.wordInput(c, "+", T("回车添加，逗号隔开多个"), func(text string) {
+			words := parseWordList(text)
+			a.learn.add(words)
+			go a.guessAliases(words)
+		})
 		return
 	}
 	cell := ui.Row(c).Grow(1).Basis(0).Shrink(1).Height(40).Justify(ui.Center).AlignItems(ui.Center).Radius(t.Radius).Border(1, t.Border).BorderStyle(ui.BorderDashed).Cursor(ui.CursorPointer)
@@ -578,7 +847,7 @@ func (a *App) voicePreview(c *ui.Context, d *Config) {
 		h = max(h, float32(math.Round(d.VoiceOrbSize)))
 	}
 	c.AnimationFrame()
-	ui.Row(c).Padding(16, 12).Gap(20).Justify(ui.Center).AlignItems(ui.End).Background(desk).Radius(8).Children(func() {
+	ui.Row(c).Padding(16, 12).Margin(4, 0, 12, 0).Gap(20).Justify(ui.Center).AlignItems(ui.End).Background(desk).Radius(c.Theme().Radius).Children(func() {
 		for i, st := range states {
 			ui.Column(c).Gap(4).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Height(h).Center().Children(func() { a.previewShape(c, d, style, dark, sk, st, bars, now) })
@@ -601,11 +870,12 @@ func (a *App) previewShape(c *ui.Context, d *Config, style string, dark bool, sk
 
 func (a *App) pagePolish(c *ui.Context, d *Config) {
 	pageTitle(c, T("润色"))
-	settingRow(c, T("档位"), "", func() {
-		optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}})
+	settingGroup(c, "", func() {
+		settingRowW(c, T("档位"), "", selectW, func() {
+			optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}})
+		})
 	})
-	subTitle(c, T("接口"))
-	a.apiPolish(c, d)
+	settingGroup(c, T("接口"), func() { a.apiPolish(c, d) })
 }
 
 func (a *App) testPolishDraft() {
@@ -658,57 +928,49 @@ func (a *App) pageTranslate(c *ui.Context, d *Config) {
 		a.translateAPI(c, d)
 		return
 	}
-	settingRow(c, T("中文翻成"), T("选中的文字里有汉字时"), func() { langSelect(c, &d.TargetForChinese) })
-	settingRow(c, T("其他翻成"), T("不含汉字的文字（英文、日文等）"), func() { langSelect(c, &d.TargetForOther) })
-	ui.Column(c).Gap(6).Padding(12, 0).Children(func() {
-		ui.Text(c, T("额外要求")).FontSize(14)
-		ui.Text(c, T("追加给模型的话，比如风格、术语处理")).FontSize(12).TextColor(c.Theme().TextMuted)
-		a.extraPromptBox(c, d)
+	settingGroup(c, T("语言"), func() {
+		settingRow(c, T("中文翻成"), T("选中的文字里有汉字时"), func() { langSelect(c, &d.TargetForChinese) })
+		settingRow(c, T("其他翻成"), T("不含汉字的文字（英文、日文等）"), func() { langSelect(c, &d.TargetForOther) })
 	})
-	ui.Divider(c)
-	switchRow(c, T("边翻边显示"), T("模型一边写，卡片一边出字；关掉就等整段译文出来再显示"), &d.StreamCard)
+	settingGroup(c, T("额外要求"), func() {
+		ui.Column(c).Gap(8).Padding(12, 0).Children(func() {
+			ui.Text(c, T("追加给模型的话，比如风格、术语处理")).FontSize(12).TextColor(c.Theme().TextMuted)
+			a.extraPromptBox(c, d)
+		})
+	})
+	settingGroup(c, T("显示"), func() {
+		switchRow(c, T("边翻边显示"), T("模型一边写，卡片一边出字；关掉就等整段译文出来再显示"), &d.StreamCard)
+	})
 }
 
 func (a *App) pageHotkeys(c *ui.Context, d *Config) {
 	pageTitle(c, T("快捷键"))
-	switchRow(c, T("启用快捷键"), T("关掉后不注册任何全局快捷键，不会和别的程序抢键；划词按钮照常能用"), &a.set.hotkeysOn)
-	ui.Divider(c)
-	if !a.set.hotkeysOn {
-		return
-	}
-	settingRow(c, T("原地替换"), T("点一下再按组合键，Backspace 清空"), func() { a.hotkeyBox(c, "hotkey", &d.Hotkey, false) })
-	settingRow(c, T("只弹卡片"), T("点一下再按组合键，Backspace 清空"), func() { a.hotkeyBox(c, "popup", &d.PopupHotkey, false) })
-	switchRow(c, T("快捷键没选中就全选"), T("按 Alt+T 时没选中文字，先全选整个输入框再翻译"), &d.SelectAllIfEmpty)
+	settingGroup(c, "", func() {
+		switchRow(c, T("启用快捷键"), T("关掉后不注册任何全局快捷键，不会和别的程序抢键；划词按钮照常能用"), &a.set.hotkeysOn)
+		if !a.set.hotkeysOn {
+			return
+		}
+		settingRowW(c, T("原地替换"), T("点一下再按组合键，Backspace 清空"), selectW, func() { a.hotkeyBox(c, "hotkey", &d.Hotkey, false) })
+		settingRowW(c, T("只弹卡片"), T("点一下再按组合键，Backspace 清空"), selectW, func() { a.hotkeyBox(c, "popup", &d.PopupHotkey, false) })
+		switchRow(c, T("快捷键没选中就全选"), T("按 Alt+T 时没选中文字，先全选整个输入框再翻译"), &d.SelectAllIfEmpty)
+	})
 }
 
 func (a *App) pageButton(c *ui.Context, d *Config) {
 	s := &a.set
 	pageTitle(c, T("划词按钮"))
-	switchRow(c, T("划词后显示翻译按钮"), T("选中文字后旁边弹出一个小图标，点它出译文"), &d.ShowButton)
-	ui.Divider(c)
-	switchRow(c, T("只在输入框里弹"), T("网页正文、文档里划词不弹"), &d.OnlyInInputs)
-	ui.Divider(c)
-	settingRow(c, T("点翻译按钮后"), T("直接替换出错时仍会弹卡片说明原因"), func() { actionSelect(c, &d.ButtonAction) })
-	settingRow(c, T("不弹按钮的程序"), T("进程名，逗号分隔"), func() {
-		ui.TextInput(c, &s.exclude).Placeholder("game.exe, WindowsTerminal.exe")
+	settingGroup(c, "", func() {
+		switchRow(c, T("划词后显示翻译按钮"), T("选中文字后旁边弹出一个小图标，点它出译文"), &d.ShowButton)
+		switchRow(c, T("只在输入框里弹"), T("网页正文、文档里划词不弹"), &d.OnlyInInputs)
+		settingRow(c, T("点翻译按钮后"), T("直接替换出错时仍会弹卡片说明原因"), func() { actionSelect(c, &d.ButtonAction) })
+		settingRow(c, T("不弹按钮的程序"), T("进程名，逗号分隔"), func() {
+			ui.TextInput(c, &s.exclude).Placeholder("game.exe, WindowsTerminal.exe")
+		})
 	})
-	ui.Row(c).Padding(8, 0).Children(func() {
-		if textButton(c, s.compatLabel()).Clicked() {
-			s.compat = !s.compat
-		}
-	})
-	if s.compat {
+	settingGroup(c, T("兼容性"), func() {
 		switchRow(c, T("认不出输入框的程序也弹"), T("微信这类程序开着能用，但聊天记录里划词也会弹"), &d.ShowInBlindApps)
-		ui.Divider(c)
 		switchRow(c, T("只认文本光标"), T("按下鼠标时光标是 I 形才算划词，拖窗口、拖文件不会误弹"), &d.RequireIBeam)
-	}
-}
-
-func (s *settingsState) compatLabel() string {
-	if s.compat {
-		return T("▾ 兼容性")
-	}
-	return T("▸ 兼容性")
+	})
 }
 
 // targetLangs 是下拉框里的语言：value 原样写进提示词发给模型，label 给人看
@@ -831,7 +1093,7 @@ func switchRow(c *ui.Context, title, desc string, on *bool) {
 
 func section(c *ui.Context, title string, fn func()) {
 	ui.Column(c).Gap(10).Children(func() {
-		ui.Text(c, title).FontSize(13).Bold().TextColor(c.Theme().TextMuted)
+		ui.Text(c, title).FontSize(12).TextColor(c.Theme().TextMuted).Padding(6, 4, 0, 4) // 跟 settingGroup 的组名一个样子
 		fn()
 	})
 }
@@ -981,28 +1243,32 @@ func (a *App) pageGeneral(c *ui.Context, d *Config) {
 			langs[i].label = T("跟随系统")
 		}
 	}
-	settingRow(c, T("界面语言"), T("设置窗口、卡片和托盘菜单用哪种语言"), func() { optionSelect(c, &d.Language, langs) })
-	settingRow(c, T("外观"), T("浅色、深色，或跟随 Windows"), func() {
-		optionSelect(c, &d.Theme, []option{{"auto", T("跟随系统")}, {"light", T("浅色")}, {"dark", T("深色")}})
+	settingGroup(c, T("界面"), func() {
+		settingRowW(c, T("界面语言"), T("设置窗口、卡片和托盘菜单用哪种语言"), selectW, func() { optionSelect(c, &d.Language, langs) })
+		settingRowW(c, T("外观"), T("浅色、深色，或跟随 Windows"), selectW, func() {
+			optionSelect(c, &d.Theme, []option{{"auto", T("跟随系统")}, {"light", T("浅色")}, {"dark", T("深色")}})
+		})
 	})
-	switchRow(c, T("开机自启"), T("登录 Windows 后在托盘里自动运行"), &a.set.openAtLogin)
-	ui.Divider(c)
-	a.updateRow(c)
-	switchRow(c, T("保存翻译记录"), T("原文、发给模型的提示词和译文按天存成文件，之后可以交给 AI 分析哪里没翻好"), &d.History)
-	ui.Divider(c)
-	if !d.History {
-		return
-	}
-	settingRow(c, T("保留时间"), T("更早的记录会自动删除"), func() {
-		v := strconv.Itoa(d.HistoryDays)
-		optionSelect(c, &v, []option{{"7", T("7 天")}, {"30", T("30 天")}, {"90", T("90 天")}, {"0", T("永久")}})
-		d.HistoryDays, _ = strconv.Atoi(v)
-	})
-	ui.Row(c).Padding(12, 0).Children(func() {
-		ui.Text(c, T("记录只存在这台电脑上，终端里的翻译不记。")).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1)
-		if textButton(c, T("打开记录文件夹")).Clicked() {
-			a.openHistory()
+	settingGroup(c, T("翻译记录"), func() {
+		switchRow(c, T("保存翻译记录"), T("原文、发给模型的提示词和译文按天存成文件，之后可以交给 AI 分析哪里没翻好"), &d.History)
+		if !d.History {
+			return
 		}
+		settingRowW(c, T("保留时间"), T("更早的记录会自动删除"), selectW, func() {
+			v := strconv.Itoa(d.HistoryDays)
+			optionSelect(c, &v, []option{{"7", T("7 天")}, {"30", T("30 天")}, {"90", T("90 天")}, {"0", T("永久")}})
+			d.HistoryDays, _ = strconv.Atoi(v)
+		})
+		ui.Row(c).Gap(12).Padding(4, 0, 14, 0).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, T("记录只存在这台电脑上，终端里的翻译不记。")).FontSize(12).TextColor(c.Theme().TextMuted).Grow(1).Shrink(1)
+			if smallLink(c, T("打开记录文件夹")).Clicked() {
+				a.openHistory()
+			}
+		})
+	})
+	settingGroup(c, T("启动和更新"), func() {
+		switchRow(c, T("开机自启"), T("登录 Windows 后在托盘里自动运行"), &a.set.openAtLogin)
+		a.updateRow(c)
 	})
 }
 
@@ -1042,7 +1308,6 @@ func (a *App) updateRow(c *ui.Context) {
 			go a.checkUpdate(true)
 		}
 	})
-	ui.Divider(c)
 }
 
 // extraPromptBox 额外要求输入框：默认按内容自动长短，右下角的把手可以拖着调高度，点一下把手恢复自动
@@ -1087,68 +1352,9 @@ const sidebarW = 212
 // settingsW, settingsH 设置窗口的默认尺寸；侧边栏放得下「Auswahl-Schaltfläche」这类长词
 const settingsW, settingsH = 732, 480
 
-const controlPad = sidebarW + 48 + 28
+const controlPad = sidebarW + 48 + 32 + 28 // 多出来的 32 是分组卡片左右内边距
 
 var iconGen = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></svg>`))
-
-// apiASR 「语音识别」页的接口区
-func (a *App) apiASR(c *ui.Context, d *Config) {
-	cur := "custom"
-	for _, p := range asrProviders {
-		if strings.EqualFold(d.ASRBaseURL, p.base) {
-			cur = p.id
-		}
-	}
-	settingRow(c, T("服务商"), T("选一个会自动填好接口地址和模型"), func() {
-		v := cur
-		opts := []option{{"stepfun", T("阶跃星辰 StepFun")}, {"qwen", T("阿里云百炼 · 千问 ASR")}}
-		if cur == "custom" { // 自定义就是直接改下面的地址，选项只用来显示
-			opts = append(opts, option{"custom", T("自定义")})
-		}
-		optionSelect(c, &v, opts)
-		for _, p := range asrProviders {
-			if v != cur && p.id == v {
-				d.ASRBaseURL, d.ASRModel, d.ASRAPIKey = p.base, p.model, "" // Key 各家不通用
-			}
-		}
-	})
-	settingRow(c, T("接口地址"), T("语音始终直连，不使用代理"), func() { ui.TextInput(c, &d.ASRBaseURL) })
-	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.ASRModel) })
-	settingRow(c, "API Key", T("换服务商要重新填"), func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
-	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
-		color := c.Theme().TextMuted
-		if a.set.voiceTestErr {
-			color = c.Theme().Danger
-		}
-		ui.Text(c, a.set.voiceTestMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-		if textButton(c, T("测试语音接口")).Disabled(a.set.voiceTesting).Clicked() {
-			a.testVoiceDraft()
-		}
-	})
-}
-
-// asrProviders 语音识别的预设；不是阶跃的地址都按 OpenAI 兼容 chat 接口发音频（见 transcribeChat）
-var asrProviders = []struct{ id, base, model string }{
-	{"stepfun", "https://api.stepfun.com/v1", "stepaudio-3-asr-max"},
-	{"qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen3-asr-flash"},
-}
-
-// apiPolish 「润色」页的接口区
-func (a *App) apiPolish(c *ui.Context, d *Config) {
-	settingRow(c, T("接口地址"), T("润色始终直连，不使用代理"), func() { ui.TextInput(c, &d.PolishBaseURL) })
-	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.PolishModel) })
-	settingRow(c, "API Key", T("OpenAI 兼容接口都能用"), func() { ui.TextInput(c, &d.PolishAPIKey).Password().Placeholder("sk-…") })
-	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
-		color := c.Theme().TextMuted
-		if a.set.polishTestErr {
-			color = c.Theme().Danger
-		}
-		ui.Text(c, a.set.polishTestMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-		if textButton(c, T("测试润色")).Disabled(a.set.polishTesting).Clicked() {
-			a.testPolishDraft()
-		}
-	})
-}
 
 // hotkeyBox 快捷键框：点一下开始录，直接按下新的键就记上；Esc 取消，Backspace 清空。
 // 录制靠键盘钩子（captureKey），所以能分清左右 Alt，录的时候现有快捷键也不会触发。

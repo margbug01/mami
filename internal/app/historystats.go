@@ -173,6 +173,21 @@ func (s *historyStats) addFromLog(path string, before time.Time) {
 	}
 }
 
+// voiceActivity 语音记录按天、按小时数次数，给「记录」页语音 tab 的热力图和时段柱子用
+func voiceActivity(list []historyEntry, loc *time.Location) (days map[string]int, hours [24]int) {
+	days = map[string]int{}
+	for _, e := range list {
+		t, err := time.Parse(time.RFC3339, e.Time)
+		if err != nil {
+			continue
+		}
+		t = t.In(loc)
+		days[t.Format("2006-01-02")]++
+		hours[t.Hour()]++
+	}
+	return days, hours
+}
+
 func (s *historyStats) maxDay() int {
 	m := 0
 	for _, n := range s.days {

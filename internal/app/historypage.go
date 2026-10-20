@@ -41,9 +41,9 @@ func (a *App) pageHistory(c *ui.Context, d *Config) {
 	st := a.historyStatsNow()
 	pageTitle(c, T("记录"))
 	ui.Row(c).Padding(4, 0, 12, 0).Children(func() {
-		segmented(c, &a.set.histTab, T("翻译"), T("语音"))
+		segmented(c, &a.set.histTab, T("语音"), T("翻译"))
 	})
-	if a.set.histTab == 1 {
+	if a.set.histTab == 0 {
 		a.voiceHistory(c, d, st)
 		return
 	}
@@ -65,11 +65,17 @@ func (a *App) pageHistory(c *ui.Context, d *Config) {
 		statCard(c, T("日均"), fmt.Sprintf("%.1f", avg))
 	})
 
-	section(c, T("最近半年"), func() { heatmap(c, st) })
-	ui.Box(c).Height(16)
-	section(c, T("一天里什么时候用"), func() { hourChart(c, st) })
+	section(c, T("一天里什么时候用"), func() { hourChart(c, st.hours) })
 	ui.Box(c).Height(8)
 
+	if st.total > 0 {
+		settingGroup(c, T("明细"), func() { historyDetails(c, st) })
+	}
+	a.historyFooter(c, d, st)
+}
+
+// historyDetails 「记录」翻译 tab 底下的几行明细
+func historyDetails(c *ui.Context, st *historyStats) {
 	if top := st.topHours(3); len(top) > 0 {
 		parts := make([]string, len(top))
 		for i, h := range top {
@@ -97,18 +103,21 @@ func (a *App) pageHistory(c *ui.Context, d *Config) {
 	if st.errors > 0 {
 		statRow(c, T("失败"), fmt.Sprintf(T("%d 次"), st.errors))
 	}
-	if st.fromLog > 0 {
-		ui.Text(c, fmt.Sprintf(T("其中 %d 次来自开记录之前的日志，只有时间和耗时。"), st.fromLog)).
-			FontSize(12).TextColor(t.TextMuted).Padding(10, 0, 0, 0)
-	}
-	if d.History {
-		ui.Row(c).Padding(12, 0).Children(func() {
-			ui.Spacer(c)
-			if textButton(c, T("打开记录文件夹")).Clicked() {
-				a.openHistory()
-			}
-		})
-	}
+}
+
+// historyFooter 卡片下面一行：开记录前的日志说明 + 记录文件夹入口
+func (a *App) historyFooter(c *ui.Context, d *Config, st *historyStats) {
+	t := c.Theme()
+	ui.Row(c).Gap(12).Padding(10, 4, 0, 4).AlignItems(ui.Center).Children(func() {
+		note := ""
+		if st.fromLog > 0 {
+			note = fmt.Sprintf(T("其中 %d 次来自开记录之前的日志，只有时间和耗时。"), st.fromLog)
+		}
+		ui.Text(c, note).FontSize(12).TextColor(t.TextMuted).Grow(1).Shrink(1)
+		if d.History && smallLink(c, T("打开记录文件夹")).Clicked() {
+			a.openHistory()
+		}
+	})
 }
 
 func statCard(c *ui.Context, label, value string) {
@@ -121,11 +130,10 @@ func statCard(c *ui.Context, label, value string) {
 
 func statRow(c *ui.Context, label, value string) {
 	t := c.Theme()
-	ui.Row(c).Gap(16).Padding(8, 0).Children(func() {
+	ui.Row(c).Gap(16).Padding(10, 0).Children(func() {
 		ui.Text(c, label).FontSize(13).TextColor(t.TextMuted).Width(120)
 		ui.Text(c, value).FontSize(13).Grow(1)
 	})
-	ui.Divider(c)
 }
 
 // heatColor 0 次是底色，其余按占最多那天的比例分 4 档
@@ -145,13 +153,16 @@ func heatColor(t *ui.Theme, n, most int) ui.Color {
 }
 
 // heatmap 一列一周（周一在上），最右一列是本周；鼠标停在格子上显示日期和次数
-func heatmap(c *ui.Context, st *historyStats) {
+func heatmap(c *ui.Context, days map[string]int) {
 	t := c.Theme()
 	now := time.Now()
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	wd := (int(today.Weekday()) + 6) % 7 // 周一 = 0
 	start := today.AddDate(0, 0, -wd-7*(heatWeeks-1))
-	most := st.maxDay()
+	most := 0
+	for _, n := range days {
+		most = max(most, n)
+	}
 	ui.Row(c).Gap(heatGap).Children(func() {
 		for w := 0; w < heatWeeks; w++ {
 			ui.Column(c).Gap(heatGap).Children(func() {
@@ -162,7 +173,7 @@ func heatmap(c *ui.Context, st *historyStats) {
 						continue
 					}
 					key := day.Format("2006-01-02")
-					n := st.days[key]
+					n := days[key]
 					ui.Box(c).Size(heatCell, heatCell).Radius(3).Background(heatColor(t, n, most)).
 						Tooltip(fmt.Sprintf(T("%s：%d 次"), key, n))
 				}
@@ -180,14 +191,14 @@ func heatmap(c *ui.Context, st *historyStats) {
 }
 
 // hourChart 24 根柱子，0 点到 23 点
-func hourChart(c *ui.Context, st *historyStats) {
+func hourChart(c *ui.Context, hours [24]int) {
 	t := c.Theme()
 	most := 0
-	for _, n := range st.hours {
+	for _, n := range hours {
 		most = max(most, n)
 	}
 	ui.Row(c).Height(hourBarMax).Gap(3).AlignItems(ui.End).Children(func() {
-		for h, n := range st.hours {
+		for h, n := range hours {
 			bh := float32(2)
 			color := t.Surface
 			if n > 0 && most > 0 {

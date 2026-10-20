@@ -39,6 +39,10 @@ func (a *App) voiceHistory(c *ui.Context, d *Config, st *historyStats) {
 	if sum.nPolish > 0 {
 		statRow(c, T("润色耗时"), fmt.Sprintf(T("平均 %.1f 秒"), float64(sum.polishMs)/float64(sum.nPolish)/1000))
 	}
+	days, hours := voiceActivity(st.voice, now.Location())
+	section(c, T("最近半年"), func() { heatmap(c, days) })
+	ui.Box(c).Height(16)
+	section(c, T("一天里什么时候用"), func() { hourChart(c, hours) })
 	ui.Box(c).Height(12)
 
 	list := st.voice[:min(len(st.voice), voiceListMax)]

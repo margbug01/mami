@@ -174,7 +174,7 @@ func TestSnapSettingsI18n(t *testing.T) {
 		draft.Language, draft.Theme = c.lang, c.theme
 		draft.History = true // 把记录相关的几行也画出来
 		draft.ExtraPrompt = "Translate for an AI prompt: be precise, keep structure, placeholders like {name} untouched, do not translate code or file paths."
-		a.set = settingsState{draft: draft, page: c.page, compat: true}
+		a.set = settingsState{draft: draft, page: c.page}
 		tt := ui.NewTester(a.settingsView, settingsW, settingsH)
 		tt.SetDark(c.dark)
 		tt.Frame()
@@ -187,20 +187,20 @@ func TestSnapSettingsI18n(t *testing.T) {
 
 // 额外要求框：默认随内容长短；拖右下角把手手动调；点一下恢复自动
 func TestExtraPromptResize(t *testing.T) {
-	const gripX = settingsW - 42 // 把手离窗口右边 42
+	const gripX = settingsW - 42 - 17 // 把手离窗口右边 42，再加分组卡片的内边距和边框
 	a := &App{avatar: loadAvatar()}
 	a.set = settingsState{draft: defaultConfig(), page: pageTrans}
 	tt := ui.NewTester(a.settingsView, settingsW, 1000) // 接口区在上面，窗口拉高让额外要求框露出来
 	tt.Frame()
-	below, ok := tt.Find("边翻边显示") // 把手就在这一行上方
+	below, ok := tt.Find("显示") // 把手在「显示」组名上方，中间隔着卡片底边
 	if !ok {
-		t.Fatalf("找不到「边翻边显示」（texts %q）", tt.Texts())
+		t.Fatalf("找不到「显示」（texts %q）", tt.Texts())
 	}
 	if a.set.extraManual {
 		t.Fatal("没动把手就不该进手动模式")
 	}
 	grab := func(dy float32) (float32, bool) {
-		for y := below.Y - 40; y < below.Y; y += 2 {
+		for y := below.Y - 60; y < below.Y; y += 2 {
 			tt.Move(gripX, y)
 			tt.Frame()
 			tt.Press(gripX, y)
@@ -287,4 +287,25 @@ func TestSnapDocs(t *testing.T) {
 	tt.SetDark(true)
 	tt.SetScale(2)
 	save("settings-ja.png", tt)
+}
+
+// 服务商分段条：点一下就换地址和模型（以前把局部变量交给 SegmentedBase，点了没反应）
+func TestProviderPickerClick(t *testing.T) {
+	a := &App{avatar: loadAvatar()}
+	d := defaultConfig()
+	d.Language, d.BaseURL = "zh", "https://index-translate.bilibili.com/v1"
+	a.set = settingsState{draft: d, page: pageTrans, transTab: 1}
+	tt := ui.NewTester(a.settingsView, settingsW, 800)
+	tt.Frame()
+	tt.Frame()
+	r, ok := tt.Find("DeepSeek")
+	if !ok {
+		t.Fatalf("找不到 DeepSeek（texts %q）", tt.Texts())
+	}
+	tt.ClickAt(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	tt.Frame()
+	if got := a.set.draft.BaseURL; got != "https://api.deepseek.com/v1" || a.set.draft.Model != "deepseek-flash" {
+		t.Fatalf("点了 DeepSeek 还是 %s / %s", got, a.set.draft.Model)
+	}
 }

@@ -23,13 +23,19 @@ type learnedWord struct {
 	Manual bool   `json:"manual,omitempty"`
 	Count  int    `json:"count"`
 	Seen   string `json:"seen"` // 最后一次见到，RFC3339
+	// Block 句子里出现这些词时，润色换上的 Right 要换回原话（Claude 旁边有「天气」时 Cloud 就是云）。
+	// 只记在 Wrong 为空的那条上，一个写法一份
+	Block []string `json:"block,omitempty"`
 }
 
 func (w learnedWord) label() string {
-	if w.Wrong == "" {
-		return w.Right
+	if w.Wrong != "" {
+		return w.Wrong + " → " + w.Right
 	}
-	return w.Wrong + " → " + w.Right
+	if len(w.Block) > 0 {
+		return w.Right + " ~~~ " + strings.Join(w.Block, ", ")
+	}
+	return w.Right
 }
 
 const learnPromote = 2
@@ -130,6 +136,51 @@ func (l *learner) rename(from, to string) {
 	l.save()
 }
 
+// edit 词库编辑面板点「完成」：写法改成 to，「也可能听成」整份换成 wrongs（删掉的听法连同学到的次数一起删），
+// 「旁边有这些词时不换」换成 blocks。改过的词转成手动、直接生效，在格子里的位置不变
+func (l *learner) edit(from, to string, wrongs, blocks []string) {
+	l.rename(from, to)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now().Format(time.RFC3339)
+	var out []learnedWord
+	pos := -1
+	for _, w := range l.words {
+		if w.Right != to {
+			out = append(out, w)
+			continue
+		}
+		if pos < 0 {
+			pos = len(out)
+		}
+		if w.Wrong != "" && !slices.Contains(wrongs, w.Wrong) {
+			continue
+		}
+		w.Manual, w.Count, w.Seen, w.Block = true, max(w.Count, learnPromote), now, nil
+		out = append(out, w)
+	}
+	if pos < 0 {
+		pos = len(out)
+	}
+	// 写法本身那条（Wrong 为空）总要有一条：听法全删了词还在，Block 也记在它身上
+	hot := slices.IndexFunc(out, func(w learnedWord) bool { return w.Wrong == "" && w.Right == to })
+	if hot < 0 {
+		out = slices.Insert(out, pos, learnedWord{Right: to, Manual: true, Count: learnPromote, Seen: now})
+		hot = pos
+	}
+	if len(blocks) > 0 {
+		out[hot].Block = blocks
+	}
+	for _, wr := range wrongs {
+		if wr != to && !slices.ContainsFunc(out, func(w learnedWord) bool { return w.Wrong == wr && w.Right == to }) {
+			out = slices.Insert(out, hot, learnedWord{Wrong: wr, Right: to, Manual: true, Count: learnPromote, Seen: now})
+			hot++
+		}
+	}
+	l.words = out
+	l.save()
+}
+
 func (l *learner) all() []learnedWord {
 	if l == nil {
 		return nil
@@ -173,6 +224,9 @@ func (l *learner) add(words []learnedWord) int {
 		l.words[i].Manual = true
 		l.words[i].Count = max(l.words[i].Count, learnPromote)
 		l.words[i].Seen = now
+		if len(p.Block) > 0 {
+			l.words[i].Block = p.Block
+		}
 	}
 	if len(words) > 0 {
 		l.save()
@@ -190,6 +244,10 @@ func parseWordList(text string) []learnedWord {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
+		var block []string
+		if head, tail, ok := strings.Cut(line, "~~~"); ok {
+			line, block = strings.TrimSpace(head), splitList(tail)
+		}
 		wrong, right := "", ""
 		for _, sep := range []string{"→", "->", "\t"} {
 			if w, r, ok := strings.Cut(line, sep); ok {
@@ -203,13 +261,18 @@ func parseWordList(text string) []learnedWord {
 			words = []learnedWord{{Wrong: wrong, Right: right}}
 		case wrong == "" && right == "":
 			for _, h := range splitList(line) {
-				words = append(words, learnedWord{Right: h})
+				words = append(words, learnedWord{Right: h, Block: block})
 			}
 		}
+		if wrong != "" && right != "" && wrong != right && len(block) > 0 {
+			words = append(words, learnedWord{Right: right, Block: block})
+		}
 		for _, w := range words {
-			if !slices.ContainsFunc(out, func(q learnedWord) bool { return q.Wrong == w.Wrong && q.Right == w.Right }) {
-				out = append(out, w)
+			if i := slices.IndexFunc(out, func(q learnedWord) bool { return q.Wrong == w.Wrong && q.Right == w.Right }); i >= 0 {
+				out[i].Block = append(out[i].Block, w.Block...)
+				continue
 			}
+			out = append(out, w)
 		}
 	}
 	return out
@@ -218,7 +281,7 @@ func parseWordList(text string) []learnedWord {
 // formatWordList 导出成 parseWordList 认的格式
 func formatWordList(words []learnedWord) string {
 	var b strings.Builder
-	b.WriteString("# Mami 词库：一行一条，只写一个词是热词，「错写 → 正确写法」是纠错对\n")
+	b.WriteString("# Mami 词库：一行一条，只写一个词是热词，「错写 → 正确写法」是纠错对，「写法 ~~~ 词, 词」是旁边有这些词时不换\n")
 	for _, w := range words {
 		b.WriteString(w.label() + "\n")
 	}
@@ -477,24 +540,33 @@ func diffHunks(a, b string) []hunk {
 func guardPolish(source, polished string, learned []learnedWord) string {
 	vocab := map[string]bool{}
 	pair := map[[2]string]bool{}
+	alias, block := map[string][]string{}, map[string][]string{}
 	for _, w := range learned {
 		vocab[w.Right] = true
 		if w.Wrong != "" {
 			pair[[2]string{w.Wrong, w.Right}] = true
+			alias[w.Right] = append(alias[w.Right], w.Wrong)
 		}
+		block[w.Right] = append(block[w.Right], w.Block...)
 	}
+	lower := strings.ToLower(source)
 	if len(vocab) == 0 {
 		return polished
 	}
 	var sb strings.Builder
-	for _, h := range diffHunks(source, polished) {
+	for _, h := range wordHunks(diffHunks(source, polished)) {
 		ins := h.ins
 		if !h.same && h.del != "" {
 			for v := range vocab {
 				if !strings.Contains(ins, v) || strings.Contains(h.del, v) {
 					continue
 				}
-				if w := homophoneIn(h.del, v); w != "" && !pair[[2]string{w, v}] {
+				w := aliasIn(h.del, alias[v]) // 「也可能听成」里写的（克劳德→Claude 读音对不上拼音也认）
+				if w == "" {
+					w = homophoneIn(h.del, v)
+				}
+				blocked := slices.ContainsFunc(block[v], func(b string) bool { return strings.Contains(lower, strings.ToLower(b)) })
+				if w != "" && (!pair[[2]string{w, v}] || blocked) {
 					for range strings.Count(ins, v) {
 						ins = unswap(ins, v, w)
 					}
@@ -504,6 +576,84 @@ func guardPolish(source, polished string, learned []learnedWord) string {
 		sb.WriteString(ins)
 	}
 	return sb.String()
+}
+
+// wordHunks 英文词按字母对齐会被拆碎（Cloud→Claude 只剩 o→a、e 两处改动），
+// 夹在两处改动中间的纯字母数字段并进前后，整个词算一处改动
+func wordHunks(hs []hunk) []hunk {
+	var out []hunk
+	for i := 0; i < len(hs); i++ {
+		h := hs[i]
+		n := len(out)
+		if h.same && n > 0 && !out[n-1].same && i+1 < len(hs) && !hs[i+1].same && asciiWord(h.del) {
+			nx := hs[i+1]
+			out[n-1].del += h.del + nx.del
+			out[n-1].ins += h.ins + nx.ins
+			i++
+			continue
+		}
+		out = append(out, h)
+	}
+	return out
+}
+
+func asciiWord(s string) bool {
+	for _, r := range s {
+		if r >= utf8.RuneSelf || !(unicode.IsLetter(r) || unicode.IsDigit(r)) {
+			return false
+		}
+	}
+	return s != ""
+}
+
+// aliasPrompt 手动加词后猜它会被听成什么。常见词、常见人名不要：
+// 它们会进纠错表，「章炜」要是猜出「张伟」，大学同学张伟就又被换掉了
+const aliasPrompt = `用户在语音输入法的词库里加了一个词。列出语音识别最可能把它写错成的样子：同音或近音的别的字、英文名被写成的中文音译。输出 JSON 字符串数组，最多 3 个。
+- 只要识别真的会写出来的错写，比如 Claude → ["克劳德","克劳得"]，阶跃 → ["阶越"]，Mami → ["马米"]。
+- 错写本身是常见人名、常见词、常见品牌或普通英文单词的一律不要（章炜 不能给 张伟；Claude 不能给 Cloud；Mami 不能给 妈咪），换了会误伤真在说那个词的时候。
+- 想不出安全的就输出 []。只输出 JSON。`
+
+// parseAliases 校验模型猜的听法：跟原词不同、不超过 12 个字、不重复、最多 3 个
+func parseAliases(out, right string) []string {
+	var raw []string
+	if json.Unmarshal([]byte(cleanOutput(out)), &raw) != nil {
+		return nil
+	}
+	var got []string
+	for _, w := range raw {
+		w = strings.TrimSpace(w)
+		if w == "" || strings.EqualFold(w, right) || utf8.RuneCountInString(w) > 12 || onlyPunct(w) || slices.Contains(got, w) {
+			continue
+		}
+		if got = append(got, w); len(got) == 3 {
+			break
+		}
+	}
+	return got
+}
+
+// addAliases 把猜出来的听法挂到 right 名下，直接生效；已有的不动
+func (l *learner) addAliases(right string, wrongs []string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now().Format(time.RFC3339)
+	for _, w := range wrongs {
+		if l.index(w, right) < 0 {
+			l.words = append(l.words, learnedWord{Wrong: w, Right: right, Manual: true, Count: learnPromote, Seen: now})
+		}
+	}
+	l.save()
+}
+
+// aliasIn 原话里出现的那个听法，最长的优先
+func aliasIn(s string, wrongs []string) string {
+	best := ""
+	for _, w := range wrongs {
+		if len(w) > len(best) && strings.Contains(s, w) {
+			best = w
+		}
+	}
+	return best
 }
 
 // homophoneIn 在 s 里找一段跟 v 读音像的，找不到返回空
