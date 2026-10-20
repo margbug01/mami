@@ -25,6 +25,9 @@ func transcribe(ctx context.Context, cfg Config, pcm []byte) (string, error) {
 	if isStepFunASR(cfg.ASRBaseURL) {
 		return transcribeStepFun(ctx, cfg, pcm)
 	}
+	if isStreamASR(cfg.ASRModel) {
+		return transcribeStream(ctx, cfg, pcm)
+	}
 	return transcribeChat(ctx, cfg, pcm)
 }
 

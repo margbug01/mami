@@ -114,6 +114,41 @@ func voiceToggle() {
 	postVoice(voiceStart, id)
 }
 
+// voiceCommand 外部触发（Mami.exe -voice toggle|start|stop|cancel，转给已经在跑的实例）：
+// 遥控器、脚踏板、宏工具不用模拟键盘也能开关语音。认不出的返回 false
+func voiceCommand(cmd string) bool {
+	switch cmd {
+	case "toggle":
+		voiceToggle()
+	case "start":
+		if voiceRecording.Load() == 0 {
+			voiceToggle()
+		}
+	case "stop":
+		voiceClick(voiceStop)
+	case "cancel":
+		voiceClick(voiceCancel)
+	default:
+		return false
+	}
+	return true
+}
+
+// voiceCommandArg 从命令行里找 -voice X / --voice=X
+func voiceCommandArg(args []string) (string, bool) {
+	for i, a := range args {
+		name, val, eq := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !strings.HasPrefix(a, "-") || name != "voice" {
+			continue
+		}
+		if !eq && i+1 < len(args) {
+			val = args[i+1]
+		}
+		return strings.ToLower(strings.TrimSpace(val)), true
+	}
+	return "", false
+}
+
 // voiceClick 胶囊上的 ✕ / ✓：和 Esc / 再按一下触发键走同一条路
 func voiceClick(action int) {
 	if action == voiceCancel {
@@ -189,6 +224,7 @@ type voiceViewState struct {
 	copy                   bool // text 是识别结果、已经在剪贴板里：胶囊右边带一个复制钮
 	recording, recognizing bool
 	levels                 []float64 // 最近的音量，旧的在前
+	live                   string    // 录音中边说边出的字（开了实时出字、用流式模型时才有）
 }
 
 func (a *App) voiceBeep(wav []byte) {
@@ -255,13 +291,14 @@ func (a *App) voiceLeave() {
 }
 
 const (
-	voiceH     = 36                          // 药丸高
-	voiceBtn   = voiceH - 10                 // 圆钮直径：上下左右都留 5
-	voiceWinH  = 64                          // 果冻球的高度，也给药丸留出上下空间做弹出动画
-	voiceOrbW  = 56                          // 果冻球默认大小；设置里可以调 40~96
-	voiceRecW  = 2*voiceBtn + 10 + 47 + 2*12 // 两颗钮、两边各 5、波形 47、波形左右各空 12
-	voiceDotsW = 5 + voiceBtn + 61 + 5       // 两边各 5、✕、三个点占的地方
-	voiceCopyW = voiceRecW + 48              // 没地方贴时那句话：只比录音时宽一点，多的截掉、悬停看全文
+	voiceH     = 36                                 // 药丸高
+	voiceBtn   = voiceH - 10                        // 圆钮直径：上下左右都留 5
+	voiceWinH  = 64                                 // 果冻球的高度，也给药丸留出上下空间做弹出动画
+	voiceOrbW  = 56                                 // 果冻球默认大小；设置里可以调 40~96
+	voiceRecW  = 2*voiceBtn + 10 + 47 + 2*12        // 两颗钮、两边各 5、波形 47、波形左右各空 12
+	voiceDotsW = 5 + voiceBtn + 61 + 5              // 两边各 5、✕、三个点占的地方
+	voiceCopyW = voiceRecW + 48                     // 没地方贴时那句话：只比录音时宽一点，多的截掉、悬停看全文
+	voiceLiveN = (voiceRecW - 2*voiceBtn - 18) / 12 // 边说边出字：胶囊保持录音时的宽度，中间只放得下最新这几个字
 )
 
 func voiceKind(state voiceViewState) int {
@@ -276,7 +313,7 @@ func voiceKind(state voiceViewState) int {
 
 // voiceOrb 果冻球样式的录音和识别；提示文字在果冻样式下是一条果冻（见 drawJelly）
 func (a *App) voiceOrb(state voiceViewState) bool {
-	return a.voiceStyle == "orb" && voiceKind(state) != 3
+	return a.voiceStyle == "orb" && voiceKind(state) != 3 && state.live == "" // 出字了就变成一条果冻
 }
 
 func (a *App) orbSize() float32 {
@@ -301,10 +338,19 @@ func (a *App) voiceWinHeight() int32 {
 	return voiceWinH
 }
 
+// liveTail 只留最后 voiceLiveN 个字，新字从右边推进来
+func liveTail(s string) string {
+	r := []rune(s)
+	if len(r) <= voiceLiveN {
+		return s
+	}
+	return string(r[len(r)-voiceLiveN:])
+}
+
 func voiceWidth(state voiceViewState) int32 {
 	switch voiceKind(state) {
 	case 1:
-		return voiceRecW
+		return voiceRecW // 边说边出字也不变宽
 	case 2:
 		return voiceDotsW
 	}
@@ -392,8 +438,19 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	})
 	learned := a.learn.active()
 	cfg.ASRHotwords = withLearned(cfg.ASRHotwords, learned)
-	// 说话的这几秒里先把连接握好，说完直接复用
-	go warmConnection(ctx, cfg.ASRBaseURL)
+	// 流式模型：录音一开始就连上，边录边推；其余模型说话的这几秒里先把连接握好，说完直接复用
+	var stream *asrStream
+	var live atomic.Pointer[string]
+	if cfg.ASRAPIKey != "" && !isStepFunASR(cfg.ASRBaseURL) && isStreamASR(cfg.ASRModel) {
+		var onText func(string)
+		if cfg.VoiceLiveText {
+			onText = func(t string) { live.Store(&t) } // 录音回调每 50ms 刷一次胶囊时顺手带上
+		}
+		stream = startASRStream(ctx, cfg, onText)
+		defer stream.stop()
+	} else {
+		go warmConnection(ctx, cfg.ASRBaseURL)
+	}
 	if cfg.PolishStyle != "off" && cfg.PolishAPIKey != "" {
 		go warmConnection(ctx, cfg.PolishBaseURL)
 	}
@@ -428,7 +485,9 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	}, func(data []byte, level float64) {
 		seg = append(seg, data...)
 		segPeak = max(segPeak, level)
-		if segmenter.feed(level) {
+		if stream != nil {
+			stream.feed(data)
+		} else if segmenter.feed(level) {
 			submit(seg)
 			seg, segPeak = nil, 0
 		}
@@ -438,7 +497,11 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		}
 		if valid() && time.Since(last) >= 50*time.Millisecond {
 			last = time.Now()
-			a.voiceDisplay(id, voiceViewState{recording: true, levels: append([]float64(nil), levels...)}, true)
+			st := voiceViewState{recording: true, levels: append([]float64(nil), levels...)}
+			if p := live.Load(); p != nil {
+				st.live = *p
+			}
+			a.voiceDisplay(id, st, true)
 		}
 	})
 	voiceRecording.CompareAndSwap(id, 0)
@@ -450,7 +513,14 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		fail(err)
 		return
 	}
-	if !voiceTooQuiet(seg, segPeak) {
+	if stream != nil && !voiceTooQuiet(seg, segPeak) {
+		job := &asrJob{done: make(chan struct{})}
+		jobs = append(jobs, job)
+		go func() {
+			job.text, job.err = stream.finish()
+			close(job.done)
+		}()
+	} else if stream == nil && !voiceTooQuiet(seg, segPeak) {
 		submit(seg)
 	} else if len(jobs) == 0 {
 		finish()
@@ -510,14 +580,14 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		switch {
 		case mode == voicePaste:
 			a.voiceDisplay(id, voiceViewState{}, false)
-			a.learnStart(fg, text, cfg)
+			a.learnStart(fg, source, text, cfg)
 		case !setClipboardText(owner, toCRLF(text), false):
 			a.voiceNotice(id, T("无法写入剪贴板"))
 		case mode == voicePasteKeep:
 			// 认不出是不是输入框（微信这类）：照样贴，但文字留在剪贴板里，贴空了还能手动 Ctrl+V
 			a.voiceDisplay(id, voiceViewState{}, false)
 			sendCtrl('V')
-			a.learnStart(fg, text, cfg)
+			a.learnStart(fg, source, text, cfg)
 		default:
 			log.Printf("voice: no input box (switched=%v modifiers=%v), copied", switched, modsDown)
 			a.voiceCopyNotice(id, text)
@@ -654,7 +724,13 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 				if pillButton(c, sk, false, T("取消")).Clicked() && live {
 					go voiceClick(voiceCancel)
 				}
-				ui.Box(c).Grow(1).Height(20).Draw(func(p *ui.Painter, r ui.Rect) { sk.wave(p, r, bars) })
+				if state.live != "" {
+					ui.Row(c).Grow(1).Shrink(1).Height(20).Clip().AlignItems(ui.Center).Justify(ui.Center).Children(func() {
+						ui.Text(c, liveTail(state.live)).FontSize(12).TextColor(sk.fg).MaxLines(1)
+					})
+				} else {
+					ui.Box(c).Grow(1).Height(20).Draw(func(p *ui.Painter, r ui.Rect) { sk.wave(p, r, bars) })
+				}
 				if pillButton(c, sk, true, T("完成")).Clicked() && live {
 					go voiceClick(voiceStop)
 				}
@@ -876,7 +952,8 @@ func (a *App) runVoiceDemo(only string) {
 		})
 		playSound(soundStart)
 		var levels []float64
-		for start := time.Now(); time.Since(start) < 3*time.Second; time.Sleep(50 * time.Millisecond) {
+		say := []rune("嗯，那个，帮我把这个接口改成用 Go 写，然后三点开会，不对，是四点开会。")
+		for start := time.Now(); time.Since(start) < 4500*time.Millisecond; time.Sleep(50 * time.Millisecond) {
 			x := time.Since(start).Seconds()
 			level := 0.06 * math.Abs(math.Sin(x*3)+0.6*math.Sin(x*7.3))
 			if x > 1.6 && x < 2.2 {
@@ -884,7 +961,11 @@ func (a *App) runVoiceDemo(only string) {
 			}
 			levels = append(levels, level)
 			levels = levels[max(0, len(levels)-voiceBars):]
-			a.voiceDisplay(id, voiceViewState{recording: true, levels: append([]float64(nil), levels...)}, true)
+			st := voiceViewState{recording: true, levels: append([]float64(nil), levels...)}
+			if n := int((x - 0.8) * 10); cfg.VoiceLiveText && n > 0 { // 边说边出字：先空一会儿，再一个个字冒出来
+				st.live = string(say[:min(n, len(say))])
+			}
+			a.voiceDisplay(id, st, true)
 		}
 		playSound(soundStop)
 		a.voiceDisplay(id, voiceViewState{recognizing: true}, true)

@@ -9,10 +9,14 @@ const (
 	voiceCancel
 )
 
-// voiceKeyNames 能单按当语音触发键的键：左右修饰键、几个锁定键、F1–F24。
+// voiceKeyNames 能单按当语音触发键的键：左右修饰键、几个锁定键、F1–F24，
+// 还有媒体键和浏览器键（蓝牙遥控器、翻页笔、带媒体键的小键盘按下去多半是这些）。
 // 组合键（带 +）不在这里，走 GlobalShortcut 注册。
 var voiceKeyNames = map[string]uint32{
 	"LShift": 0xA0, "RShift": 0xA1, "LCtrl": 0xA2, "RCtrl": 0xA3, "LAlt": 0xA4, "RAlt": 0xA5,
+	"VolumeMute": 0xAD, "VolumeDown": 0xAE, "VolumeUp": 0xAF,
+	"MediaNext": 0xB0, "MediaPrev": 0xB1, "MediaStop": 0xB2, "MediaPlayPause": 0xB3,
+	"BrowserBack": 0xA6, "BrowserHome": 0xAC,
 	"CapsLock": 0x14, "ScrollLock": 0x91, "Pause": 0x13,
 }
 

@@ -302,3 +302,40 @@ func TestQwenASRLive(t *testing.T) {
 		t.Fatal("ASR result did not contain expected word 接口")
 	}
 }
+
+func TestVoiceCommandArg(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		cmd  string
+		ok   bool
+	}{
+		{[]string{"-voice", "toggle"}, "toggle", true},
+		{[]string{"--voice=Start"}, "start", true},
+		{[]string{"--voice", "cancel"}, "cancel", true},
+		{[]string{"-demo-voice"}, "", false},
+		{[]string{"voice", "toggle"}, "", false},
+		{nil, "", false},
+	} {
+		if cmd, ok := voiceCommandArg(c.args); cmd != c.cmd || ok != c.ok {
+			t.Errorf("%q → %q %v", c.args, cmd, ok)
+		}
+	}
+	if voiceCommand("nope") {
+		t.Error("unknown command accepted")
+	}
+}
+
+func TestVoiceMediaKeyCapture(t *testing.T) {
+	for _, vk := range []uint32{0xB3, 0xAF, 0xA6} {
+		k := keyCapture{voice: true}
+		if st, acc, _ := k.step(vk, true); st != captureDone || voiceKey(acc) != vk {
+			t.Errorf("vk %#x → %d %q", vk, st, acc)
+		}
+	}
+	cfg := defaultConfig()
+	cfg.VoiceHotkey = "MediaPlayPause"
+	cfg.normalize()
+	if cfg.VoiceHotkey != "MediaPlayPause" {
+		t.Errorf("normalize dropped media key: %q", cfg.VoiceHotkey)
+	}
+}

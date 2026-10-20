@@ -111,11 +111,12 @@ type App struct {
 	lastUpTime uint32
 	dblTime    uint32
 
-	learn  *learner
-	learnW learnWatch
-	uiaOK  bool
-	set    settingsState // 主线程
-	avatar *ui.Bitmap
+	learn   *learner
+	samples *sampleLog // 长文口述改前改后的样本，以后学说话习惯用
+	learnW  learnWatch
+	uiaOK   bool
+	set     settingsState // 主线程
+	avatar  *ui.Bitmap
 }
 
 func (a *App) config() (Config, *Translator) {

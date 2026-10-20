@@ -250,7 +250,7 @@ var translatePresets = func() []apiPreset {
 var asrPresets = func() []apiPreset {
 	return []apiPreset{
 		{id: "stepfun", label: T("阶跃星辰"), logo: logoStepFun, base: "https://api.stepfun.com/v1", model: "stepaudio-3-asr-max", keyURL: "https://platform.stepfun.com/interface-key"},
-		{id: "qwen", label: T("阿里云百炼"), logo: logoBailian, base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen3-asr-flash", keyURL: "https://bailian.console.aliyun.com/"},
+		{id: "qwen", label: T("阿里云百炼"), logo: logoBailian, base: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-audio-3.1-asr-flash-streaming", keyURL: "https://bailian.console.aliyun.com/"},
 		customPreset(),
 	}
 }
@@ -461,6 +461,7 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 		switchRow(c, T("启用语音输入"), T("按一下开始说话，再按一下贴入；Esc 取消"), &d.VoiceEnabled)
 		settingRowW(c, T("触发键"), T("点一下再按键，Backspace 关闭"), selectW, func() { a.hotkeyBox(c, "voice", &d.VoiceHotkey, true) })
 		switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
+		switchRow(c, T("边说边出字"), T("说话时胶囊里实时显示识别的字，说完照常润色后贴入；需要千问 3.1 这类流式模型"), &d.VoiceLiveText)
 	})
 }
 
@@ -472,6 +473,14 @@ func (a *App) pageWords(c *ui.Context, d *Config) {
 	pageTitle(c, T("词库"))
 	settingGroup(c, "", func() {
 		switchRow(c, T("自动学习"), T("贴入后你手改过的词会记住，下次识别和润色都用对的写法"), &d.VoiceLearn)
+		if a.samples != nil {
+			n := a.samples.count()
+			settingRowW(c, T("长文改写"), fmt.Sprintf(T("已存 %d 段：较长的口述和你改完的样子，只存在本机，以后用来学你的说话习惯"), n), 64, func() {
+				if n > 0 && smallLink(c, T("清空")).AlignSelf(ui.End).Clicked() {
+					go a.samples.clear()
+				}
+			})
+		}
 	})
 	groups := groupWords(a.learn.all())
 	ui.Row(c).Gap(12).AlignItems(ui.End).Padding(16, 0, 10, 0).Children(func() {

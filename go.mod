@@ -3,6 +3,7 @@ module mami
 go 1.27.1
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/egoist/mygo v0.4.8
 	github.com/mozillazg/go-pinyin v0.21.0
 )

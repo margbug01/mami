@@ -28,11 +28,16 @@ func Run() {
 	demo := flag.Bool("demo", false, "只画出按钮和一张示例卡片，8 秒后退出（不挂钩子、不注册快捷键）")
 	demoVoice := flag.Bool("demo-voice", false, "只放一遍语音胶囊的几种状态（假音量，不开麦克风），然后退出")
 	demoStyle := flag.String("demo-style", "", "配合 -demo-voice：只放这几种样式（逗号分隔，如 mercury），空着就全放")
+	flag.String("voice", "", "让已经在跑的 Mami 开关语音输入：toggle | start | stop | cancel（给遥控器、脚踏板、宏工具用）")
 	flag.Parse()
 
 	mygo.App.SetName("Mami")
 	if !*demo && !*demoVoice && !mygo.App.RequestSingleInstanceLock() {
-		return // 已经在跑了，那边会打开设置窗口
+		return // 已经在跑了，那边会打开设置窗口（带 -voice 时改成开关语音）
+	}
+	if _, ok := voiceCommandArg(os.Args[1:]); ok && !*demo && !*demoVoice {
+		log.Printf("voice: -voice given but Mami is not running")
+		return // 没有在跑的 Mami 可以转；别因为一个遥控器按键把整个程序启动起来
 	}
 
 	a := &App{pid: uint32(os.Getpid())}
@@ -54,6 +59,7 @@ func Run() {
 	}
 	a.hist = &history{dir: filepath.Join(filepath.Dir(a.cfgPath), "history")}
 	a.learn = newLearner(filepath.Join(filepath.Dir(a.cfgPath), "learned.json"))
+	a.samples = newSampleLog(filepath.Join(filepath.Dir(a.cfgPath), "samples.jsonl"))
 	a.logPaths = []string{a.logPath}
 	if os.Getenv("MAMI_CONFIG") == "" { // 改名前（Huaci）的日志也算进去
 		a.logPaths = append(a.logPaths, filepath.Join(filepath.Dir(filepath.Dir(a.cfgPath)), "Huaci", "logs", "huaci.log"))
@@ -91,7 +97,15 @@ func Run() {
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.quitting = true })
 	mygo.App.OnWindowAllClosed(func() {}) // 只剩托盘时也接着跑
-	mygo.App.OnSecondInstance(func([]string, string) { a.openSettings() })
+	mygo.App.OnSecondInstance(func(args []string, _ string) {
+		if cmd, ok := voiceCommandArg(args); ok {
+			if !voiceCommand(cmd) {
+				log.Printf("voice: unknown -voice %q (toggle/start/stop/cancel)", cmd)
+			}
+			return
+		}
+		a.openSettings()
+	})
 
 	mygo.App.WhenReady(func() {
 		if _, err := startWorker(); err != nil {
