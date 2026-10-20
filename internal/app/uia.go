@@ -208,6 +208,81 @@ func focusedSelectionText(auto uintptr) string {
 	return strings.Join(parts, "\n")
 }
 
+// caretReq 读焦点输入框里光标前 before 个字、后 after 个字（TextPattern）
+type caretReq struct {
+	before, after int
+	reply         chan [2]string
+}
+
+var uiaCaretReqs = make(chan caretReq, 4)
+
+// caretText 光标前后的文字；没有 TextPattern（微信、终端）、超时、两边都空都算读不到
+func caretText(before, after int) (pre, post string, ok bool) {
+	reply := make(chan [2]string, 1)
+	select {
+	case uiaCaretReqs <- caretReq{before, after, reply}:
+	default:
+		return "", "", false
+	}
+	select {
+	case r := <-reply:
+		return r[0], r[1], r[0] != "" || r[1] != ""
+	case <-time.After(400 * time.Millisecond):
+		log.Println("uia: caret text query timed out")
+		return "", "", false
+	}
+}
+
+// caretTextUIA 在 UIA 线程上：取选区（光标）范围，分别向前、向后扩 N 个字读文字
+func caretTextUIA(auto uintptr, before, after int) (pre, post string) {
+	var el uintptr
+	if hr := comCall(auto, 8, uintptr(unsafe.Pointer(&el))); hr != 0 || el == 0 { // GetFocusedElement
+		return "", ""
+	}
+	defer comRelease(el)
+	var tp uintptr
+	if hr := comCall(el, 14, uiaTextPatternId, uintptr(unsafe.Pointer(&iidTextPattern)), uintptr(unsafe.Pointer(&tp))); hr != 0 || tp == 0 { // GetCurrentPatternAs
+		return "", ""
+	}
+	defer comRelease(tp)
+	var arr uintptr
+	if hr := comCall(tp, 5, uintptr(unsafe.Pointer(&arr))); hr != 0 || arr == 0 { // GetSelection
+		return "", ""
+	}
+	defer comRelease(arr)
+	var n int32
+	comCall(arr, 3, uintptr(unsafe.Pointer(&n))) // get_Length
+	if n < 1 {
+		return "", ""
+	}
+	var sel uintptr
+	if hr := comCall(arr, 4, 0, uintptr(unsafe.Pointer(&sel))); hr != 0 || sel == 0 { // GetElement(0)
+		return "", ""
+	}
+	defer comRelease(sel)
+	// endpoint 0=Start 1=End：先把另一端挪到选区的这一侧缩成一个点，再把这一端按字挪 count（负数往前）
+	side := func(endpoint int, count int) string {
+		var r uintptr
+		if hr := comCall(sel, 3, uintptr(unsafe.Pointer(&r))); hr != 0 || r == 0 { // Clone
+			return ""
+		}
+		defer comRelease(r)
+		comCall(r, 15, uintptr(1-endpoint), sel, uintptr(endpoint)) // MoveEndpointByRange
+		var moved int32
+		comCall(r, 14, uintptr(endpoint), 0, uintptr(count), uintptr(unsafe.Pointer(&moved))) // MoveEndpointByUnit(TextUnit_Character)
+		var bstr uintptr
+		comCall(r, 12, ^uintptr(0), uintptr(unsafe.Pointer(&bstr))) // GetText(-1)
+		if bstr == 0 {
+			return ""
+		}
+		l, _, _ := pSysStringLen.Call(bstr)
+		text := string(utf16.Decode(unsafe.Slice((*uint16)(nativePointer(bstr)), l)))
+		pSysFreeString.Call(bstr)
+		return text
+	}
+	return side(0, -before), side(1, after)
+}
+
 // startUIA 起一条 COM(MTA) 线程专门做跨进程的 UIA 查询，慢了也不卡 UI 和钩子。
 func startUIA() error {
 	ready := make(chan error)
@@ -230,6 +305,9 @@ func startUIA() error {
 				reply <- focusedSelectionText(auto)
 			case reply := <-uiaInputReqs:
 				reply <- focusedInputState(auto)
+			case req := <-uiaCaretReqs:
+				pre, post := caretTextUIA(auto, req.before, req.after)
+				req.reply <- [2]string{pre, post}
 			}
 		}
 	}()

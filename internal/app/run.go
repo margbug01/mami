@@ -53,6 +53,7 @@ func Run() {
 		a.logPath = filepath.Join(logDir, "mami.log")
 	}
 	a.hist = &history{dir: filepath.Join(filepath.Dir(a.cfgPath), "history")}
+	a.learn = newLearner(filepath.Join(filepath.Dir(a.cfgPath), "learned.json"))
 	a.logPaths = []string{a.logPath}
 	if os.Getenv("MAMI_CONFIG") == "" { // 改名前（Huaci）的日志也算进去
 		a.logPaths = append(a.logPaths, filepath.Join(filepath.Dir(filepath.Dir(a.cfgPath)), "Huaci", "logs", "huaci.log"))
@@ -69,6 +70,17 @@ func Run() {
 	}
 
 	cfg, created, cfgErr := loadConfig(a.cfgPath)
+	if len(cfg.ASRHotwords) > 0 { // 老配置里的热词搬进词库，和学到的词一起管
+		var words []learnedWord
+		for _, h := range cfg.ASRHotwords {
+			words = append(words, learnedWord{Right: h})
+		}
+		a.learn.add(words)
+		cfg.ASRHotwords = []string{}
+		if err := saveConfig(a.cfgPath, cfg); err != nil {
+			log.Println(err)
+		}
+	}
 	if err := a.setConfig(cfg); err != nil {
 		log.Println(err)
 		a.setConfig(defaultConfig())

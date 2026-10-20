@@ -38,7 +38,7 @@ func TestPolishRequest(t *testing.T) {
 					if (body.Thinking != nil) != wantThinking || (wantThinking && body.Thinking["type"] != "disabled") {
 						t.Error("thinking provider guard")
 					}
-					wantPrompt := polishBasePrompt + polishStyles[style] + "\n以下是用户的专有名词，出现时按这个写法原样保留：Go、Mami、DeepSeek"
+					wantPrompt := polishBasePrompt + polishStyles[style] + polishHotwordsLead + "Go、Mami、DeepSeek"
 					if body.Model != "deepseek-flash" || body.Temperature != 0.3 || body.Stream || len(body.Messages) != 2 {
 						t.Error("request body")
 						return

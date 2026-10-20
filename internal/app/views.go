@@ -133,6 +133,32 @@ func accentButton(c *ui.Context, label string) ui.Element {
 	return fitLabel(c, ui.PrimaryButton(c, label), label)
 }
 
+// segmented 就是 ui.Segmented 的样子，只是每段按 MiSans 量出最小宽度：
+// 原生的同样没按主题字体量，「All」「Gelernt」「자동 학습」这类会被截成省略号
+func segmented(c *ui.Context, selected *int, labels ...string) ui.Element {
+	t := c.Theme()
+	parts := ui.SegmentedBase(c, selected, len(labels))
+	parts.Track.AlignItems(ui.Stretch).Padding(t.Space(0.5)).Gap(t.Space(0.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Label(labels[0])
+	chosen := t.Background
+	if t.Dark {
+		chosen = t.SurfacePressed
+	}
+	parts.Track.Children(func() {
+		for i, label := range labels {
+			w, _ := c.MeasureText(10000, ui.Span{Text: label, Size: t.FontSize})
+			s := parts.Segment(i).Padding(t.Space(1), t.Space(3)).Radius(max(t.Radius-t.Space(0.5), 0)).MinWidth(w + 2*t.Space(3) + 8)
+			switch {
+			case i == *selected:
+				s.Background(chosen).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12))
+			case s.Hovered():
+				s.Background(t.SurfaceHover)
+			}
+			s.Children(func() { ui.Text(c, label).SingleLine() })
+		}
+	})
+	return parts.Track
+}
+
 func fitLabel(c *ui.Context, b ui.Element, label string) ui.Element {
 	t := c.Theme()
 	w, _ := c.MeasureText(10000, ui.Span{Text: label, Size: t.FontSize})

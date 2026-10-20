@@ -390,6 +390,8 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	a.voiceWin.Update(func() {
 		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, cfg.VoiceTone, float32(cfg.VoiceOrbSize)
 	})
+	learned := a.learn.active()
+	cfg.ASRHotwords = withLearned(cfg.ASRHotwords, learned)
 	// 说话的这几秒里先把连接握好，说完直接复用
 	go warmConnection(ctx, cfg.ASRBaseURL)
 	if cfg.PolishStyle != "off" && cfg.PolishAPIKey != "" {
@@ -481,7 +483,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		return
 	}
 	source := text
-	text, polishMs := polishVoice(ctx, cfg, source)
+	text, polishMs := polishVoice(ctx, cfg, source, learned...)
 	if !valid() {
 		finish()
 		return
@@ -508,12 +510,14 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		switch {
 		case mode == voicePaste:
 			a.voiceDisplay(id, voiceViewState{}, false)
+			a.learnStart(fg, text, cfg)
 		case !setClipboardText(owner, toCRLF(text), false):
 			a.voiceNotice(id, T("无法写入剪贴板"))
 		case mode == voicePasteKeep:
 			// 认不出是不是输入框（微信这类）：照样贴，但文字留在剪贴板里，贴空了还能手动 Ctrl+V
 			a.voiceDisplay(id, voiceViewState{}, false)
 			sendCtrl('V')
+			a.learnStart(fg, text, cfg)
 		default:
 			log.Printf("voice: no input box (switched=%v modifiers=%v), copied", switched, modsDown)
 			a.voiceCopyNotice(id, text)

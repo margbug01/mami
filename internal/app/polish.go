@@ -47,7 +47,15 @@ var polishStyles = map[string]string{
 只有一两件事时直接写成一两句话，不要加小标题或分组。`,
 }
 
-func polish(ctx context.Context, cfg Config, text string) (string, error) {
+// polish 整理语音识别出的原话；learned 是自动学到的纠错词对（见 learn.go）
+// 名词表只管写法，不拿来替换读音相近的词（「同学张伟」不能被改成用户词库里的「章炜」）；
+// 替换只靠纠错表，那是用户同一处改过两次才生效的
+const (
+	polishHotwordsLead = "\n以下是用户的专有名词，原文里出现时按这个写法写（用字、大小写照抄）；不要把读音相近的别的词改成它们："
+	polishTableLead    = "\n以下是这位用户语音识别常见的错写（左→右），出现左边的一般就是右边那个，改过来；上下文明显说的是别的人或东西时不改："
+)
+
+func polish(ctx context.Context, cfg Config, text string, learned ...learnedWord) (string, error) {
 	cfg.normalize()
 	if cfg.PolishStyle == "off" {
 		return text, nil
@@ -57,11 +65,24 @@ func polish(ctx context.Context, cfg Config, text string) (string, error) {
 	}
 	prompt := polishBasePrompt + polishStyles[cfg.PolishStyle]
 	if len(cfg.ASRHotwords) > 0 {
-		prompt += "\n以下是用户的专有名词，出现时按这个写法原样保留：" + strings.Join(cfg.ASRHotwords, "、")
+		prompt += polishHotwordsLead + strings.Join(cfg.ASRHotwords, "、")
 	}
+	if table := learnedTable(learned); table != "" {
+		prompt += polishTableLead + table
+	}
+	out, err := chatOnce(ctx, cfg, prompt, text)
+	if err != nil {
+		return "", err
+	}
+	return cleanPolishOutput(out), nil
+}
+
+// chatOnce 在润色接口上发一轮非流式对话，返回助手回复的原文
+func chatOnce(ctx context.Context, cfg Config, system, user string) (string, error) {
+	cfg.normalize()
 	body := map[string]any{
 		"model": cfg.PolishModel, "temperature": 0.3, "stream": false,
-		"messages": []map[string]string{{"role": "system", "content": prompt}, {"role": "user", "content": text}},
+		"messages": []map[string]string{{"role": "system", "content": system}, {"role": "user", "content": user}},
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cfg.PolishBaseURL+"/chat/completions", nil)
 	if err != nil {
@@ -101,7 +122,7 @@ func polish(ctx context.Context, cfg Config, text string) (string, error) {
 	if len(result.Choices) == 0 {
 		return "", nil
 	}
-	return cleanPolishOutput(result.Choices[0].Message.Content), nil
+	return result.Choices[0].Message.Content, nil
 }
 
 func cleanPolishOutput(text string) string {
@@ -120,7 +141,7 @@ func cleanPolishOutput(text string) string {
 	}
 }
 
-func polishVoice(ctx context.Context, cfg Config, source string) (string, int64) {
+func polishVoice(ctx context.Context, cfg Config, source string, learned ...learnedWord) (string, int64) {
 	cfg.normalize()
 	if cfg.PolishStyle == "off" || cfg.PolishAPIKey == "" || utf8.RuneCountInString(strings.TrimSpace(source)) < polishMinRunes {
 		return source, 0
@@ -128,7 +149,7 @@ func polishVoice(ctx context.Context, cfg Config, source string) (string, int64)
 	started := time.Now()
 	polishCtx, cancel := context.WithTimeout(ctx, polishDeadline(source))
 	defer cancel()
-	result, err := polish(polishCtx, cfg, source)
+	result, err := polish(polishCtx, cfg, source, learned...)
 	elapsed := time.Since(started).Milliseconds()
 	if err == nil {
 		err = polishCtx.Err()
@@ -152,5 +173,6 @@ func polishVoice(ctx context.Context, cfg Config, source string) (string, int64)
 		log.Printf("polish: %dms: %s", elapsed, reason)
 		return source, 0 // 没润色成：耗时记 0，历史和统计就不会把它当成润色过
 	}
+	result = guardPolish(source, result, learned)
 	return result, elapsed
 }

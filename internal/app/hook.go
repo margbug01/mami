@@ -27,6 +27,7 @@ type mouseEvent struct {
 	time  uint32
 	ours  bool
 	ibeam bool
+	vk    uint32 // keyPress：按的哪个键
 }
 
 var (
@@ -119,7 +120,7 @@ func kbdProc(nCode, wp, lp uintptr) uintptr {
 		}
 		if k.ExtraInfo != ourKeyTag && !isModifierVK(k.VkCode) {
 			select {
-			case mouseEvents <- mouseEvent{kind: keyPress, time: k.Time}:
+			case mouseEvents <- mouseEvent{kind: keyPress, time: k.Time, vk: k.VkCode}:
 			default:
 			}
 		}

@@ -111,6 +111,8 @@ type App struct {
 	lastUpTime uint32
 	dblTime    uint32
 
+	learn  *learner
+	learnW learnWatch
 	uiaOK  bool
 	set    settingsState // 主线程
 	avatar *ui.Bitmap
@@ -275,6 +277,7 @@ func (a *App) onMouse(ev mouseEvent) {
 		}
 		a.btnGen.Add(1)
 		a.hideButton()
+		a.learnTyped(ev.vk)
 	}
 }
 

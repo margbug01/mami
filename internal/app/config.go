@@ -23,6 +23,7 @@ type Config struct {
 	VoiceOrbSize      float64  `json:"voice_orb_size"` // 果冻球直径（DIP），40~96
 	VoiceTone         string   `json:"voice_tone"`     // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
 	VoiceSound        bool     `json:"voice_sound"`    // 开始、结束、取消的提示音
+	VoiceLearn        bool     `json:"voice_learn"`    // 贴入后用户手改的词自动记成热词和纠错表
 	ASRBaseURL        string   `json:"asr_base_url"`
 	ASRModel          string   `json:"asr_model"`
 	ASRAPIKey         string   `json:"asr_api_key,omitempty"`
@@ -66,6 +67,7 @@ func defaultConfig() Config {
 		VoiceStyle:       "bars",
 		VoiceTone:        "dark",
 		VoiceSound:       true,
+		VoiceLearn:       true,
 		VoiceOrbSize:     voiceOrbW,
 		ASRBaseURL:       "https://api.stepfun.com/v1",
 		ASRModel:         "stepaudio-3-asr-max",

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,7 +22,6 @@ import (
 type settingsState struct {
 	draft         Config
 	exclude       string
-	asrHotwords   string
 	openAtLogin   bool
 	hotkeysOn     bool // 「启用快捷键」开关，保存时写回 DisableHotkeys 的反面
 	status        string
@@ -30,9 +30,15 @@ type settingsState struct {
 	page          string
 	extraH        float32 // 额外要求输入框的高度（手动拖过之后才用）
 	extraManual   bool
-	gripMoved     bool // 这次按住把手时拖动过
-	transTab      int  // 「翻译」页：0 译文、1 接口
-	voiceTab      int  // 「语音识别」页：0 通用、1 外观、2 接口
+	gripMoved     bool   // 这次按住把手时拖动过
+	transTab      int    // 「翻译」页：0 译文、1 接口
+	voiceTab      int    // 「语音识别」页：0 通用、1 外观、2 接口
+	wordAdd       bool   // 词库：「+ 添加」点开成了输入框
+	editWord      string // 词库：正在原地改的那个词
+	editText      string
+	editSeen      bool // 输入框拿到过焦点，之后失焦就算提交
+	wordsMsg      string
+	wordsErr      bool
 	compat        bool
 	stats         *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
 	custom        bool          // 「服务商」手动选了自定义（地址还是某家预设的也不跳回去）
@@ -59,7 +65,6 @@ func (a *App) openSettings() {
 		a.set = settingsState{
 			draft:       cfg,
 			exclude:     strings.Join(cfg.ExcludeProcesses, ", "),
-			asrHotwords: strings.Join(cfg.ASRHotwords, ", "),
 			openAtLogin: mygo.App.OpenAtLogin(),
 			hotkeysOn:   !cfg.DisableHotkeys,
 			page:        pageTrans,
@@ -115,6 +120,7 @@ func (a *App) settingsView(c *ui.Context) {
 					})
 					ui.SidebarSection(c, T("语音输入"), nil, func() {
 						ui.SidebarItem(c, pageVoice, iconMic, T("语音识别"))
+						ui.SidebarItem(c, pageWords, iconWords, T("词库"))
 						ui.SidebarItem(c, pagePolish, iconPolish, T("润色"))
 					})
 					ui.Box(c).Height(12)
@@ -128,6 +134,8 @@ func (a *App) settingsView(c *ui.Context) {
 					switch s.page {
 					case pageVoice:
 						a.pageVoice(c, d)
+					case pageWords:
+						a.pageWords(c, d)
 					case pagePolish:
 						a.pagePolish(c, d)
 					case pageKeys:
@@ -164,6 +172,7 @@ const (
 	pageBtn    = "btn"
 	pageVoice  = "voice"
 	pagePolish = "polish"
+	pageWords  = "words"
 	pageGen    = "gen"
 )
 
@@ -192,7 +201,7 @@ func pageTitle(c *ui.Context, title string) {
 // pageTabs 页标题下的分段切换，页面太长时按用途拆开
 func pageTabs(c *ui.Context, selected *int, labels ...string) {
 	ui.Row(c).Padding(4, 0, 8, 0).Children(func() {
-		ui.Segmented(c, selected, labels...).Label(labels[0])
+		segmented(c, selected, labels...)
 	})
 }
 
@@ -293,8 +302,229 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 	ui.Divider(c)
 	settingRow(c, T("触发键"), T("点一下再按键，Backspace 关闭"), func() { a.hotkeyBox(c, "voice", &d.VoiceHotkey, true) })
 	switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
-	ui.Divider(c)
-	settingRow(c, T("热词"), T("逗号或换行分隔"), func() { ui.TextArea(c, &a.set.asrHotwords).Height(64) })
+}
+
+// pageWords 「词库」页：识别和润色要认得的词。自动纠正学到的对子也只按正确写法显示成一个词，
+// 错写藏在悬停提示里（润色还要用「错写→正确」这张表，数据不丢）。改动直接落盘，不走「保存」。
+func (a *App) pageWords(c *ui.Context, d *Config) {
+	t := c.Theme()
+	s := &a.set
+	pageTitle(c, T("词库"))
+	switchRow(c, T("自动学习"), T("贴入后你手改过的词会记住，下次识别和润色都用对的写法"), &d.VoiceLearn)
+	groups := groupWords(a.learn.all())
+	ui.Row(c).Gap(12).AlignItems(ui.End).Padding(16, 0, 10, 0).Children(func() {
+		ui.Column(c).Grow(1).Shrink(1).Gap(3).Children(func() {
+			if len(groups) > 0 {
+				ui.Text(c, fmt.Sprintf(T("共 %d 个"), len(groups))).FontSize(14).Bold()
+			}
+			ui.Text(c, T("让识别认得这些写法，比如人名、产品名")).FontSize(12).TextColor(t.TextMuted)
+		})
+		ui.Row(c).Gap(12).Children(func() {
+			if smallLink(c, T("导入…")).Clicked() {
+				go a.importWords()
+			}
+			if smallLink(c, T("导出…")).Clicked() {
+				go a.exportWords()
+			}
+		})
+	})
+	if s.wordsMsg != "" {
+		color := t.TextMuted
+		if s.wordsErr {
+			color = t.Danger
+		}
+		ui.Text(c, s.wordsMsg).FontSize(12).TextColor(color).Padding(0, 0, 8, 0).MaxLines(2)
+	}
+	// 固定三列的格子：内容区 472 宽，四列放大字号后「Claude Opus」这种会被截断
+	const cols = 3
+	n := len(groups) + 1 // 最后一格是「+ 添加」
+	for row := 0; row < n; row += cols {
+		ui.Row(c).Gap(8).Padding(0, 0, 8, 0).Children(func() {
+			for i := row; i < row+cols; i++ {
+				switch {
+				case i < len(groups):
+					a.wordCell(c, groups[i])
+				case i == len(groups):
+					a.addCell(c)
+				default:
+					ui.Box(c).Grow(1).Basis(0) // 补空位，格子宽度才一致
+				}
+			}
+		})
+	}
+	if len(groups) == 0 {
+		ui.Text(c, T("你改过两次的词会自动加进来，也可以自己添加")).FontSize(12).TextColor(t.TextMuted).Padding(12, 0, 0, 0)
+	}
+}
+
+// wordGroup 词库里显示的一个词：同一个正确写法的几条（纯热词 + 各种错写）合成一个
+type wordGroup struct {
+	Right  string
+	Words  []learnedWord
+	Wrongs []string
+	Count  int
+	Manual bool
+}
+
+// active 跟 learner.active 同一个规则：手动加的，或同一写法累计见过 learnPromote 次
+func (g wordGroup) active() bool { return g.Manual || g.Count >= learnPromote }
+
+// groupWords 按正确写法合并，最近加的（文件里靠后的）在前
+func groupWords(words []learnedWord) []wordGroup {
+	var out []wordGroup
+	at := map[string]int{}
+	for i := len(words) - 1; i >= 0; i-- {
+		w := words[i]
+		j, ok := at[w.Right]
+		if !ok {
+			j = len(out)
+			at[w.Right] = j
+			out = append(out, wordGroup{Right: w.Right})
+		}
+		g := &out[j]
+		g.Words = append(g.Words, w)
+		g.Count += w.Count
+		g.Manual = g.Manual || w.Manual
+		if w.Wrong != "" {
+			g.Wrongs = append(g.Wrongs, w.Wrong)
+		}
+	}
+	return out
+}
+
+func (g wordGroup) tip() string {
+	var parts []string
+	if len(g.Wrongs) > 0 {
+		parts = append(parts, fmt.Sprintf(T("曾听成 %s"), strings.Join(g.Wrongs, "、")))
+	}
+	switch {
+	case !g.active():
+		parts = append(parts, T("再遇到一次就生效"))
+	case g.Manual:
+		parts = append(parts, T("手动添加"))
+	default:
+		parts = append(parts, fmt.Sprintf(T("学到 %d 次"), g.Count))
+	}
+	return strings.Join(parts, " · ")
+}
+
+// smallLink 次要操作用的小号文字链接（导入导出一年点一次，不配做成按钮）
+func smallLink(c *ui.Context, label string) ui.Element {
+	t := c.Theme()
+	w, _ := c.MeasureText(10000, ui.Span{Text: label, Size: 12})
+	l := ui.Text(c, label).FontSize(12).Cursor(ui.CursorPointer).SingleLine().Shrink(0).MinWidth(w + 8) // 同 fitLabel：不按 MiSans 量会被截成省略号
+	if l.Hovered() {
+		return l.TextColor(t.Accent)
+	}
+	return l.TextColor(t.TextMuted)
+}
+
+// wordCell 词库的一格：点一下原地改写法，悬停露出 ✕；自动学到的前面一个小点，还没生效的虚线淡字
+func (a *App) wordCell(c *ui.Context, g wordGroup) {
+	t := c.Theme()
+	s := &a.set
+	if s.editWord == g.Right {
+		a.wordInput(c, g.Right, "", func(text string) { a.learn.rename(g.Right, text) })
+		return
+	}
+	cell := ui.Row(c).Key(g.Right).Grow(1).Basis(0).Shrink(1).Height(40).Gap(8).AlignItems(ui.Center).Padding(0, 10, 0, 12).Radius(t.Radius).Border(1, t.Border).Cursor(ui.CursorText).Tooltip(g.tip())
+	hover := cell.Hovered()
+	bg, ink := t.Surface, t.Text
+	if !g.active() {
+		cell.BorderStyle(ui.BorderDashed)
+		bg, ink = ui.RGBA(0, 0, 0, 0), t.TextMuted
+	}
+	if hover {
+		bg = t.SurfaceHover
+	}
+	removed := false
+	cell.Background(bg).Children(func() {
+		if !g.Manual {
+			ui.Box(c).Size(6, 6).Radius(3).Background(t.Accent)
+		}
+		ui.Text(c, g.Right).FontSize(15).TextColor(ink).SingleLine().Grow(1).Shrink(1)
+		x := ui.Text(c, "✕").FontSize(11).TextColor(t.TextMuted).Cursor(ui.CursorPointer).Tooltip(T("删除"))
+		if !hover {
+			x.TextColor(ui.RGBA(0, 0, 0, 0)) // 占着位置，悬停时文字不跳
+		}
+		if hover && x.Clicked() {
+			removed = true
+			for _, w := range g.Words {
+				a.learn.remove(w.Wrong, w.Right)
+			}
+		}
+	})
+	if cell.Clicked() && !removed {
+		s.editWord, s.editText, s.editSeen, s.wordAdd = g.Right, g.Right, false, false
+	}
+}
+
+// addCell 最后一格「+ 添加」，点开原地变输入框
+func (a *App) addCell(c *ui.Context) {
+	t := c.Theme()
+	s := &a.set
+	if s.wordAdd {
+		a.wordInput(c, "+", T("回车添加，逗号隔开多个"), func(text string) { a.learn.add(parseWordList(text)) })
+		return
+	}
+	cell := ui.Row(c).Grow(1).Basis(0).Shrink(1).Height(40).Justify(ui.Center).AlignItems(ui.Center).Radius(t.Radius).Border(1, t.Border).BorderStyle(ui.BorderDashed).Cursor(ui.CursorPointer)
+	if cell.Hovered() {
+		cell.Background(t.SurfaceHover)
+	}
+	cell.Children(func() {
+		ui.Text(c, "+ "+T("添加")).FontSize(14).TextColor(t.TextMuted).SingleLine()
+	})
+	if cell.Clicked() {
+		s.wordAdd, s.editWord, s.editText, s.editSeen = true, "", "", false
+	}
+}
+
+// wordInput 格子里的输入框：回车或点别处就提交，空着算取消
+func (a *App) wordInput(c *ui.Context, key, placeholder string, done func(string)) {
+	s := &a.set
+	in := ui.TextInput(c, &s.editText).Placeholder(placeholder).Grow(1).Basis(0).Shrink(1).Height(40).Radius(c.Theme().Radius).AutoFocus()
+	focused := in.Focused()
+	if in.Submitted() || (s.editSeen && !focused) {
+		if text := strings.TrimSpace(s.editText); text != "" {
+			done(text)
+		}
+		s.editWord, s.editText, s.editSeen, s.wordAdd = "", "", false, false
+		return
+	}
+	s.editSeen = s.editSeen || focused
+}
+
+func (a *App) wordsStatus(msg string, isErr bool) {
+	a.setWin.Update(func() { a.set.wordsMsg, a.set.wordsErr = msg, isErr })
+}
+
+var wordFileFilters = []mygo.FileFilter{{Name: "Text", Extensions: []string{"txt", "tsv", "csv"}}}
+
+// importWords 在界面线程之外跑：文件对话框、读文件，结果回到设置窗口；导入的直接生效
+func (a *App) importWords() {
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: a.setWin, Title: T("导入词库"), Filters: wordFileFilters})
+	if err != nil || len(paths) == 0 {
+		return
+	}
+	b, err := os.ReadFile(paths[0])
+	if err != nil {
+		a.wordsStatus(err.Error(), true)
+		return
+	}
+	n := a.learn.add(parseWordList(string(b)))
+	a.wordsStatus(fmt.Sprintf(T("已导入 %d 条"), n), false)
+}
+
+func (a *App) exportWords() {
+	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: a.setWin, Title: T("导出词库"), DefaultPath: "mami-words.txt", Filters: wordFileFilters})
+	if err != nil || path == "" {
+		return
+	}
+	if err := os.WriteFile(path, []byte(formatWordList(a.learn.all())), 0o600); err != nil {
+		a.wordsStatus(err.Error(), true)
+		return
+	}
+	a.wordsStatus(T("已导出"), false)
 }
 
 // voiceLook 「语音识别」页的外观 tab：录音时的样式
@@ -380,7 +610,7 @@ func (a *App) pagePolish(c *ui.Context, d *Config) {
 
 func (a *App) testPolishDraft() {
 	cfg := a.set.draft
-	cfg.ASRHotwords = splitList(a.set.asrHotwords)
+	cfg.ASRHotwords = withLearned(cfg.ASRHotwords, a.learn.active())
 	a.set.polishTesting, a.set.polishTestMsg, a.set.polishTestErr = true, T("润色中…"), false
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), polishDeadline(polishSample))
@@ -404,7 +634,7 @@ func (a *App) testPolishDraft() {
 
 func (a *App) testVoiceDraft() {
 	cfg := a.set.draft
-	cfg.ASRHotwords = splitList(a.set.asrHotwords)
+	cfg.ASRHotwords = withLearned(cfg.ASRHotwords, a.learn.active())
 	a.set.voiceTesting, a.set.voiceTestMsg, a.set.voiceTestErr = true, T("识别中…"), false
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -637,7 +867,6 @@ func (a *App) saveDraft() {
 	cfg.BaseURL, cfg.Model = strings.TrimSpace(cfg.BaseURL), strings.TrimSpace(cfg.Model)
 	cfg.APIKey = strings.TrimSpace(cfg.APIKey)
 	cfg.ExcludeProcesses = splitList(s.exclude)
-	cfg.ASRHotwords = splitList(s.asrHotwords)
 	cfg.DisableHotkeys = !s.hotkeysOn
 	cfg.normalize()
 	if err := a.setConfig(cfg); err != nil {
@@ -700,6 +929,7 @@ func (a *App) titleBar(c *ui.Context) {
 
 // 侧边栏图标（Lucide 描边风格，和 iconChevron 一致）
 var iconMic = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>`))
+var iconWords = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>`))
 var iconPolish = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></svg>`))
 var iconTrans = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>`))
 var iconKeys = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></svg>`))

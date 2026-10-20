@@ -41,7 +41,7 @@ func (a *App) pageHistory(c *ui.Context, d *Config) {
 	st := a.historyStatsNow()
 	pageTitle(c, T("记录"))
 	ui.Row(c).Padding(4, 0, 12, 0).Children(func() {
-		ui.Segmented(c, &a.set.histTab, T("翻译"), T("语音")).Label(T("记录"))
+		segmented(c, &a.set.histTab, T("翻译"), T("语音"))
 	})
 	if a.set.histTab == 1 {
 		a.voiceHistory(c, d, st)
