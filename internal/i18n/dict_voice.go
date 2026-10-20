@@ -3,6 +3,8 @@ package i18n
 // 语音页的新文案与现有各语言词典保持对应。
 func init() {
 	entries := map[string][6]string{
+		"目前只支持阶跃星辰 StepFun 的语音接口":            {"目前只支援階躍星辰 StepFun 的語音介面", "현재는 StepFun 음성 API만 지원합니다", "Por ahora solo la API de voz de StepFun", "Pour l'instant, seule l'API vocale StepFun", "Derzeit nur die Sprach-API von StepFun", "Пока поддерживается только речевой API StepFun"},
+		"OpenAI 兼容接口都能用":                     {"OpenAI 相容介面都能用", "OpenAI 호환 API 모두 가능", "Cualquier API compatible con OpenAI", "Toute API compatible OpenAI", "Jede OpenAI-kompatible API", "Любой OpenAI-совместимый API"},
 		"按一个键或组合键…":                          {"按一個鍵或組合鍵…", "키 또는 조합 키를 누르세요…", "Pulsa una tecla o combinación…", "Appuyez sur une touche ou une combinaison…", "Taste oder Kombination drücken…", "Нажмите клавишу или сочетание…"},
 		"单按只能用 Alt/Ctrl/Shift、F 键或 CapsLock": {"單按只能用 Alt/Ctrl/Shift、F 鍵或 CapsLock", "단독으로는 Alt/Ctrl/Shift, F 키, CapsLock만 가능", "Sola, solo Alt/Ctrl/Mayús, teclas F o BloqMayús", "Seule : Alt/Ctrl/Maj, touches F ou Verr. Maj", "Allein nur Alt/Strg/Umschalt, F-Tasten oder Feststell", "Отдельно — только Alt/Ctrl/Shift, F-клавиши или CapsLock"},
 		"按下新的快捷键…":                           {"按下新的快速鍵…", "새 단축키를 누르세요…", "Pulsa el nuevo atajo…", "Appuyez sur le nouveau raccourci…", "Neue Tastenkombination drücken…", "Нажмите новое сочетание…"},

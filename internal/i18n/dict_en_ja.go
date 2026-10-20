@@ -4,6 +4,8 @@ package i18n
 // 新增界面文字时，先在代码里写 T("中文")，再回来补这张表；
 // TestI18nDictComplete 会扫源码，漏了会失败。
 var Dict = map[string][2]string{
+	"目前只支持阶跃星辰 StepFun 的语音接口":            {"Only StepFun's speech API is supported for now", "現在は StepFun の音声 API のみ対応"},
+	"OpenAI 兼容接口都能用":                     {"Any OpenAI-compatible API", "OpenAI 互換 API なら使えます"},
 	"按一个键或组合键…":                          {"Press a key or combination…", "キーか組み合わせを押してください…"},
 	"单按只能用 Alt/Ctrl/Shift、F 键或 CapsLock": {"Alone, only Alt/Ctrl/Shift, F keys or CapsLock", "単独では Alt/Ctrl/Shift・F キー・CapsLock のみ"},
 	"按下新的快捷键…":                           {"Press the new shortcut…", "新しいショートカットを押してください…"},

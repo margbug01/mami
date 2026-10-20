@@ -123,7 +123,8 @@ func (a *App) settingsView(c *ui.Context) {
 				}).Grow(1)
 			})
 			ui.Scroll(c).Grow(1).Children(func() {
-				ui.Column(c).Padding(8, 24, 16, 24).Children(func() {
+				// 每页、每个 tab 单独认控件：按位置认的话，上一页同位置的多行框（热词）会被沿用，Password 对它无效，Key 就明文了
+				ui.Column(c).Padding(8, 24, 16, 24).Key(fmt.Sprint(s.page, s.transTab, s.voiceTab)).Children(func() {
 					switch s.page {
 					case pageVoice:
 						a.pageVoice(c, d)
@@ -812,7 +813,7 @@ var iconGen = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" vi
 func (a *App) apiASR(c *ui.Context, d *Config) {
 	settingRow(c, T("接口地址"), T("语音始终直连，不使用代理"), func() { ui.TextInput(c, &d.ASRBaseURL) })
 	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.ASRModel) })
-	settingRow(c, "API Key", "StepFun", func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
+	settingRow(c, "API Key", T("目前只支持阶跃星辰 StepFun 的语音接口"), func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
 	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
 		color := c.Theme().TextMuted
 		if a.set.voiceTestErr {
@@ -829,7 +830,7 @@ func (a *App) apiASR(c *ui.Context, d *Config) {
 func (a *App) apiPolish(c *ui.Context, d *Config) {
 	settingRow(c, T("接口地址"), T("润色始终直连，不使用代理"), func() { ui.TextInput(c, &d.PolishBaseURL) })
 	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.PolishModel) })
-	settingRow(c, "API Key", "DeepSeek", func() { ui.TextInput(c, &d.PolishAPIKey).Password().Placeholder("sk-…") })
+	settingRow(c, "API Key", T("OpenAI 兼容接口都能用"), func() { ui.TextInput(c, &d.PolishAPIKey).Password().Placeholder("sk-…") })
 	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
 		color := c.Theme().TextMuted
 		if a.set.polishTestErr {
