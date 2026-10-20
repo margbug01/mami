@@ -728,7 +728,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 		case mode == voicePasteKeep:
 			// 认不出是不是输入框（微信这类）：照样贴，但文字留在剪贴板里，贴空了还能手动 Ctrl+V
 			a.voiceDisplay(id, voiceViewState{}, false)
-			sendCtrl('V')
+			sendPaste()
 			if selected != "" {
 				a.voiceUndoNotice(id)
 			} else {

@@ -101,7 +101,7 @@ func (w *worker) do(job func(owner uintptr)) {
 	pPostMessageW.Call(w.hwnd, wmWorkerJob, 0, 0)
 }
 
-// paste 用剪贴板 + Ctrl+V 把译文贴进当前焦点，0.7 秒后把原来的剪贴板还回去
+// paste 用剪贴板 + 粘贴键（一般是 Ctrl+V，见 sendPaste）把文字贴进当前焦点，0.7 秒后把原来的剪贴板还回去
 // （期间要是别人又往剪贴板里写了东西，就不还原，免得覆盖掉）。
 func (w *worker) paste(text string, allow ...func(owner uintptr) bool) {
 	w.do(func(owner uintptr) {
@@ -112,7 +112,7 @@ func (w *worker) paste(text string, allow ...func(owner uintptr) bool) {
 		if !setClipboardText(owner, toCRLF(text), true) {
 			return
 		}
-		sendCtrl('V')
+		sendPaste()
 		if !ok {
 			return
 		}
