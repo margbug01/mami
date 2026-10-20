@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -29,7 +31,7 @@ func TestASRRequestAndSSE(t *testing.T) {
 	cfg := defaultConfig()
 	cfg.ASRBaseURL, cfg.ASRAPIKey, cfg.ASRHotwords, cfg.Proxy = server.URL, "test-key", []string{"接口"}, "http://127.0.0.1:1"
 	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:1")
-	got, err := transcribe(context.Background(), cfg, []byte{1, 2, 3, 4})
+	got, err := transcribeStepFun(context.Background(), cfg, []byte{1, 2, 3, 4})
 	if err != nil || got != "最终接口" {
 		t.Fatalf("got %q, %v", got, err)
 	}
@@ -52,7 +54,7 @@ func TestASRErrors(t *testing.T) {
 			defer server.Close()
 			cfg := defaultConfig()
 			cfg.ASRBaseURL, cfg.ASRAPIKey = server.URL, "secret-key"
-			_, err := transcribe(context.Background(), cfg, nil)
+			_, err := transcribeStepFun(context.Background(), cfg, nil)
 			if err == nil || !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), "secret-key") {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -94,5 +96,49 @@ func TestVoiceConfigNormalize(t *testing.T) {
 	}
 	if got := splitList("Go, 接口\n语音，StepFun"); !reflect.DeepEqual(got, []string{"Go", "接口", "语音", "StepFun"}) {
 		t.Fatal(got)
+	}
+}
+
+func TestTranscribeChat(t *testing.T) {
+	var got map[string]any
+	var auth, path string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth, path = r.Header.Get("Authorization"), r.URL.Path
+		json.NewDecoder(r.Body).Decode(&got)
+		w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":" 四点开会。 "}}]}`))
+	}))
+	defer server.Close()
+	cfg := defaultConfig()
+	cfg.ASRBaseURL, cfg.ASRModel, cfg.ASRAPIKey, cfg.ASRHotwords = server.URL+"/compatible-mode/v1", "qwen3-asr-flash", "sk-test", []string{"Mami", "StepFun"}
+	text, err := transcribe(context.Background(), cfg, []byte{1, 2, 3, 4})
+	if err != nil || text != "四点开会。" {
+		t.Fatalf("got %q %v", text, err)
+	}
+	if path != "/compatible-mode/v1/chat/completions" || auth != "Bearer sk-test" || got["model"] != "qwen3-asr-flash" {
+		t.Fatalf("request: %s %s %v", path, auth, got["model"])
+	}
+	msgs := got["messages"].([]any)
+	if sys := msgs[0].(map[string]any); sys["role"] != "system" || sys["content"].([]any)[0].(map[string]any)["text"] != "Mami，StepFun" {
+		t.Fatalf("hotwords: %v", sys)
+	}
+	audio := msgs[1].(map[string]any)["content"].([]any)[0].(map[string]any)["input_audio"].(map[string]any)["data"].(string)
+	b64, ok := strings.CutPrefix(audio, "data:audio/wav;base64,")
+	wav, _ := base64.StdEncoding.DecodeString(b64)
+	if !ok || len(wav) != 48 || string(wav[:4]) != "RIFF" || string(wav[8:12]) != "WAVE" || binary.LittleEndian.Uint32(wav[24:]) != 16000 || binary.LittleEndian.Uint32(wav[40:]) != 4 {
+		t.Fatalf("wav header: %v", wav)
+	}
+	if got["asr_options"].(map[string]any)["enable_itn"] != true {
+		t.Fatal("asr_options")
+	}
+}
+
+func TestIsStepFunASR(t *testing.T) {
+	for base, want := range map[string]bool{
+		"https://api.stepfun.com/v1": true, "https://stepfun.com/v1": true,
+		"https://dashscope.aliyuncs.com/compatible-mode/v1": false, "https://evilstepfun.com/v1": false, "https://stepfun.com.evil.io/v1": false,
+	} {
+		if isStepFunASR(base) != want {
+			t.Errorf("%s: want %v", base, want)
+		}
 	}
 }

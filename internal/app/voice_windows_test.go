@@ -241,3 +241,38 @@ func TestVoiceOrbSize(t *testing.T) {
 		t.Fatal("bars height")
 	}
 }
+
+// MAMI_QWEN_KEY=sk-… [MAMI_QWEN_BASE=…] 时真连千问 ASR（OpenAI 兼容 chat 接口）
+func TestQwenASRLive(t *testing.T) {
+	key := os.Getenv("MAMI_QWEN_KEY")
+	if key == "" {
+		t.Skip("set MAMI_QWEN_KEY to call Qwen ASR")
+	}
+	wav, err := os.ReadFile(`C:\Users\marg0\.config\alma\scratch\mami-asr\test.wav`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := defaultConfig()
+	cfg.ASRBaseURL, cfg.ASRModel, cfg.ASRAPIKey = "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen3-asr-flash", key
+	if b := os.Getenv("MAMI_QWEN_BASE"); b != "" {
+		cfg.ASRBaseURL = b
+	}
+	if m := os.Getenv("MAMI_QWEN_MODEL"); m != "" {
+		cfg.ASRModel = m
+	}
+	cfg.ASRHotwords = strings.Split(os.Getenv("MAMI_QWEN_HOTWORDS"), ",")
+	if cfg.ASRHotwords[0] == "" {
+		cfg.ASRHotwords = nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	start := time.Now()
+	text, err := transcribe(ctx, cfg, wav[44:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%s · %v · %q", cfg.ASRModel, time.Since(start).Round(time.Millisecond), text)
+	if !strings.Contains(text, "接口") {
+		t.Fatal("ASR result did not contain expected word 接口")
+	}
+}

@@ -811,9 +811,28 @@ var iconGen = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" vi
 
 // apiASR 「语音识别」页的接口区
 func (a *App) apiASR(c *ui.Context, d *Config) {
+	cur := "custom"
+	for _, p := range asrProviders {
+		if strings.EqualFold(d.ASRBaseURL, p.base) {
+			cur = p.id
+		}
+	}
+	settingRow(c, T("服务商"), T("选一个会自动填好接口地址和模型"), func() {
+		v := cur
+		opts := []option{{"stepfun", T("阶跃星辰 StepFun")}, {"qwen", T("阿里云百炼 · 千问 ASR")}}
+		if cur == "custom" { // 自定义就是直接改下面的地址，选项只用来显示
+			opts = append(opts, option{"custom", T("自定义")})
+		}
+		optionSelect(c, &v, opts)
+		for _, p := range asrProviders {
+			if v != cur && p.id == v {
+				d.ASRBaseURL, d.ASRModel, d.ASRAPIKey = p.base, p.model, "" // Key 各家不通用
+			}
+		}
+	})
 	settingRow(c, T("接口地址"), T("语音始终直连，不使用代理"), func() { ui.TextInput(c, &d.ASRBaseURL) })
 	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.ASRModel) })
-	settingRow(c, "API Key", T("目前只支持阶跃星辰 StepFun 的语音接口"), func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
+	settingRow(c, "API Key", T("换服务商要重新填"), func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
 	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
 		color := c.Theme().TextMuted
 		if a.set.voiceTestErr {
@@ -824,6 +843,12 @@ func (a *App) apiASR(c *ui.Context, d *Config) {
 			a.testVoiceDraft()
 		}
 	})
+}
+
+// asrProviders 语音识别的预设；不是阶跃的地址都按 OpenAI 兼容 chat 接口发音频（见 transcribeChat）
+var asrProviders = []struct{ id, base, model string }{
+	{"stepfun", "https://api.stepfun.com/v1", "stepaudio-3-asr-max"},
+	{"qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen3-asr-flash"},
 }
 
 // apiPolish 「润色」页的接口区
