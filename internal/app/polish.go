@@ -57,7 +57,7 @@ var polishStyles = map[string]string{
 // 替换只靠纠错表，那是用户同一处改过两次才生效的
 const (
 	polishHotwordsLead = "\n以下是用户的专有名词，原文里出现时按这个写法写（用字、大小写照抄）；不要把读音相近的别的词改成它们："
-	polishTableLead    = "\n以下是这位用户语音识别常见的错写（左→右），出现左边的一般就是右边那个，改过来；上下文明显说的是别的人或东西时不改："
+	polishTableLead    = "\n以下是这位用户语音识别常见的错写（左→右，大小写和空格不同也算），出现左边的一般就是右边那个，改过来；上下文明显说的是别的人或东西时不改："
 )
 
 func polish(ctx context.Context, cfg Config, text string, learned ...learnedWord) (string, error) {
@@ -149,7 +149,7 @@ func cleanPolishOutput(text string) string {
 func polishVoice(ctx context.Context, cfg Config, source string, learned ...learnedWord) (string, int64) {
 	cfg.normalize()
 	if cfg.PolishStyle == "off" || cfg.PolishAPIKey == "" || utf8.RuneCountInString(strings.TrimSpace(source)) < polishMinRunes {
-		return source, 0
+		return applyCorrections(source, learned), 0 // 不润色，词库里的纠错照样用
 	}
 	started := time.Now()
 	polishCtx, cancel := context.WithTimeout(ctx, polishDeadline(source))
@@ -176,8 +176,8 @@ func polishVoice(ctx context.Context, cfg Config, source string, learned ...lear
 			reason = "empty polish result"
 		}
 		log.Printf("polish: %dms: %s", elapsed, reason)
-		return source, 0 // 没润色成：耗时记 0，历史和统计就不会把它当成润色过
+		return applyCorrections(source, learned), 0 // 没润色成：耗时记 0，历史和统计就不会把它当成润色过
 	}
-	result = guardPolish(source, result, learned)
+	result = applyCorrections(guardPolish(source, result, learned), learned)
 	return result, elapsed
 }

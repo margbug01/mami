@@ -70,7 +70,7 @@ func (l *learner) save() {
 
 func (l *learner) index(wrong, right string) int {
 	for i, w := range l.words {
-		if w.Wrong == wrong && w.Right == right {
+		if foldKey(w.Wrong) == foldKey(wrong) && foldKey(w.Right) == foldKey(right) {
 			return i
 		}
 	}
@@ -84,8 +84,10 @@ func (l *learner) observe(pairs []learnedWord) {
 	defer l.mu.Unlock()
 	now := time.Now().Format(time.RFC3339)
 	for _, p := range pairs {
-		if slices.ContainsFunc(l.words, func(w learnedWord) bool { return w.Right == p.Wrong }) {
-			l.words = slices.DeleteFunc(l.words, func(w learnedWord) bool { return !w.Manual && w.Wrong == p.Right && w.Right == p.Wrong })
+		if slices.ContainsFunc(l.words, func(w learnedWord) bool { return foldKey(w.Right) == foldKey(p.Wrong) }) {
+			l.words = slices.DeleteFunc(l.words, func(w learnedWord) bool {
+				return !w.Manual && foldKey(w.Wrong) == foldKey(p.Right) && foldKey(w.Right) == foldKey(p.Wrong)
+			})
 			continue
 		}
 		i := l.index(p.Wrong, p.Right)
@@ -292,7 +294,7 @@ func formatWordList(words []learnedWord) string {
 func withLearned(hotwords []string, learned []learnedWord) []string {
 	out := slices.Clone(hotwords)
 	for _, w := range learned {
-		if !slices.Contains(out, w.Right) {
+		if !slices.ContainsFunc(out, func(h string) bool { return foldKey(h) == foldKey(w.Right) }) {
 			out = append(out, w.Right)
 		}
 	}
@@ -302,8 +304,10 @@ func withLearned(hotwords []string, learned []learnedWord) []string {
 // learnedTable 给润色提示词的纠错表（只要纠错对，纯热词已经在专有名词那行里）
 func learnedTable(learned []learnedWord) string {
 	var parts []string
+	seen := map[string]bool{}
 	for _, w := range learned {
-		if w.Wrong != "" {
+		if k := foldKey(w.Wrong) + "→" + foldKey(w.Right); w.Wrong != "" && !seen[k] {
+			seen[k] = true
 			parts = append(parts, w.Wrong+"→"+w.Right)
 		}
 	}
@@ -406,27 +410,116 @@ const learnPrompt = `用户用语音输入了一段文字（「贴入」），�
 
 // parseLearned 校验模型抽出来的词对：读音得像（soundsAlike），wrong 得真在贴入文本里、right 得真在改后文本里、wrong 在改后文本里已经不见了，都不超过 12 个字
 func parseLearned(out, pasted, now string) []learnedWord {
+	pairs, _ := parseLearnedWhy(out, pasted, now)
+	return pairs
+}
+
+// parseLearnedWhy 同 parseLearned，另外给出每条被扔掉的原因（只有原因，不含文字，可以进日志）。
+// 写法比对不管大小写和空格：贴入的是「L 码」，模型常写成「L码」
+func parseLearnedWhy(out, pasted, now string) (pairs []learnedWord, drops []string) {
 	var raw []struct {
 		Wrong string `json:"wrong"`
 		Right string `json:"right"`
 	}
 	if err := json.Unmarshal([]byte(cleanOutput(out)), &raw); err != nil {
-		return nil
+		return nil, []string{"bad json"}
 	}
-	var pairs []learnedWord
 	for _, p := range raw {
-		w, r := strings.TrimSpace(p.Wrong), strings.TrimSpace(p.Right)
-		if w == "" || r == "" || w == r || utf8.RuneCountInString(w) > 12 || utf8.RuneCountInString(r) > 12 || onlyPunct(w) || onlyPunct(r) {
-			continue
-		}
-		if !strings.Contains(pasted, w) || !strings.Contains(now, r) || strings.Contains(now, w) || !soundsAlike(w, r) {
-			continue
-		}
-		if !slices.ContainsFunc(pairs, func(q learnedWord) bool { return q.Wrong == w && q.Right == r }) {
+		w, r := foldFind(pasted, p.Wrong), foldFind(now, p.Right) // 换成原文里实际的那一段
+		switch {
+		case strings.TrimSpace(p.Wrong) == "" || strings.TrimSpace(p.Right) == "" || foldKey(p.Wrong) == foldKey(p.Right):
+			drops = append(drops, "empty or same")
+		case utf8.RuneCountInString(p.Wrong) > 12 || utf8.RuneCountInString(p.Right) > 12 || onlyPunct(p.Wrong) || onlyPunct(p.Right):
+			drops = append(drops, "too long or punct")
+		case w == "":
+			drops = append(drops, "wrong not in paste")
+		case r == "":
+			drops = append(drops, "right not in edit")
+		case foldFind(now, w) != "":
+			drops = append(drops, "wrong still there")
+		case !soundsAlike(w, r):
+			drops = append(drops, "not alike")
+		case slices.ContainsFunc(pairs, func(q learnedWord) bool { return foldKey(q.Wrong) == foldKey(w) && foldKey(q.Right) == foldKey(r) }):
+		default:
 			pairs = append(pairs, learnedWord{Wrong: w, Right: r})
 		}
 	}
-	return pairs
+	return pairs, drops
+}
+
+// foldKey 比较写法用：不管大小写和空格（「L 码」「l码」「L码」是同一个）
+func foldKey(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(s), ""))
+}
+
+// foldFind 在 s 里找 sub，不管大小写和空格，返回 s 里实际的那一段；找不到返回空
+func foldFind(s, sub string) string {
+	want := []rune(foldKey(sub))
+	if len(want) == 0 {
+		return ""
+	}
+	rs := []rune(s)
+	for i := range rs {
+		if unicode.IsSpace(rs[i]) {
+			continue
+		}
+		j, k := i, 0
+		for j < len(rs) && k < len(want) {
+			if unicode.IsSpace(rs[j]) {
+				j++
+				continue
+			}
+			if unicode.ToLower(rs[j]) != want[k] {
+				break
+			}
+			j, k = j+1, k+1
+		}
+		if k == len(want) {
+			return string(rs[i:j])
+		}
+	}
+	return ""
+}
+
+// applyCorrections 把纠错表里生效的错写直接换成正确写法（不管大小写和空格）。
+// 润色没跑（关了、太短、失败）时靠它；润色跑了也再过一遍，补模型漏换的。原话里有「旁边有这些词时不换」的词就不换
+func applyCorrections(text string, learned []learnedWord) string {
+	block := map[string][]string{}
+	for _, w := range learned {
+		block[foldKey(w.Right)] = append(block[foldKey(w.Right)], w.Block...)
+	}
+	lower := strings.ToLower(text)
+	for _, w := range learned {
+		if w.Wrong == "" || foldFind(w.Right, w.Wrong) != "" {
+			continue
+		}
+		if slices.ContainsFunc(block[foldKey(w.Right)], func(b string) bool { return strings.Contains(lower, strings.ToLower(b)) }) {
+			continue
+		}
+		for range 20 {
+			hit := foldFind(text, w.Wrong)
+			if hit == "" {
+				break
+			}
+			i := strings.Index(text, hit)
+			text = text[:i] + spacedFor(text[:i], w.Right, text[i+len(hit):]) + text[i+len(hit):]
+		}
+	}
+	return text
+}
+
+// spacedFor 英文词换进中文句子里时两边补空格（「在alma里面」→「在 alma 里面」）
+func spacedFor(before, word, after string) string {
+	if !asciiWord(strings.ReplaceAll(word, " ", "")) {
+		return word
+	}
+	if r, _ := utf8.DecodeLastRuneInString(before); unicode.Is(unicode.Han, r) {
+		word = " " + word
+	}
+	if r, _ := utf8.DecodeRuneInString(after); unicode.Is(unicode.Han, r) {
+		word += " "
+	}
+	return word
 }
 
 // soundsAlike 自动学习只收「听错了」的：两边转成不带声调的拼音（英文转小写），
@@ -544,7 +637,7 @@ func guardPolish(source, polished string, learned []learnedWord) string {
 	for _, w := range learned {
 		vocab[w.Right] = true
 		if w.Wrong != "" {
-			pair[[2]string{w.Wrong, w.Right}] = true
+			pair[[2]string{foldKey(w.Wrong), foldKey(w.Right)}] = true
 			alias[w.Right] = append(alias[w.Right], w.Wrong)
 		}
 		block[w.Right] = append(block[w.Right], w.Block...)
@@ -558,7 +651,8 @@ func guardPolish(source, polished string, learned []learnedWord) string {
 		ins := h.ins
 		if !h.same && h.del != "" {
 			for v := range vocab {
-				if !strings.Contains(ins, v) || strings.Contains(h.del, v) {
+				vv := foldFind(ins, v) // 润色写出来的那一段（大小写可能和词库不一样）
+				if vv == "" || foldFind(h.del, v) != "" {
 					continue
 				}
 				w := aliasIn(h.del, alias[v]) // 「也可能听成」里写的（克劳德→Claude 读音对不上拼音也认）
@@ -566,9 +660,9 @@ func guardPolish(source, polished string, learned []learnedWord) string {
 					w = homophoneIn(h.del, v)
 				}
 				blocked := slices.ContainsFunc(block[v], func(b string) bool { return strings.Contains(lower, strings.ToLower(b)) })
-				if w != "" && (!pair[[2]string{w, v}] || blocked) {
-					for range strings.Count(ins, v) {
-						ins = unswap(ins, v, w)
+				if w != "" && (!pair[[2]string{foldKey(w), foldKey(v)}] || blocked) {
+					for range strings.Count(ins, vv) {
+						ins = unswap(ins, vv, w)
 					}
 				}
 			}
@@ -610,6 +704,7 @@ func asciiWord(s string) bool {
 // 它们会进纠错表，「章炜」要是猜出「张伟」，大学同学张伟就又被换掉了
 const aliasPrompt = `用户在语音输入法的词库里加了一个词。列出语音识别最可能把它写错成的样子：同音或近音的别的字、英文名被写成的中文音译。输出 JSON 字符串数组，最多 3 个。
 - 只要识别真的会写出来的错写，比如 Claude → ["克劳德","克劳得"]，阶跃 → ["阶越"]，Mami → ["马米"]。
+- 英文词常被听成「字母+汉字」或几个字母，也要考虑，比如 Alma → ["L码","阿尔玛"]，Kiro → ["K肉"]。
 - 错写本身是常见人名、常见词、常见品牌或普通英文单词的一律不要（章炜 不能给 张伟；Claude 不能给 Cloud；Mami 不能给 妈咪），换了会误伤真在说那个词的时候。
 - 想不出安全的就输出 []。只输出 JSON。`
 
@@ -649,8 +744,8 @@ func (l *learner) addAliases(right string, wrongs []string) {
 func aliasIn(s string, wrongs []string) string {
 	best := ""
 	for _, w := range wrongs {
-		if len(w) > len(best) && strings.Contains(s, w) {
-			best = w
+		if hit := foldFind(s, w); len(hit) > len(best) {
+			best = hit
 		}
 	}
 	return best

@@ -39,6 +39,8 @@ type settingsState struct {
 	editText      string
 	editSeen      bool     // 输入框拿到过焦点，之后失焦就算提交
 	editAliases   []string // 词库编辑面板里还留着的听法，点 ✕ 去掉
+	aliasNew      string   // 编辑面板里正在手加的听法
+	aliasAdding   bool
 	wordsMsg      string
 	wordsErr      bool
 	stats         *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
@@ -664,9 +666,8 @@ func (a *App) wordEditor(c *ui.Context, g wordGroup) {
 		})
 		ui.Column(c).Gap(6).Children(func() {
 			ui.Text(c, T("也可能听成")).FontSize(12).TextColor(t.TextMuted)
-			if len(s.editAliases) == 0 {
+			if len(s.editAliases) == 0 && !s.aliasAdding {
 				ui.Text(c, T("还没有。加词时会自动猜几种，你改过的也会记下来")).FontSize(12).TextColor(t.TextMuted)
-				return
 			}
 			ui.Row(c).Wrap().Gap(6).Children(func() {
 				for i, w := range s.editAliases {
@@ -681,6 +682,19 @@ func (a *App) wordEditor(c *ui.Context, g wordGroup) {
 						}
 					})
 				}
+				if s.aliasAdding {
+					in := ui.TextInput(c, &s.aliasNew).Height(28).Width(120).AutoFocus()
+					if in.Submitted() {
+						s.addAliasDraft(g.Right)
+					}
+					return
+				}
+				add := ui.Row(c).Height(28).Padding(0, 10).AlignItems(ui.Center).Radius(t.Radius).Border(1, t.Border).Cursor(ui.CursorPointer).Children(func() {
+					ui.Text(c, "+ "+T("添加")).FontSize(13).TextColor(t.TextMuted).SingleLine()
+				})
+				if add.Clicked() {
+					s.aliasAdding, s.aliasNew = true, ""
+				}
 			})
 		})
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -694,6 +708,7 @@ func (a *App) wordEditor(c *ui.Context, g wordGroup) {
 		})
 	})
 	if save {
+		s.addAliasDraft(g.Right)
 		if to := strings.TrimSpace(s.editText); to != "" {
 			a.learn.edit(g.Right, to, s.editAliases, g.Blocks)
 		}
@@ -701,7 +716,18 @@ func (a *App) wordEditor(c *ui.Context, g wordGroup) {
 	}
 	if cancel {
 		s.editWord, s.editText, s.editAliases = "", "", nil
+		s.aliasAdding, s.aliasNew = false, ""
 	}
+}
+
+// addAliasDraft 把编辑面板里手打的听法（逗号可分多个）加进草稿；跟写法本身或已有的重了就不加
+func (s *settingsState) addAliasDraft(right string) {
+	for _, w := range splitList(s.aliasNew) {
+		if foldKey(w) != foldKey(right) && !slices.ContainsFunc(s.editAliases, func(x string) bool { return foldKey(x) == foldKey(w) }) {
+			s.editAliases = append(slices.Clone(s.editAliases), w)
+		}
+	}
+	s.aliasAdding, s.aliasNew = false, ""
 }
 
 // guessAliases 手动加的词在后台让润色模型猜几种听错的写法，挂进「也可能听成」，用户什么都不用填。

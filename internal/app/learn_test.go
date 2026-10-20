@@ -50,9 +50,17 @@ func TestParseLearned(t *testing.T) {
 		"{\"wrong\":\"越\",\"right\":\"越\"},{\"wrong\":\"没有的词\",\"right\":\"阶跃\"},{\"wrong\":\"阶越\",\"right\":\"不在改后里\"}," +
 		"{\"wrong\":\"，\",\"right\":\"。\"},{\"wrong\":\"接口\",\"right\":\"接口。\"},{\"wrong\":\"\",\"right\":\"x\"}]\n```"
 	got := parseLearned(out, pasted, now)
-	want := []learnedWord{{Wrong: "阶越", Right: "阶跃"}, {Wrong: "Mami", Right: "MaMi"}}
+	want := []learnedWord{{Wrong: "阶越", Right: "阶跃"}} // Mami→MaMi 只改了大小写，不算听错
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v", got)
+	}
+	// 贴入里是「L 码」，模型写成「L码」：不管空格认出来，记下原文里实际那一段
+	got, drops := parseLearnedWhy(`[{"wrong":"L码","right":"alma"}]`, "为什么在 L 码里面", "为什么在 Alma 里面")
+	if len(got) != 1 || got[0].Wrong != "L 码" || got[0].Right != "Alma" || len(drops) != 0 {
+		t.Fatalf("fold: %v %v", got, drops)
+	}
+	if _, drops := parseLearnedWhy(`[{"wrong":"张伟","right":"李明"}]`, "找张伟", "找李明"); len(drops) != 1 || drops[0] != "not alike" {
+		t.Fatalf("drops %v", drops)
 	}
 	if parseLearned("not json", pasted, now) != nil || parseLearned("[]", pasted, now) != nil {
 		t.Fatal("garbage must give nothing")
@@ -299,5 +307,26 @@ func TestParseAliases(t *testing.T) {
 	l.addAliases("Claude", got[:1])
 	if g := groupWords(l.active()); len(g) != 1 || len(g[0].Wrongs) != 3 {
 		t.Fatalf("groups %+v", g)
+	}
+}
+
+func TestApplyCorrections(t *testing.T) {
+	learned := []learnedWord{{Right: "alma", Manual: true}, {Wrong: "L码", Right: "alma", Manual: true, Count: 2}, {Wrong: "张伟", Right: "章炜", Count: 2, Block: nil}}
+	for in, want := range map[string]string{
+		"为什么在l码里面": "为什么在 alma 里面",
+		"L 码。":     "alma。",
+		"打开 L码":    "打开 alma",
+		"我找张伟":     "我找章炜",
+		"没有要换的":    "没有要换的",
+	} {
+		if got := applyCorrections(in, learned); got != want {
+			t.Errorf("%q → %q, want %q", in, got, want)
+		}
+	}
+	if got := guardPolish("在l码里面", "在 Alma 里面", learned); got != "在 Alma 里面" {
+		t.Errorf("guard must keep a fold-matched correction: %q", got)
+	}
+	if foldFind("为什么在 L 码里面", "l码") != "L 码" || foldKey(" A l ma ") != "alma" {
+		t.Error("fold helpers")
 	}
 }

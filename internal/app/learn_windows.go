@@ -166,9 +166,9 @@ func (a *App) learnWords(cfg Config, pasted, now string, nEdits int) {
 		log.Printf("learn: %s", reason)
 		return
 	}
-	pairs := parseLearned(out, pasted, now)
+	pairs, drops := parseLearnedWhy(out, pasted, now)
 	if len(pairs) == 0 {
-		log.Printf("learn: %d edit(s), nothing usable", nEdits)
+		log.Printf("learn: %d edit(s), nothing usable (model gave %d; dropped: %s)", nEdits, len(drops), strings.Join(drops, ", "))
 		return
 	}
 	a.learn.observe(pairs)
