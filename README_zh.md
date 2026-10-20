@@ -68,7 +68,7 @@
 
 到 [Releases](https://github.com/margbug01/mami/releases/latest) 下载 `Mami Setup x.y.z amd64.exe`（安装包）或 `Mami.exe`（绿色版）。Windows 10/11，x64。
 
-第一次启动会打开设置窗口的「接口」页。在「服务商」里选一家（B 站免费、腾讯 TokenHub、OpenRouter、DeepSeek 或自定义），接口地址和模型会自动填好，点「测试连接」确认能用再保存。没改之前用的是 B 站**免费**的 Index-Translate-35B 接口（不用 Key），高峰期会过载，可能返回 504。
+第一次启动会打开设置窗口的「翻译」页。在「服务商」里选一家（B 站免费、腾讯 TokenHub、OpenRouter、DeepSeek 或自定义），接口地址和模型会自动填好，点「测试连接」确认能用再保存。没改之前用的是 B 站**免费**的 Index-Translate-35B 接口（不用 Key），高峰期会过载，可能返回 504。
 
 ## 推荐的接口
 

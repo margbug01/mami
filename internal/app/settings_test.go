@@ -126,7 +126,7 @@ func TestSnapSettingsPages(t *testing.T) {
 	if dir == "" {
 		t.Skip("MAMI_SNAP not set")
 	}
-	for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen, pageHist} {
+	for _, page := range []string{pageTrans, pageBtn, pageKeys, pageVoice, pagePolish, pageGen, pageHist} {
 		a := &App{avatar: loadAvatar()}
 		a.set = settingsState{draft: defaultConfig(), page: page, testMsg: "连接正常（1.4s）：你好，世界 → Hello, world"}
 		tt := ui.NewTester(a.settingsView, settingsW, settingsH)
@@ -146,7 +146,7 @@ func TestButtonActionsTranslated(t *testing.T) {
 	}
 }
 
-// MAMI_SNAP=dir 时，把 9 种界面语言 × 5 个设置页都截下来（高级、兼容性展开）
+// MAMI_SNAP=dir 时，把 9 种界面语言 × 5 个设置页都截下来（兼容性展开）
 func TestSnapSettingsI18n(t *testing.T) {
 	dir := os.Getenv("MAMI_SNAP")
 	if dir == "" {
@@ -164,7 +164,7 @@ func TestSnapSettingsI18n(t *testing.T) {
 		if i%2 == 1 {
 			theme, dark = "light", false
 		}
-		for _, page := range []string{pageConn, pageTrans, pageKeys, pageBtn, pageGen, pageHist} {
+		for _, page := range []string{pageTrans, pageBtn, pageKeys, pageVoice, pagePolish, pageGen, pageHist} {
 			cases = append(cases, snap{lang, theme, page, dark})
 		}
 	}
@@ -174,7 +174,7 @@ func TestSnapSettingsI18n(t *testing.T) {
 		draft.Language, draft.Theme = c.lang, c.theme
 		draft.History = true // 把记录相关的几行也画出来
 		draft.ExtraPrompt = "Translate for an AI prompt: be precise, keep structure, placeholders like {name} untouched, do not translate code or file paths."
-		a.set = settingsState{draft: draft, page: c.page, advanced: true, compat: true}
+		a.set = settingsState{draft: draft, page: c.page, compat: true}
 		tt := ui.NewTester(a.settingsView, settingsW, settingsH)
 		tt.SetDark(c.dark)
 		tt.Frame()
@@ -190,13 +190,17 @@ func TestExtraPromptResize(t *testing.T) {
 	const gripX = settingsW - 42 // 把手离窗口右边 42
 	a := &App{avatar: loadAvatar()}
 	a.set = settingsState{draft: defaultConfig(), page: pageTrans}
-	tt := ui.NewTester(a.settingsView, settingsW, settingsH)
+	tt := ui.NewTester(a.settingsView, settingsW, 1000) // 接口区在上面，窗口拉高让额外要求框露出来
 	tt.Frame()
+	below, ok := tt.Find("边翻边显示") // 把手就在这一行上方
+	if !ok {
+		t.Fatalf("找不到「边翻边显示」（texts %q）", tt.Texts())
+	}
 	if a.set.extraManual {
 		t.Fatal("没动把手就不该进手动模式")
 	}
 	grab := func(dy float32) (float32, bool) {
-		for y := float32(345); y < 372; y += 2 {
+		for y := below.Y - 40; y < below.Y; y += 2 {
 			tt.Move(gripX, y)
 			tt.Frame()
 			tt.Press(gripX, y)

@@ -8,7 +8,7 @@ var dictES = map[string]string{
 	"接口地址": "Endpoint", "会自动拼上 /chat/completions": "Se añade /chat/completions automáticamente", "免费接口留空": "Déjalo vacío si la API es gratuita",
 	"模型": "Modelo", "测试连接": "Probar conexión", "代理": "Proxy",
 	"Go 不读系统代理，要走 Clash 得填这里": "Go no usa el proxy del sistema; para usar Clash, indícalo aquí",
-	"▸ 高级": "▸ Avanzado", "▾ 高级": "▾ Avanzado",
+	
 	"正在请求 ": "Solicitando ", "连接失败：": "Error de conexión: ", "连接正常（%s）：你好，世界 → %s": "Conexión correcta (%s): 你好，世界 → %s",
 
 	"中文翻成": "Chino a", "选中的文字里有汉字时": "Cuando la selección contiene caracteres chinos",

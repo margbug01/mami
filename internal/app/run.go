@@ -121,6 +121,7 @@ func Run() {
 			a.set.status, a.set.statusErr = T("配置文件没读成功，保存会覆盖它：")+cfgErr.Error(), true
 		case created:
 			a.openSettings()
+			a.set.transTab = 1 // 第一次启动直接看接口
 			a.set.status = T("先在「服务商」里选一家，点「测试连接」确认能用，再保存")
 		case len(probs) > 0:
 			a.openSettings()

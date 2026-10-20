@@ -3,13 +3,14 @@ package i18n
 // 语音页的新文案与现有各语言词典保持对应。
 func init() {
 	entries := map[string][6]string{
-		"语音识别":       {"語音辨識", "음성 인식", "Voz", "Voix", "Sprache", "Речь"},
+		"划词翻译":       {"劃詞翻譯", "선택 번역", "Traducir selección", "Traduire la sélection", "Markieren & übersetzen", "Перевод выделенного"},
+		"译文":         {"譯文", "번역 결과", "Resultado", "Résultat", "Ausgabe", "Результат"},
+		"语音识别":       {"語音辨識", "음성 인식", "Dictado", "Dictée", "Diktat", "Диктовка"},
 		"果冻球大小":      {"果凍球大小", "젤리 구슬 크기", "Tamaño de la bola", "Taille de la bulle", "Kugelgröße", "Размер шарика"},
 		"右边是实际大小的预览": {"右邊是實際大小的預覽", "오른쪽은 실제 크기 미리보기", "A la derecha, vista previa a tamaño real", "À droite, aperçu en taille réelle", "Rechts: Vorschau in Originalgröße", "Справа — превью в реальном размере"},
-		"语音识别和润色用的接口、模型、Key 在「接口」页。": {"語音辨識和潤色用的介面、模型、Key 在「API」頁。", "음성 인식과 다듬기의 엔드포인트·모델·키는 API 페이지에 있습니다.", "Los endpoints, modelos y claves de voz y pulido están en la página API.", "Les points d'accès, modèles et clés de la voix et de la reformulation sont sur la page API.", "Endpunkte, Modelle und Schlüssel für Sprache und Glättung findest du auf der Seite API.", "Адреса, модели и ключи для речи и обработки — на странице «API»."},
-		"1月2日":      {"1月2日", "1월 2일", "2/1", "2/1", "2.1.", "02.01"},
-		"2006年1月2日": {"2006年1月2日", "2006년 1월 2일", "2/1/2006", "2/1/2006", "2.1.2006", "02.01.2006"},
-		"语音":        {"語音", "음성", "Voz", "Voix", "Sprache", "Голос"},
+		"1月2日":       {"1月2日", "1월 2일", "2/1", "2/1", "2.1.", "02.01"},
+		"2006年1月2日":  {"2006年1月2日", "2006년 1월 2일", "2/1/2006", "2/1/2006", "2.1.2006", "02.01.2006"},
+		"语音":         {"語音", "음성", "Voz", "Voix", "Sprache", "Голос"},
 		"还没打开「保存翻译记录」（在「通用」页），语音记录也不会保存。": {"還沒開啟「儲存翻譯記錄」（在「一般」頁），語音記錄也不會儲存。", "기록 저장이 꺼져 있어(일반 페이지) 음성 기록도 저장되지 않습니다.", "El historial está desactivado (página General), así que el dictado tampoco se guarda.", "L'historique est désactivé (page Général), les dictées ne sont donc pas enregistrées.", "Der Verlauf ist aus (Seite Allgemein), daher werden auch Diktate nicht gespeichert.", "История отключена (вкладка «Общие»), поэтому диктовки тоже не сохраняются."},
 		"还没有语音记录": {"還沒有語音記錄", "아직 음성 기록이 없습니다", "Aún no hay dictados", "Aucune dictée pour l'instant", "Noch keine Diktate", "Диктовок пока нет"},
 		"按一下语音键说句话，记录会出现在这里。": {"按一下語音鍵說句話，記錄會出現在這裡。", "음성 키를 눌러 말하면 여기에 표시됩니다.", "Pulsa la tecla de voz y di algo; aparecerá aquí.", "Appuyez sur la touche vocale et parlez ; cela apparaîtra ici.", "Drücke die Sprachtaste und sag etwas; es erscheint dann hier.", "Нажмите клавишу голоса и скажите что-нибудь — запись появится здесь."},

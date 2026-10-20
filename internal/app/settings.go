@@ -31,7 +31,8 @@ type settingsState struct {
 	extraH        float32 // 额外要求输入框的高度（手动拖过之后才用）
 	extraManual   bool
 	gripMoved     bool // 这次按住把手时拖动过
-	advanced      bool
+	transTab      int  // 「翻译」页：0 译文、1 接口
+	voiceTab      int  // 「语音识别」页：0 通用、1 外观、2 接口
 	compat        bool
 	stats         *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
 	custom        bool          // 「服务商」手动选了自定义（地址还是某家预设的也不跳回去）
@@ -39,7 +40,9 @@ type settingsState struct {
 	testErr       bool
 	polishTesting bool
 	histTab       int // 「记录」页：0 翻译、1 语音
-	apiTab        int // 「接口」页：0 翻译、1 语音识别、2 润色
+	voiceTesting  bool
+	voiceTestMsg  string
+	voiceTestErr  bool
 	copiedID      string
 	copiedAt      time.Time
 	polishTestMsg string
@@ -55,6 +58,7 @@ func (a *App) openSettings() {
 			asrHotwords: strings.Join(cfg.ASRHotwords, ", "),
 			openAtLogin: mygo.App.OpenAtLogin(),
 			hotkeysOn:   !cfg.DisableHotkeys,
+			page:        pageTrans,
 		}
 	}
 	if a.setWin == nil {
@@ -99,11 +103,16 @@ func (a *App) settingsView(c *ui.Context) {
 			ui.Column(c).Width(sidebarW).Children(func() {
 				ui.Sidebar(c, &s.page, func() {
 					ui.Box(c).Height(8)
-					ui.SidebarItem(c, pageConn, iconConn, T("接口"))
-					ui.SidebarItem(c, pageTrans, iconTrans, T("翻译"))
-					ui.SidebarItem(c, pageKeys, iconKeys, T("快捷键"))
-					ui.SidebarItem(c, "voice", iconKeys, T("语音输入"))
-					ui.SidebarItem(c, pageBtn, iconBtn, T("划词按钮"))
+					ui.SidebarSection(c, T("划词翻译"), nil, func() {
+						ui.SidebarItem(c, pageTrans, iconTrans, T("翻译"))
+						ui.SidebarItem(c, pageBtn, iconBtn, T("划词按钮"))
+						ui.SidebarItem(c, pageKeys, iconKeys, T("快捷键"))
+					})
+					ui.SidebarSection(c, T("语音输入"), nil, func() {
+						ui.SidebarItem(c, pageVoice, iconMic, T("语音识别"))
+						ui.SidebarItem(c, pagePolish, iconPolish, T("润色"))
+					})
+					ui.Box(c).Height(12)
 					ui.SidebarItem(c, pageGen, iconGen, T("通用"))
 					ui.SidebarItem(c, pageHist, iconHist, T("记录"))
 				}).Grow(1)
@@ -111,10 +120,10 @@ func (a *App) settingsView(c *ui.Context) {
 			ui.Scroll(c).Grow(1).Children(func() {
 				ui.Column(c).Padding(8, 24, 16, 24).Children(func() {
 					switch s.page {
-					case pageTrans:
-						a.pageTranslate(c, d)
-					case "voice":
+					case pageVoice:
 						a.pageVoice(c, d)
+					case pagePolish:
+						a.pagePolish(c, d)
 					case pageKeys:
 						a.pageHotkeys(c, d)
 					case pageBtn:
@@ -124,7 +133,7 @@ func (a *App) settingsView(c *ui.Context) {
 					case pageHist:
 						a.pageHistory(c, d)
 					default:
-						a.pageConnection(c, d)
+						a.pageTranslate(c, d)
 					}
 				})
 			})
@@ -144,11 +153,12 @@ func (a *App) settingsView(c *ui.Context) {
 }
 
 const (
-	pageConn  = "conn"
-	pageTrans = "trans"
-	pageKeys  = "keys"
-	pageBtn   = "btn"
-	pageGen   = "gen"
+	pageTrans  = "trans"
+	pageKeys   = "keys"
+	pageBtn    = "btn"
+	pageVoice  = "voice"
+	pagePolish = "polish"
+	pageGen    = "gen"
 )
 
 // settingRow 一行设置：左边名字+一句说明，右边控件，行与行之间一条细线
@@ -173,23 +183,22 @@ func pageTitle(c *ui.Context, title string) {
 	ui.Text(c, title).FontSize(16).Bold().Padding(10, 0, 4, 0)
 }
 
-func (a *App) pageConnection(c *ui.Context, d *Config) {
+// pageTabs 页标题下的分段切换，页面太长时按用途拆开
+func pageTabs(c *ui.Context, selected *int, labels ...string) {
+	ui.Row(c).Padding(4, 0, 8, 0).Children(func() {
+		ui.Segmented(c, selected, labels...).Label(labels[0])
+	})
+}
+
+// subTitle 页内分区的小标题，比页标题轻一档
+func subTitle(c *ui.Context, title string) {
+	ui.Text(c, title).FontSize(13).Bold().TextColor(c.Theme().TextMuted).Padding(20, 0, 2, 0)
+}
+
+// translateAPI 「翻译」页的接口区：服务商、地址、Key、模型、测试、代理
+func (a *App) translateAPI(c *ui.Context, d *Config) {
 	s := &a.set
 	t := c.Theme()
-	pageTitle(c, T("接口"))
-	ui.Row(c).Padding(4, 0, 12, 0).Children(func() {
-		if ui.Segmented(c, &s.apiTab, T("翻译"), T("语音识别"), T("润色")).Label(T("接口")).Changed() {
-			s.testMsg, s.testErr = "", false // 三个 tab 共用一行测试结果，换 tab 就清掉
-		}
-	})
-	switch s.apiTab {
-	case 1:
-		a.apiASR(c, d)
-		return
-	case 2:
-		a.apiPolish(c, d)
-		return
-	}
 	cur := "custom"
 	if !s.custom {
 		cur = providerOf(d.BaseURL)
@@ -218,6 +227,9 @@ func (a *App) pageConnection(c *ui.Context, d *Config) {
 		ui.TextInput(c, &d.APIKey).Password().Placeholder("sk-…")
 	})
 	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.Model).Placeholder("deepseek-flash") })
+	settingRow(c, T("代理"), T("Go 不读系统代理，要走 Clash 得填这里"), func() {
+		ui.TextInput(c, &d.Proxy).Placeholder("http://127.0.0.1:7890")
+	})
 	ui.Row(c).Gap(12).Padding(12, 0).Children(func() {
 		color := t.TextMuted
 		if s.testErr {
@@ -228,16 +240,6 @@ func (a *App) pageConnection(c *ui.Context, d *Config) {
 			a.testDraft()
 		}
 	})
-	ui.Row(c).Padding(8, 0).Children(func() {
-		if textButton(c, s.advancedLabel()).Clicked() {
-			s.advanced = !s.advanced
-		}
-	})
-	if s.advanced {
-		settingRow(c, T("代理"), T("Go 不读系统代理，要走 Clash 得填这里"), func() {
-			ui.TextInput(c, &d.Proxy).Placeholder("http://127.0.0.1:7890")
-		})
-	}
 }
 
 // providers 是「服务商」下拉框里的预设：选中后填好接口地址和模型。
@@ -271,12 +273,28 @@ func providerOf(base string) string {
 }
 
 func (a *App) pageVoice(c *ui.Context, d *Config) {
-	pageTitle(c, T("语音输入"))
+	pageTitle(c, T("语音识别"))
+	pageTabs(c, &a.set.voiceTab, T("通用"), T("外观"), T("接口"))
+	switch a.set.voiceTab {
+	case 1:
+		a.voiceLook(c, d)
+		return
+	case 2:
+		a.apiASR(c, d)
+		return
+	}
 	switchRow(c, T("启用语音输入"), T("按一下开始说话，再按一下贴入；Esc 取消"), &d.VoiceEnabled)
 	ui.Divider(c)
 	settingRow(c, T("触发键"), T("快捷键总开关关闭时不响应"), func() {
 		optionSelect(c, &d.VoiceHotkey, []option{{"RAlt", "RAlt"}, {"RCtrl", "RCtrl"}, {"RShift", "RShift"}, {"Off", T("关闭")}})
 	})
+	switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
+	ui.Divider(c)
+	settingRow(c, T("热词"), T("逗号或换行分隔"), func() { ui.TextArea(c, &a.set.asrHotwords).Height(64) })
+}
+
+// voiceLook 「语音识别」页的外观 tab：录音时的样式
+func (a *App) voiceLook(c *ui.Context, d *Config) {
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
 		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}})
 	})
@@ -293,14 +311,15 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 			})
 		})
 	}
-	switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
-	settingRow(c, T("热词"), T("逗号或换行分隔"), func() { ui.TextArea(c, &a.set.asrHotwords).Height(64) })
-	ui.Divider(c)
+}
+
+func (a *App) pagePolish(c *ui.Context, d *Config) {
 	pageTitle(c, T("润色"))
 	settingRow(c, T("档位"), "", func() {
 		optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}})
 	})
-	ui.Text(c, T("语音识别和润色用的接口、模型、Key 在「接口」页。")).FontSize(12).TextColor(c.Theme().TextMuted).Padding(12, 0)
+	subTitle(c, T("接口"))
+	a.apiPolish(c, d)
 }
 
 func (a *App) testPolishDraft() {
@@ -330,17 +349,17 @@ func (a *App) testPolishDraft() {
 func (a *App) testVoiceDraft() {
 	cfg := a.set.draft
 	cfg.ASRHotwords = splitList(a.set.asrHotwords)
-	a.set.testing, a.set.testMsg, a.set.testErr = true, T("识别中…"), false
+	a.set.voiceTesting, a.set.voiceTestMsg, a.set.voiceTestErr = true, T("识别中…"), false
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		_, err := transcribe(ctx, cfg, make([]byte, 16000))
 		a.setWin.Update(func() {
-			a.set.testing = false
+			a.set.voiceTesting = false
 			if err != nil {
-				a.set.testMsg, a.set.testErr = err.Error(), true
+				a.set.voiceTestMsg, a.set.voiceTestErr = err.Error(), true
 			} else {
-				a.set.testMsg, a.set.testErr = T("语音接口正常"), false
+				a.set.voiceTestMsg, a.set.voiceTestErr = T("语音接口正常"), false
 			}
 		})
 	}()
@@ -348,6 +367,11 @@ func (a *App) testVoiceDraft() {
 
 func (a *App) pageTranslate(c *ui.Context, d *Config) {
 	pageTitle(c, T("翻译"))
+	pageTabs(c, &a.set.transTab, T("译文"), T("接口"))
+	if a.set.transTab == 1 {
+		a.translateAPI(c, d)
+		return
+	}
 	settingRow(c, T("中文翻成"), T("选中的文字里有汉字时"), func() { langSelect(c, &d.TargetForChinese) })
 	settingRow(c, T("其他翻成"), T("不含汉字的文字（英文、日文等）"), func() { langSelect(c, &d.TargetForOther) })
 	ui.Column(c).Gap(6).Padding(12, 0).Children(func() {
@@ -392,13 +416,6 @@ func (a *App) pageButton(c *ui.Context, d *Config) {
 		ui.Divider(c)
 		switchRow(c, T("只认文本光标"), T("按下鼠标时光标是 I 形才算划词，拖窗口、拖文件不会误弹"), &d.RequireIBeam)
 	}
-}
-
-func (s *settingsState) advancedLabel() string {
-	if s.advanced {
-		return T("▾ 高级")
-	}
-	return T("▸ 高级")
 }
 
 func (s *settingsState) compatLabel() string {
@@ -626,7 +643,8 @@ func (a *App) titleBar(c *ui.Context) {
 }
 
 // 侧边栏图标（Lucide 描边风格，和 iconChevron 一致）
-var iconConn = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>`))
+var iconMic = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>`))
+var iconPolish = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></svg>`))
 var iconTrans = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>`))
 var iconKeys = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></svg>`))
 var iconBtn = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5"/><path d="M19 3h-2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2"/><path d="M9 12h6"/></svg>`))
@@ -787,24 +805,24 @@ const controlPad = sidebarW + 48 + 28
 
 var iconGen = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></svg>`))
 
-// apiASR 「接口」页的语音识别 tab
+// apiASR 「语音识别」页的接口区
 func (a *App) apiASR(c *ui.Context, d *Config) {
 	settingRow(c, T("接口地址"), T("语音始终直连，不使用代理"), func() { ui.TextInput(c, &d.ASRBaseURL) })
 	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.ASRModel) })
 	settingRow(c, "API Key", "StepFun", func() { ui.TextInput(c, &d.ASRAPIKey).Password().Placeholder("sk-…") })
 	ui.Row(c).Padding(12, 0).Gap(12).Children(func() {
 		color := c.Theme().TextMuted
-		if a.set.testErr {
+		if a.set.voiceTestErr {
 			color = c.Theme().Danger
 		}
-		ui.Text(c, a.set.testMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-		if textButton(c, T("测试语音接口")).Disabled(a.set.testing).Clicked() {
+		ui.Text(c, a.set.voiceTestMsg).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+		if textButton(c, T("测试语音接口")).Disabled(a.set.voiceTesting).Clicked() {
 			a.testVoiceDraft()
 		}
 	})
 }
 
-// apiPolish 「接口」页的润色 tab
+// apiPolish 「润色」页的接口区
 func (a *App) apiPolish(c *ui.Context, d *Config) {
 	settingRow(c, T("接口地址"), T("润色始终直连，不使用代理"), func() { ui.TextInput(c, &d.PolishBaseURL) })
 	settingRow(c, T("模型"), "", func() { ui.TextInput(c, &d.PolishModel) })

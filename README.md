@@ -68,7 +68,7 @@ I write a lot of prompts in Chinese and send them in English. Copy, open a trans
 
 Download `Mami Setup x.y.z amd64.exe` (installer) or `Mami.exe` (portable) from [Releases](https://github.com/margbug01/mami/releases/latest). Windows 10/11, x64.
 
-On first launch the settings window opens on the API page. Pick a **Provider** (bilibili free, Tencent TokenHub, OpenRouter, DeepSeek, or Custom) and it fills in the endpoint and model; press **Test connection** to check it before saving. Until you change it, Mami uses bilibili's **free** Index-Translate-35B endpoint (no key needed), which gets overloaded at peak hours and may return 504.
+On first launch the settings window opens on the Translation page. Pick a **Provider** (bilibili free, Tencent TokenHub, OpenRouter, DeepSeek, or Custom) and it fills in the endpoint and model; press **Test connection** to check it before saving. Until you change it, Mami uses bilibili's **free** Index-Translate-35B endpoint (no key needed), which gets overloaded at peak hours and may return 504.
 
 ## Recommended backends
 

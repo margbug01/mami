@@ -4,13 +4,14 @@ package i18n
 // 新增界面文字时，先在代码里写 T("中文")，再回来补这张表；
 // TestI18nDictComplete 会扫源码，漏了会失败。
 var Dict = map[string][2]string{
-	"语音识别":       {"Speech", "音声認識"},
+	"划词翻译":       {"Select & translate", "選択翻訳"},
+	"译文":         {"Output", "訳文"},
+	"语音识别":       {"Dictation", "音声認識"},
 	"果冻球大小":      {"Jelly orb size", "ゼリーボールの大きさ"},
 	"右边是实际大小的预览": {"Preview on the right is actual size", "右は実寸のプレビュー"},
-	"语音识别和润色用的接口、模型、Key 在「接口」页。": {"Endpoints, models and keys for speech and polish live on the API page.", "音声認識と整形の接続先・モデル・キーは「API」ページにあります。"},
-	"1月2日":      {"1/2", "1月2日"},
-	"2006年1月2日": {"1/2/2006", "2006年1月2日"},
-	"语音":        {"Voice", "音声"},
+	"1月2日":       {"1/2", "1月2日"},
+	"2006年1月2日":  {"1/2/2006", "2006年1月2日"},
+	"语音":         {"Voice", "音声"},
 	"还没打开「保存翻译记录」（在「通用」页），语音记录也不会保存。": {"History is off (General page), so dictations aren't saved either.", "履歴の保存がオフ（「一般」ページ）なので、音声入力も保存されません。"},
 	"还没有语音记录": {"No dictations yet", "まだ音声入力の記録はありません"},
 	"按一下语音键说句话，记录会出现在这里。": {"Tap the voice key and say something; it will show up here.", "音声キーを押して話すと、ここに表示されます。"},
@@ -78,8 +79,6 @@ var Dict = map[string][2]string{
 	"测试连接":                    {"Test connection", "接続テスト"},
 	"代理":                      {"Proxy", "プロキシ"},
 	"Go 不读系统代理，要走 Clash 得填这里": {"Go ignores the system proxy; set it here to go through Clash", "Go はシステムのプロキシを使いません。Clash 経由ならここに入力"},
-	"▸ 高级":  {"▸ Advanced", "▸ 詳細設定"},
-	"▾ 高级":  {"▾ Advanced", "▾ 詳細設定"},
 	"正在请求 ": {"Requesting ", "リクエスト中 "},
 	"连接失败：": {"Connection failed: ", "接続に失敗しました："},
 	"连接正常（%s）：你好，世界 → %s": {"Connected (%s): 你好，世界 → %s", "接続OK（%s）：你好，世界 → %s"},
