@@ -123,6 +123,8 @@ func polishLabel(style string) string {
 		return T("标准")
 	case "structured":
 		return T("结构化")
+	case "prompt":
+		return T("提示词")
 	}
 	return ""
 }

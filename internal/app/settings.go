@@ -881,8 +881,9 @@ func (a *App) pagePolish(c *ui.Context, d *Config) {
 	pageTitle(c, T("润色"))
 	settingGroup(c, "", func() {
 		settingRowW(c, T("档位"), "", selectW, func() {
-			optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}})
+			optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}, {"prompt", T("提示词")}})
 		})
+		switchRow(c, T("按程序自动换档"), T("在 Cursor、ChatGPT 这类 AI 工具里用「提示词」档，在微信、QQ 里用「轻润色」，其他地方用上面选的"), &d.PolishAuto)
 	})
 	settingGroup(c, T("接口"), func() { a.apiPolish(c, d) })
 }

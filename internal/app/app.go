@@ -79,6 +79,7 @@ type App struct {
 	voiceFrameAt           time.Time
 	voiceHover             bool               // 鼠标在胶囊上：带复制钮的提示先不收
 	voiceCopiedAt          time.Time          // 点了胶囊上的复制，钮变成 ✓
+	voiceRetry             func()             // 胶囊上的重试钮：拿上次失败的录音再识别一次（界面线程读写）
 	voiceBarH              [voiceBars]float32 // 平滑后的柱高 / 球大小（0~1）
 	voiceOrbLv             float32
 	voiceGapL, voiceGapR   float32 // 三岛样式：上次切换时两道缝的宽度，从这里过渡到新状态

@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"math"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -222,6 +223,7 @@ func (a *App) voiceLoop() {
 type voiceViewState struct {
 	text                   string
 	copy                   bool // text 是识别结果、已经在剪贴板里：胶囊右边带一个复制钮
+	retry                  bool // 识别失败、录音还留着：胶囊右边带一个重试钮
 	recording, recognizing bool
 	levels                 []float64 // 最近的音量，旧的在前
 	live                   string    // 录音中边说边出的字（开了实时出字、用流式模型时才有）
@@ -355,7 +357,7 @@ func voiceWidth(state voiceViewState) int32 {
 		return voiceDotsW
 	}
 	w := 28 + 13*int32(utf8.RuneCountInString(state.text))
-	if state.copy {
+	if state.copy || state.retry {
 		return min(voiceCopyW, max(96, w+voiceBtn+4)) // 加上复制钮
 	}
 	return min(360, max(96, w))
@@ -402,6 +404,59 @@ func (a *App) voiceNotice(id uint64, text string) {
 	})
 }
 
+// voiceRetryNotice 识别失败：录音留着，胶囊显示「识别失败」和重试钮，10 秒后收起，鼠标停在上面时不收
+func (a *App) voiceRetryNotice(id uint64, pcm []byte, cfg Config) {
+	a.voiceWin.Update(func() { a.voiceRetry = func() { go a.retryVoice(pcm, cfg) } })
+	a.voiceDisplay(id, voiceViewState{text: T("识别失败，点右边重试"), retry: true}, true)
+	var check func()
+	check = func() {
+		a.voiceWin.Update(func() {
+			if voiceEpoch.Load() != id || !a.voiceUI.retry {
+				return
+			}
+			if a.voiceHover {
+				time.AfterFunc(time.Second, check)
+				return
+			}
+			a.voiceLeave()
+		})
+	}
+	time.AfterFunc(10*time.Second, check)
+}
+
+// retryVoice 拿失败那次的整段录音再识别一次，成了就照常润色、贴到眼下的前台窗口
+func (a *App) retryVoice(pcm []byte, cfg Config) {
+	if voiceActive.Load() != 0 {
+		return
+	}
+	id := voiceEpoch.Add(1)
+	if !voiceActive.CompareAndSwap(0, id) {
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(asrTimeout+polishMaxWait+5*time.Second, cancel) // 贴入在 worker 里异步完成，不能一返回就取消
+	started, fg := time.Now(), foreground()
+	a.voiceDisplay(id, voiceViewState{recognizing: true}, true)
+	text, err := transcribe(ctx, cfg, pcm)
+	if voiceEpoch.Load() != id {
+		voiceActive.CompareAndSwap(id, 0)
+		return
+	}
+	if err != nil {
+		voiceActive.CompareAndSwap(id, 0)
+		log.Printf("voice: retry failed: %v", err)
+		a.voiceRetryNotice(id, pcm, cfg)
+		return
+	}
+	if text = strings.TrimSpace(text); text == "" {
+		voiceActive.CompareAndSwap(id, 0)
+		a.voiceNotice(id, T("没听清，请再说一次"))
+		return
+	}
+	log.Printf("voice: retry ok after %dms", time.Since(started).Milliseconds())
+	a.deliverVoice(ctx, id, fg, cfg, text, a.learn.active(), started)
+}
+
 // voiceCopyNotice 没地方贴：胶囊显示这句话和复制钮，6 秒后收起，鼠标停在上面时不收
 func (a *App) voiceCopyNotice(id uint64, text string) {
 	a.voiceDisplay(id, voiceViewState{text: text, copy: true}, true)
@@ -436,6 +491,23 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	a.voiceWin.Update(func() {
 		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, cfg.VoiceTone, float32(cfg.VoiceOrbSize)
 	})
+	if cfg.ASRAPIKey == "" { // 还没填 Key：不录，直接带去填
+		voiceRecording.CompareAndSwap(id, 0)
+		finish()
+		a.voiceNotice(id, T("先填一下语音识别的 Key"))
+		a.voiceWin.Update(func() {
+			a.openSettings()
+			a.set.page, a.set.voiceTab = pageVoice, 2
+		})
+		return
+	}
+	if cfg.PolishAuto {
+		exe := filepath.Base(processName(windowPID(fg)))
+		if s := autoPolishStyle(exe, windowTitle(fg), cfg.PolishStyle); s != cfg.PolishStyle {
+			log.Printf("voice: polish %s in %s", s, exe)
+			cfg.PolishStyle = s
+		}
+	}
 	learned := a.learn.active()
 	cfg.ASRHotwords = withLearned(cfg.ASRHotwords, learned)
 	// 流式模型：录音一开始就连上，边录边推；其余模型说话的这几秒里先把连接握好，说完直接复用
@@ -475,7 +547,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	var seg []byte
 	var segPeak float64
 	var segmenter voiceSegmenter
-	_, err := recordVoice(ctx, stop, func() {
+	pcm, err := recordVoice(ctx, stop, func() {
 		if !valid() {
 			return
 		}
@@ -538,7 +610,11 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 			return
 		}
 		if job.err != nil {
-			fail(job.err)
+			finish()
+			if valid() {
+				log.Printf("voice: recognition failed, kept %dms of audio for retry: %v", len(pcm)/32, job.err)
+				a.voiceRetryNotice(id, pcm, cfg)
+			}
 			return
 		}
 		if part := strings.TrimSpace(job.text); part != "" {
@@ -552,7 +628,13 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		a.voiceNotice(id, T("没听清，请再说一次"))
 		return
 	}
-	source := text
+	a.deliverVoice(ctx, id, fg, cfg, text, learned, started)
+}
+
+// deliverVoice 识别出的原话 → 润色 → 贴进输入框（贴不了就留在胶囊里给复制），记历史、开始盯手改
+func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Config, source string, learned []learnedWord, started time.Time) {
+	valid := func() bool { return ctx.Err() == nil && voiceEpoch.Load() == id }
+	finish := func() { voiceActive.CompareAndSwap(id, 0) }
 	text, polishMs := polishVoice(ctx, cfg, source, learned...)
 	if !valid() {
 		finish()
@@ -743,7 +825,7 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 				ui.Box(c).Grow(1).Height(20).Draw(sk.dots)
 			})
 		case 3:
-			if !state.copy {
+			if !state.copy && !state.retry {
 				row.Padding(0, 14).Justify(ui.Center).Children(func() {
 					ui.Text(c, state.text).FontSize(12).TextColor(sk.fg).MaxLines(1).Tooltip(state.text)
 				})
@@ -752,6 +834,12 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 			done := live && !a.voiceCopiedAt.IsZero()
 			row.Padding(0, 5, 0, 14).Gap(6).Children(func() {
 				ui.Text(c, state.text).FontSize(12).TextColor(sk.fg).MaxLines(1).Grow(1).Shrink(1).Tooltip(state.text)
+				if state.retry {
+					if pillRetryButton(c, sk, T("重试")).Clicked() && live && a.voiceRetry != nil {
+						a.voiceRetry()
+					}
+					return
+				}
 				tip := T("已复制，到要用的地方按 Ctrl+V")
 				if pillCopyButton(c, sk, done, tip).Clicked() && !done && live {
 					text, id := state.text, voiceEpoch.Load()
@@ -763,6 +851,40 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 		}
 	})
 	return pill
+}
+
+// pillRetryButton 胶囊上的重试钮：一个带箭头的圆弧 ↻
+func pillRetryButton(c *ui.Context, sk voiceSkin, tip string) ui.Element {
+	rad := float32(voiceBtn / 2)
+	if sk.style == "pixel" {
+		rad = 0
+	}
+	b := ui.ButtonBase(c).Size(voiceBtn, voiceBtn).Radius(rad).Background(sk.btn).Cursor(ui.CursorPointer).Tooltip(tip).Shrink(0)
+	if b.Hovered() {
+		b.Background(sk.btnHover)
+	}
+	return b.DrawOver(func(p *ui.Painter, r ui.Rect) {
+		cx, cy := r.X+r.W/2, r.Y+r.H/2
+		path := new(ui.Path)
+		const rr = 4.5
+		const a0, sweep = -1.0, 5.0 // 从右上方顺时针绕一圈，顶上留个口
+		for i := 0; i <= 14; i++ {
+			ang := a0 + sweep*float64(i)/14
+			x, y := cx+rr*float32(math.Cos(ang)), cy+rr*float32(math.Sin(ang))
+			if i == 0 {
+				path.MoveTo(x, y)
+			} else {
+				path.LineTo(x, y)
+			}
+		}
+		e := a0 + sweep // 箭头在弧的尽头，顺着走向
+		ex, ey := cx+rr*float32(math.Cos(e)), cy+rr*float32(math.Sin(e))
+		tx, ty := -float32(math.Sin(e)), float32(math.Cos(e))
+		nx, ny := float32(math.Cos(e)), float32(math.Sin(e))
+		hx, hy := ex+1.6*tx, ey+1.6*ty
+		path.MoveTo(hx-3*tx+2.4*nx, hy-3*ty+2.4*ny).LineTo(hx, hy).LineTo(hx-3*tx-2.4*nx, hy-3*ty-2.4*ny)
+		p.StrokePath(path, 1.4, sk.fg)
+	})
 }
 
 // pillCopyButton 胶囊上的复制钮：两个叠着的方框，点过之后变成 ✓
@@ -974,6 +1096,8 @@ func (a *App) runVoiceDemo(only string) {
 		time.Sleep(1500 * time.Millisecond)
 		a.voiceDisplay(id, voiceViewState{text: "帮我把这个接口改成用 Go 写，然后四点开会。", copy: true}, true)
 		time.Sleep(2500 * time.Millisecond)
+		a.voiceDisplay(id, voiceViewState{text: T("识别失败，点右边重试"), retry: true}, true)
+		time.Sleep(2000 * time.Millisecond)
 		a.voiceDisplay(id, voiceViewState{}, false)
 		time.Sleep(600 * time.Millisecond)
 	}

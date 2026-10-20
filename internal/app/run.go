@@ -76,6 +76,16 @@ func Run() {
 	}
 
 	cfg, created, cfgErr := loadConfig(a.cfgPath)
+	if created { // 全新安装才默认开语音（老配置没有这个字段，升级上来不能悄悄打开）
+		cfg.VoiceEnabled = true
+		if rightAltTaken() { // 韩文键盘、带 AltGr 的欧洲键盘：右 Alt 另有用处，默认改右 Ctrl
+			cfg.VoiceHotkey = "RCtrl"
+			log.Printf("voice: right Alt is used by this keyboard layout, trigger set to RCtrl")
+		}
+		if err := saveConfig(a.cfgPath, cfg); err != nil {
+			log.Println(err)
+		}
+	}
 	if len(cfg.ASRHotwords) > 0 { // 老配置里的热词搬进词库，和学到的词一起管
 		var words []learnedWord
 		for _, h := range cfg.ASRHotwords {
