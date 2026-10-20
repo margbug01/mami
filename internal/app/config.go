@@ -112,10 +112,9 @@ func (c *Config) normalize() {
 		c.PolishModel = "deepseek-flash"
 	}
 	c.PolishAPIKey = strings.TrimSpace(c.PolishAPIKey)
-	switch c.VoiceHotkey {
-	case "RAlt", "RCtrl", "RShift", "Off":
-	default:
-		c.VoiceHotkey = "RAlt"
+	c.VoiceHotkey = strings.TrimSpace(c.VoiceHotkey)
+	if c.VoiceHotkey != "Off" && voiceKey(c.VoiceHotkey) == 0 && !strings.Contains(c.VoiceHotkey, "+") {
+		c.VoiceHotkey = "RAlt" // 组合键是否有效由注册时报错
 	}
 	if c.VoiceOrbSize <= 0 {
 		c.VoiceOrbSize = voiceOrbW

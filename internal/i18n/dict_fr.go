@@ -17,8 +17,8 @@ var dictFR = map[string]string{
 	"比如：技术文档风格，术语保留英文": "Par ex. : style documentation technique, termes en anglais",
 	"拖动调整高度，点一下恢复自动":   "Faites glisser pour redimensionner, cliquez pour revenir en automatique",
 
-	"原地替换": "Remplacer sur place", "写法如 Ctrl+Shift+Y、Alt+F2": "Par exemple, Ctrl+Shift+Y ou Alt+F2",
-	"只弹卡片": "Afficher la carte seulement", "留空表示不用": "Laisser vide pour désactiver",
+	"原地替换": "Remplacer sur place",
+	"只弹卡片": "Afficher la carte seulement",
 	"快捷键没选中就全选":                  "Tout sélectionner si rien n'est sélectionné",
 	"按 Alt+T 时没选中文字，先全选整个输入框再翻译": "Si rien n'est sélectionné quand vous appuyez sur Alt+T, tout le champ de saisie est sélectionné avant la traduction",
 	"开机自启": "Lancer au démarrage",

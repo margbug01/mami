@@ -43,6 +43,9 @@ type settingsState struct {
 	voiceTesting  bool
 	voiceTestMsg  string
 	voiceTestErr  bool
+	recID         string         // 正在录的快捷键框
+	recJob        *keyCaptureJob // 交给键盘钩子的那次录制
+	recHint       string
 	copiedID      string
 	copiedAt      time.Time
 	polishTestMsg string
@@ -52,6 +55,7 @@ type settingsState struct {
 func (a *App) openSettings() {
 	cfg, _ := a.config()
 	reset := func() {
+		keyCapturing.Store(nil)
 		a.set = settingsState{
 			draft:       cfg,
 			exclude:     strings.Join(cfg.ExcludeProcesses, ", "),
@@ -77,6 +81,7 @@ func (a *App) openSettings() {
 		a.setWin.OnClose(func(e *mygo.CloseEvent) {
 			if !a.quitting {
 				e.PreventDefault()
+				a.stopCapture()
 				a.setWin.Hide()
 				saved, _ := a.config()
 				i18n.Set(i18n.Resolve(saved.Language, sysLocale)) // 没保存的语言预览收回
@@ -285,9 +290,7 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 	}
 	switchRow(c, T("启用语音输入"), T("按一下开始说话，再按一下贴入；Esc 取消"), &d.VoiceEnabled)
 	ui.Divider(c)
-	settingRow(c, T("触发键"), T("快捷键总开关关闭时不响应"), func() {
-		optionSelect(c, &d.VoiceHotkey, []option{{"RAlt", "RAlt"}, {"RCtrl", "RCtrl"}, {"RShift", "RShift"}, {"Off", T("关闭")}})
-	})
+	settingRow(c, T("触发键"), T("点一下再按键，Backspace 关闭"), func() { a.hotkeyBox(c, "voice", &d.VoiceHotkey, true) })
 	switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
 	ui.Divider(c)
 	settingRow(c, T("热词"), T("逗号或换行分隔"), func() { ui.TextArea(c, &a.set.asrHotwords).Height(64) })
@@ -390,8 +393,8 @@ func (a *App) pageHotkeys(c *ui.Context, d *Config) {
 	if !a.set.hotkeysOn {
 		return
 	}
-	settingRow(c, T("原地替换"), T("写法如 Ctrl+Shift+Y、Alt+F2"), func() { ui.TextInput(c, &d.Hotkey).Placeholder("Alt+T") })
-	settingRow(c, T("只弹卡片"), T("留空表示不用"), func() { ui.TextInput(c, &d.PopupHotkey).Placeholder("Alt+Shift+T") })
+	settingRow(c, T("原地替换"), T("点一下再按组合键，Backspace 清空"), func() { a.hotkeyBox(c, "hotkey", &d.Hotkey, false) })
+	settingRow(c, T("只弹卡片"), T("点一下再按组合键，Backspace 清空"), func() { a.hotkeyBox(c, "popup", &d.PopupHotkey, false) })
 	switchRow(c, T("快捷键没选中就全选"), T("按 Alt+T 时没选中文字，先全选整个输入框再翻译"), &d.SelectAllIfEmpty)
 }
 
@@ -837,4 +840,81 @@ func (a *App) apiPolish(c *ui.Context, d *Config) {
 			a.testPolishDraft()
 		}
 	})
+}
+
+// hotkeyBox 快捷键框：点一下开始录，直接按下新的键就记上；Esc 取消，Backspace 清空。
+// 录制靠键盘钩子（captureKey），所以能分清左右 Alt，录的时候现有快捷键也不会触发。
+func (a *App) hotkeyBox(c *ui.Context, id string, value *string, voice bool) {
+	s := &a.set
+	t := c.Theme()
+	rec := s.recID == id
+	box := ui.Row(c).Height(38).Gap(6).Padding(0, 12).AlignItems(ui.Center).Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Cursor(ui.CursorPointer)
+	switch {
+	case rec:
+		box.Border(1, t.Accent)
+	case box.Hovered():
+		box.Background(t.SurfaceHover)
+	}
+	box.Children(func() {
+		if rec {
+			hint := s.recHint
+			if hint == "" {
+				hint = T("按下新的快捷键…")
+				if voice {
+					hint = T("按一个键或组合键…")
+				}
+			}
+			ui.Text(c, hint).FontSize(13).TextColor(t.Accent).SingleLine().Grow(1)
+			return
+		}
+		v := strings.TrimSpace(*value)
+		if v == "" || v == "Off" {
+			ui.Text(c, T("未设置")).TextColor(t.TextMuted).SingleLine().Grow(1)
+			return
+		}
+		for _, part := range strings.Split(v, "+") {
+			w, _ := c.MeasureText(200, ui.Span{Text: part, Size: 13})
+			ui.Box(c).Shrink(0).Padding(2, 8).Radius(4).Background(t.Background).Border(1, t.Border).Children(func() {
+				ui.Text(c, part).FontSize(13).SingleLine().MinWidth(w + 2) // 量出来的宽度偏紧，RAlt 会被省略成 R…
+			})
+		}
+	})
+	if box.Clicked() {
+		if rec {
+			a.stopCapture()
+		} else {
+			a.startCapture(id, value, voice)
+		}
+	}
+}
+
+func (a *App) startCapture(id string, value *string, voice bool) {
+	s := &a.set
+	job := &keyCaptureJob{keyCapture: keyCapture{voice: voice}, hwnd: a.setWin.NativeHandle()}
+	job.report = func(state int, acc, hint string) {
+		a.setWin.Update(func() {
+			if s.recJob != job { // 已经取消或换了别的框；乱序到达的旧消息也在这里丢掉
+				return
+			}
+			switch state {
+			case captureDone:
+				*value = acc
+				a.stopCapture()
+			case captureCancel:
+				a.stopCapture()
+			default:
+				s.recHint = hint
+			}
+		})
+	}
+	s.recID, s.recJob, s.recHint = id, job, ""
+	keyCapturing.Store(job)
+}
+
+func (a *App) stopCapture() {
+	s := &a.set
+	if s.recJob != nil {
+		keyCapturing.CompareAndSwap(s.recJob, nil)
+	}
+	s.recID, s.recJob, s.recHint = "", nil, ""
 }

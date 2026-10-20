@@ -722,6 +722,11 @@ func (a *App) registerHotkeys(cfg Config) []string {
 			problems = append(problems, acc+T("：")+err.Error())
 		}
 	}
+	if acc := cfg.VoiceHotkey; cfg.VoiceEnabled && strings.Contains(acc, "+") {
+		if err := mygo.GlobalShortcut.Register(acc, voiceToggle); err != nil {
+			problems = append(problems, T("语音")+" "+acc+T("：")+err.Error())
+		}
+	}
 	return problems
 }
 

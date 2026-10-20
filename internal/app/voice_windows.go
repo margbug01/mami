@@ -21,6 +21,7 @@ var (
 	voiceRecording atomic.Uint64 // 正在录音的那次；键盘、胶囊按钮、录音结束都会清掉它
 	voiceKeyboard  voiceKeys     // 仅钩子线程使用
 	voicePressID   uint64
+	voiceTriggerAt uint32 // 上一次触发键事件的钩子时间（毫秒）
 	voiceEvents    = make(chan voiceEvent, 32)
 )
 
@@ -45,7 +46,19 @@ func voiceHookKey(key *kbdLLHook, down bool) bool {
 	if voiceKeyboard.recording && voiceRecording.Load() == 0 {
 		voiceKeyboard.recording = false // 录音已在别处结束（点了胶囊、超时、出错），下一下重新开始
 	}
-	if healed := voiceKeyboard.heal(func(vk uint32) bool { return keyDown(uintptr(vk)) }); len(healed) > 0 {
+	// 吞掉的单键（F 键、CapsLock）系统记不到按下，heal 不能拿 GetAsyncKeyState 判它；
+	// 改成看间隔：按住时连发约 30ms 一次，隔了 500ms 还没松开就是漏了松开
+	swallowTrigger := trigger != 0 && !voiceKeyIsModifier(trigger)
+	if swallowTrigger && key.VkCode == trigger && down && voiceKeyboard.pressed[trigger] && key.Time-voiceTriggerAt > 500 {
+		voiceKeyboard.pressed[trigger] = false
+		if voiceKeyboard.held == trigger {
+			voiceKeyboard.held, voiceKeyboard.combo = 0, false
+		}
+	}
+	if key.VkCode == trigger {
+		voiceTriggerAt = key.Time
+	}
+	if healed := voiceKeyboard.heal(func(vk uint32) bool { return (swallowTrigger && vk == trigger) || keyDown(uintptr(vk)) }); len(healed) > 0 {
 		log.Printf("voice: cleared stuck keys %x", healed)
 	}
 	held := voiceKeyboard.held
@@ -54,7 +67,10 @@ func voiceHookKey(key *kbdLLHook, down bool) bool {
 	if down && key.VkCode == trigger && held == 0 && action == voiceNone && !voiceKeyboard.recording {
 		log.Printf("voice: trigger ignored (busy=%v modifier=%v others=%v)", busy, blocked, voiceKeyboard.othersDown(trigger))
 	}
-	if !down && key.VkCode == held && held == 0xA5 {
+	if swallowTrigger && key.VkCode == trigger {
+		swallow = true
+	}
+	if !down && key.VkCode == held && (held == 0xA5 || held == 0xA4) { // 单按 Alt 松开会激活菜单栏
 		sendKeys(KEYBDINPUT{WVk: VK_MASK}, KEYBDINPUT{WVk: VK_MASK, DwFlags: KEYEVENTF_KEYUP})
 	}
 	if action == voiceNone {
@@ -80,6 +96,22 @@ func postVoice(action int, id uint64) {
 	default:
 		voiceEpoch.Add(1) // 队列满时丢弃整次，而不是遗漏结束一直录音。
 	}
+}
+
+// voiceToggle 组合键触发键（GlobalShortcut 回调）：没在录就开始，在录就结束。
+// 单键走钩子；两者不会同时启用（组合键时 voiceTrigger 是 0）。
+func voiceToggle() {
+	if voiceRecording.Load() != 0 {
+		voiceClick(voiceStop)
+		return
+	}
+	if voiceActive.Load() != 0 {
+		return // 还在识别上一段
+	}
+	id := voiceEpoch.Add(1)
+	voiceActive.Store(id)
+	voiceRecording.Store(id)
+	postVoice(voiceStart, id)
 }
 
 // voiceClick 胶囊上的 ✕ / ✓：和 Esc / 再按一下触发键走同一条路

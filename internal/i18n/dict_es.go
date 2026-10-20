@@ -17,8 +17,8 @@ var dictES = map[string]string{
 	"比如：技术文档风格，术语保留英文": "p. ej.: estilo de documentación técnica, términos en inglés",
 	"拖动调整高度，点一下恢复自动":   "Arrastra para cambiar la altura; haz clic para volver a automática",
 
-	"原地替换": "Traducir y reemplazar", "写法如 Ctrl+Shift+Y、Alt+F2": "Por ejemplo, Ctrl+Shift+Y o Alt+F2",
-	"只弹卡片": "Solo mostrar tarjeta", "留空表示不用": "Déjalo vacío para desactivar",
+	"原地替换": "Traducir y reemplazar",
+	"只弹卡片": "Solo mostrar tarjeta",
 	"快捷键没选中就全选":                  "Seleccionar todo si no hay selección",
 	"按 Alt+T 时没选中文字，先全选整个输入框再翻译": "Si pulsas Alt+T sin texto seleccionado, se selecciona todo el cuadro de texto antes de traducir",
 	"开机自启": "Iniciar con Windows",

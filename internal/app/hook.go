@@ -106,7 +106,8 @@ func cardWantsKey(vk uint32) bool {
 func kbdProc(nCode, wp, lp uintptr) uintptr {
 	if int32(nCode) == 0 && (wp == wmKeyDown || wp == wmSysKeyDown || wp == 0x0101 || wp == 0x0105) {
 		k := (*kbdLLHook)(nativePointer(lp))
-		if k.ExtraInfo != ourKeyTag && k.Flags&0x10 == 0 && voiceHookKey(k, wp == wmKeyDown || wp == wmSysKeyDown) {
+		down := wp == wmKeyDown || wp == wmSysKeyDown
+		if k.ExtraInfo != ourKeyTag && k.Flags&0x10 == 0 && (captureKey(k.VkCode, down) || voiceHookKey(k, down)) {
 			return 1
 		}
 	}
@@ -174,4 +175,39 @@ func startHook(isOurs func(POINT) bool, onCardKey func(vk uint32)) error {
 		}
 	}()
 	return <-ready
+}
+
+// keyCaptureJob 设置页正在录的一个快捷键框；report 在钩子线程调用，自己别阻塞
+type keyCaptureJob struct {
+	keyCapture
+	hwnd   uintptr // 只在设置窗口在前台时接管键盘，切到别的程序照常打字
+	report func(state int, acc, hint string)
+}
+
+var (
+	keyCapturing atomic.Pointer[keyCaptureJob]
+	captureHeld  [256]bool // 录制时按下的键：录完之后它们的松开也吞掉，别漏给前台窗口（仅钩子线程）
+)
+
+// captureKey 录制中把按键交给 keyCaptureJob 并吞掉：录 Alt+T 时现有的 Alt+T 不会触发，语音键也不会开始录音
+func captureKey(vk uint32, down bool) bool {
+	if !down && vk < 256 && captureHeld[vk] {
+		captureHeld[vk] = false
+		if job := keyCapturing.Load(); job == nil || foreground() != job.hwnd {
+			return true
+		}
+	}
+	job := keyCapturing.Load()
+	if job == nil || foreground() != job.hwnd {
+		return false
+	}
+	if down && vk < 256 {
+		captureHeld[vk] = true
+	}
+	state, acc, hint := job.step(vk, down)
+	if state != captureGoing {
+		keyCapturing.CompareAndSwap(job, nil)
+	}
+	go job.report(state, acc, hint)
+	return true
 }

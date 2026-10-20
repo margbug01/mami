@@ -85,7 +85,7 @@ func TestVoiceConfigNormalize(t *testing.T) {
 	if cfg.VoiceHotkey != "RAlt" || cfg.ASRBaseURL != "https://example.test/v1" || cfg.ASRModel != "stepaudio-3-asr-max" || cfg.ASRHotwords == nil {
 		t.Fatal("normalize")
 	}
-	for _, key := range []string{"RAlt", "RCtrl", "RShift", "Off"} {
+	for _, key := range []string{"RAlt", "RCtrl", "RShift", "LAlt", "LCtrl", "F9", "CapsLock", "Ctrl+Space", "Off"} {
 		cfg.VoiceHotkey = key
 		cfg.normalize()
 		if cfg.VoiceHotkey != key {

@@ -1,5 +1,7 @@
 package app
 
+import "fmt"
+
 const (
 	voiceNone = iota
 	voiceStart
@@ -7,17 +9,23 @@ const (
 	voiceCancel
 )
 
-func voiceKey(name string) uint32 {
-	switch name {
-	case "RAlt":
-		return 0xA5
-	case "RCtrl":
-		return 0xA3
-	case "RShift":
-		return 0xA1
-	}
-	return 0
+// voiceKeyNames 能单按当语音触发键的键：左右修饰键、几个锁定键、F1–F24。
+// 组合键（带 +）不在这里，走 GlobalShortcut 注册。
+var voiceKeyNames = map[string]uint32{
+	"LShift": 0xA0, "RShift": 0xA1, "LCtrl": 0xA2, "RCtrl": 0xA3, "LAlt": 0xA4, "RAlt": 0xA5,
+	"CapsLock": 0x14, "ScrollLock": 0x91, "Pause": 0x13,
 }
+
+func init() {
+	for i := 1; i <= 24; i++ {
+		voiceKeyNames[fmt.Sprintf("F%d", i)] = uint32(0x70 + i - 1)
+	}
+}
+
+func voiceKey(name string) uint32 { return voiceKeyNames[name] }
+
+// voiceKeyIsModifier 修饰键当触发键时不吞（吞了 Shift/Ctrl 的状态会乱），其余单键吞掉，免得 CapsLock 跟着切大小写
+func voiceKeyIsModifier(vk uint32) bool { return vk >= 0xA0 && vk <= 0xA5 }
 
 // 只由钩子线程驱动。单击触发键开始录音，再单击结束；按着触发键时按了别的键算组合键：
 // 第一下的组合键取消这次录音，结束那下的组合键忽略（继续录）。
