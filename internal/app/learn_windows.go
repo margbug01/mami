@@ -12,7 +12,8 @@ import (
 	"unicode/utf8"
 )
 
-// 贴入之后盯着：用户在同一个窗口里打字，每停手 0.3 秒就读一次光标附近的文字存成快照。
+// 贴入之后盯着：用户在同一个窗口里打字，每停手 80ms 就读一次光标附近的文字存成快照
+// （原来 0.3 秒：改完最后几个字马上按 Enter，快照还停在改到一半，「妈咪→MAMI」读成了「妈咪→MA」）。
 // 改词：停手 2 秒或按 Enter 时拿快照和贴入的比，一次口述最多问模型一次。Enter 不能当场读：
 // 聊天框里 Enter 就是发送，读到时框已经清空了，所以用按下前那张。
 // 长文样本：一直盯到切走窗口、停手 60 秒或满 10 分钟，存最后一张还对得上贴入内容的快照
@@ -23,9 +24,11 @@ type learnWatch struct {
 	fg       uintptr // 0 = 没在盯
 	raw      string  // 识别原话（润色前）
 	pasted   string
-	snap     string // 最近一次读到的光标附近文字（还没读到时为空）
-	best     string // 最近一张还对得上贴入内容的快照
-	asked    bool   // 这次口述已经问过模型改词了
+	snap     string    // 最近一次读到的光标附近文字（还没读到时为空）
+	snapAt   time.Time // snap 是什么时候开始读的
+	typedAt  time.Time // 最后一次按键
+	best     string    // 最近一张还对得上贴入内容的快照
+	asked    bool      // 这次口述已经问过模型改词了
 	cfg      Config
 	deadline time.Time // 停手超过这个时间就收尾
 	hardEnd  time.Time
@@ -35,7 +38,7 @@ type learnWatch struct {
 }
 
 const (
-	learnSnapAfter  = 300 * time.Millisecond
+	learnSnapAfter  = 80 * time.Millisecond
 	learnCheckAfter = 2 * time.Second
 	learnIdleEnd    = 60 * time.Second
 	learnMaxWatch   = 10 * time.Minute // 写长 prompt 可能改好几分钟
@@ -52,6 +55,7 @@ func (a *App) learnStart(fg uintptr, raw, pasted string, cfg Config) {
 	w.gen++
 	now := time.Now()
 	w.fg, w.raw, w.pasted, w.snap, w.best, w.asked, w.cfg = fg, raw, pasted, "", "", false, cfg
+	w.snapAt, w.typedAt = time.Time{}, time.Time{}
 	w.deadline, w.hardEnd = now.Add(learnIdleEnd), now.Add(learnMaxWatch)
 	gen := w.gen
 	w.endT = time.AfterFunc(learnIdleEnd, func() { a.learnFinish(gen) })
@@ -81,10 +85,15 @@ func (a *App) learnTyped(vk uint32) {
 		return
 	}
 	w.stopTimers()
+	prevKey := w.typedAt
+	w.typedAt = now
 	w.deadline = now.Add(learnIdleEnd)
 	w.endT = time.AfterFunc(min(learnIdleEnd, time.Until(w.hardEnd)), func() { a.learnFinish(gen) })
 	if vk == vkReturn {
 		snap := w.snap
+		if snap != "" && w.snapAt.Before(prevKey) {
+			log.Printf("learn: keys right before Enter not read yet")
+		}
 		w.mu.Unlock()
 		go a.learnJudge(gen, snap) // 用按 Enter 之前那张快照；长文还接着盯（Enter 也可能只是换行）
 		return
@@ -110,6 +119,7 @@ func (a *App) learnSnap(gen uint64) {
 	fg, pasted := w.fg, w.pasted
 	n := utf8.RuneCountInString(pasted)
 	w.mu.Unlock()
+	readAt := time.Now()
 	if foreground() != fg {
 		return
 	}
@@ -125,7 +135,7 @@ func (a *App) learnSnap(gen uint64) {
 	}
 	w.mu.Lock()
 	if w.gen == gen {
-		w.snap = snap
+		w.snap, w.snapAt = snap, readAt
 		if same {
 			w.best = snap
 		}

@@ -115,12 +115,14 @@ func sampleOf(pasted, snap string) (final string, changed int, ok bool) {
 	if now == "" {
 		return "", 0, false
 	}
-	n, del := utf8.RuneCountInString(pasted), 0
+	n, del, ins := utf8.RuneCountInString(pasted), 0, 0
 	for _, e := range edits {
 		del += utf8.RuneCountInString(e.del)
-		changed += utf8.RuneCountInString(e.del) + utf8.RuneCountInString(e.ins)
+		ins += utf8.RuneCountInString(e.ins)
 	}
-	return now, changed, (n-del)*10 >= 6*n
+	changed = del + ins
+	// 加进来的字比原文还多两倍：读到的是别处的一大段（比如聊天记录），常用字凑巧对上了
+	return now, changed, (n-del)*10 >= 6*n && ins <= 2*n
 }
 
 // worthSample 长文、改过、改后还对得上原文才存
