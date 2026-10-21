@@ -21,6 +21,7 @@ type Config struct {
 	VoiceRewrite      bool    `json:"voice_rewrite"` // 选中文字再说话：按说的要求改写选中的那段
 	PolishAuto        bool    `json:"polish_auto"`   // 按程序自动换润色档位（AI 工具用提示词档、聊天软件用轻润色）
 	VoiceHotkey       string  `json:"voice_hotkey"`
+	VoiceJoined       bool    `json:"voice_joined"`
 	VoiceStyle        string  `json:"voice_style"`     // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
 	VoiceOrbSize      float64 `json:"voice_orb_size"`  // 果冻球直径（DIP），40~96
 	VoiceTone         string  `json:"voice_tone"`      // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
@@ -131,8 +132,11 @@ func (c *Config) normalize() {
 		c.VoiceOrbSize = voiceOrbW
 	}
 	c.VoiceOrbSize = math.Round(min(96, max(40, c.VoiceOrbSize)))
+	if c.VoiceStyle == "joined" {
+		c.VoiceStyle, c.VoiceJoined = "leds", true
+	}
 	switch c.VoiceStyle {
-	case "bars", "orb", "glass", "pixel", "mercury", "islands", "leds", "joined":
+	case "bars", "orb", "glass", "pixel", "mercury", "islands", "leds":
 	default:
 		c.VoiceStyle = "bars"
 	}

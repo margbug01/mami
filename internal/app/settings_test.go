@@ -307,7 +307,63 @@ func TestSnapDocs(t *testing.T) {
 	save("settings-ja.png", tt)
 }
 
-// 服务商分段条：点一下就换地址和模型（以前把局部变量交给 SegmentedBase，点了没反应）
+func TestPolishTabs(t *testing.T) {
+	defer i18n.Set(i18n.ZH)
+	a := &App{avatar: loadAvatar()}
+	cfg := defaultConfig()
+	cfg.Language = "zh"
+	a.set = settingsState{draft: cfg, page: pagePolish}
+	tt := ui.NewTester(a.settingsView, settingsW, 800)
+	tt.Frame()
+	if _, ok := tt.Find("按程序自动换档"); !ok {
+		t.Fatal("missing polish options")
+	}
+	snapshot := func(name string) {
+		if dir := os.Getenv("MAMI_SNAP"); dir != "" {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			file, err := os.Create(filepath.Join(dir, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			if err := png.Encode(file, tt.Image()); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, ok := tt.Find("服务商"); ok {
+		t.Fatal("API settings visible on options tab")
+	}
+	snapshot("polish-level.png")
+	if err := tt.Click("接口"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	tt.Frame()
+	if a.set.polishTab != 1 {
+		t.Fatal("API tab did not activate")
+	}
+	if _, ok := tt.Find("服务商"); !ok {
+		t.Fatal("missing API settings")
+	}
+	if _, ok := tt.Find("按程序自动换档"); ok {
+		t.Fatal("polish options visible on API tab")
+	}
+	snapshot("polish-api.png")
+	track, ok := tt.Find("档位")
+	if !ok {
+		t.Fatal("missing options tab")
+	}
+	tt.ClickAt(track.X+16, track.Y+track.H/2)
+	tt.Frame()
+	tt.Frame()
+	if a.set.polishTab != 0 || a.set.draft.PolishStyle != cfg.PolishStyle {
+		t.Fatalf("tab=%d style=%q want=%q", a.set.polishTab, a.set.draft.PolishStyle, cfg.PolishStyle)
+	}
+}
+
 func TestProviderPickerClick(t *testing.T) {
 	a := &App{avatar: loadAvatar()}
 	d := defaultConfig()

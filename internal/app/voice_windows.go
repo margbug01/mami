@@ -521,6 +521,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	dpi, wa := dpiAt(pt), workArea(pt)
 	a.voiceWin.Update(func() {
 		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, cfg.VoiceTone, float32(cfg.VoiceOrbSize)
+		a.voiceJoined = cfg.VoiceJoined
 	})
 	if cfg.ASRAPIKey == "" { // 还没填 Key：不录，直接带去填
 		voiceRecording.CompareAndSwap(id, 0)
@@ -844,14 +845,14 @@ func (a *App) voiceView(c *ui.Context) {
 			return
 		}
 		gl, gr := a.islandGaps(now)
-		pill := a.voicePill(c, a.voiceStyle, dark, sk, state, bars, orbLv, gl, gr, kind, now, true)
+		pill := a.voicePill(c, a.voiceStyle, dark, sk, state, bars, orbLv, gl, gr, kind, now, true, a.voiceJoined)
 		a.voiceHover = pill.Hovered()
 		pill.Width(a.voicePillW(now)).Opacity(opacity).Scale(size, size).Translate(0, dy)
 	})
 }
 
 // voicePill 画胶囊本体（不含进出场动画）。live=false 是设置页里的预览：按钮只是样子，点了没反应
-func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, state voiceViewState, bars [voiceBars]float32, orbLv, gl, gr, kind float32, now time.Time, live bool) ui.Element {
+func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, state voiceViewState, bars [voiceBars]float32, orbLv, gl, gr, kind float32, now time.Time, live, joined bool) ui.Element {
 	pill := ui.Row(c).Height(voiceH).AlignItems(ui.Center).Justify(ui.Center).Clip().
 		Background(pillBg).Border(1, pillBorder).Radius(voiceH / 2)
 	if !dark {
@@ -868,11 +869,13 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 	case "mercury":
 		bg, edge := mercuryShell(dark)
 		pill.Background(bg).Border(1, edge)
-	case "joined":
-		bg, edge := mercuryShell(dark)
-		bg.A = 255
-		pill.Background(bg).Border(1, edge).Radius(6)
 	case "islands", "leds":
+		if joined {
+			bg, edge := mercuryShell(dark)
+			bg.A = 255
+			pill.Background(bg).Border(1, edge).Radius(6)
+			break
+		}
 		bridge := style == "islands"
 		pill.Background(clearC).Border(0, clearC).Radius(0).Draw(func(p *ui.Painter, r ui.Rect) { drawIslands(p, r, dark, gl, gr, bridge) })
 	}
@@ -1166,6 +1169,7 @@ func (a *App) runVoiceDemo(only string) {
 	for _, style := range styles {
 		a.voiceWin.Update(func() {
 			a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, style, cfg.VoiceTone, voiceOrbW
+			a.voiceJoined = cfg.VoiceJoined
 		})
 		playSound(soundStart)
 		var levels []float64
@@ -1222,9 +1226,6 @@ var (
 
 // skinFor 磨砂玻璃跟着深浅色走；像素和黑胶囊不跟主题
 func skinFor(style string, dark bool) voiceSkin {
-	if style == "joined" {
-		style = "leds"
-	}
 	switch {
 	case style == "pixel":
 		return voiceSkin{style, pixCyan, pixEdge, pixEdgeHi, pixCyan, ui.RGBA(190, 252, 255, 1), pixBg}
@@ -1290,11 +1291,11 @@ func (sk voiceSkin) dots(p *ui.Painter, r ui.Rect) {
 	drawDotsColor(p, r, sk.fg)
 }
 
-// drawGlass 磨砂玻璃：深色纯黑底，浅色半透明底带高光；录音时中间垫一团随音量变大的紫青光晕。
+// drawGlass 磨砂玻璃：深浅色都用半透明底带高光；录音时中间垫一团随音量变大的紫青光晕。
 // 没有背景模糊：mygo 的 Acrylic 只能整窗开，语音窗口比胶囊大，开了就是一整块模糊的长方形
 func drawGlass(p *ui.Painter, r ui.Rect, dark bool, level float32, halo bool) {
 	rad := r.H / 2
-	bg, edge, hi := pillBg, ui.RGBA(255, 255, 255, 0.10), clearC
+	bg, edge, hi := ui.RGBA(28, 30, 35, 0.76), ui.RGBA(255, 255, 255, 0.10), ui.RGBA(255, 255, 255, 0.07)
 	if !dark {
 		bg, edge, hi = ui.RGBA(244, 246, 252, 0.62), ui.RGBA(120, 130, 160, 0.12), ui.RGBA(255, 255, 255, 0.32)
 	}

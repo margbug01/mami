@@ -131,6 +131,12 @@ func TestVoiceSkins(t *testing.T) {
 		cfg.VoiceStyle = style
 		cfg.normalize()
 		want := style
+		if style == "joined" {
+			want = "leds"
+			if !cfg.VoiceJoined {
+				t.Error("joined style must migrate to connected layout")
+			}
+		}
 		if style == "nope" || style == "" {
 			want = "bars"
 		}

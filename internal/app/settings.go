@@ -32,6 +32,7 @@ type settingsState struct {
 	extraH        float32 // 额外要求输入框的高度（手动拖过之后才用）
 	extraManual   bool
 	gripMoved     bool   // 这次按住把手时拖动过
+	polishTab     int
 	transTab      int    // 「翻译」页：0 译文、1 接口
 	voiceTab      int    // 「语音识别」页：0 通用、1 外观、2 接口
 	wordAdd       bool   // 词库：「+ 添加」点开成了输入框
@@ -136,7 +137,7 @@ func (a *App) settingsView(c *ui.Context) {
 			})
 			ui.Scroll(c).Grow(1).Children(func() {
 				// 每页、每个 tab 单独认控件：按位置认的话，上一页同位置的多行框（热词）会被沿用，Password 对它无效，Key 就明文了
-				ui.Column(c).Padding(8, 24, 16, 24).Key(fmt.Sprint(s.page, s.transTab, s.voiceTab)).Children(func() {
+				ui.Column(c).Padding(8, 24, 16, 24).Key(fmt.Sprint(s.page, s.transTab, s.voiceTab, s.polishTab)).Children(func() {
 					switch s.page {
 					case pageVoice:
 						a.pageVoice(c, d)
@@ -834,12 +835,15 @@ func (a *App) exportWords() {
 // voiceLook 「语音识别」页的外观 tab：录音时的样式
 func (a *App) voiceLook(c *ui.Context, d *Config) {
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
-		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}, {"joined", T("连体方条")}})
+		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}})
 	})
 	if d.VoiceStyle != "pixel" && d.VoiceStyle != "orb" { // 像素和果冻球的配色是固定的
 		settingRow(c, T("浮窗底色"), T("跟界面主题分开选"), func() {
 			optionSelect(c, &d.VoiceTone, []option{{"dark", T("深色")}, {"light", T("浅色")}, {"auto", T("跟随主题")}})
 		})
+	}
+	if d.VoiceStyle == "islands" || d.VoiceStyle == "leds" {
+		switchRow(c, T("连体"), "", &d.VoiceJoined)
 	}
 	a.voicePreview(c, d)
 	if d.VoiceStyle == "orb" {
@@ -899,12 +903,17 @@ func (a *App) previewShape(c *ui.Context, d *Config, style string, dark bool, sk
 		ui.Box(c).Size(sz, sz).Draw(func(p *ui.Painter, r ui.Rect) { drawOrb(p, r, bars[voiceBars-1], now, rec) })
 	} else {
 		gl, gr := islandGapsFor(st)
-		a.voicePill(c, style, dark, sk, st, bars, bars[voiceBars-1], gl, gr, 1, now, false).Width(float32(min(voiceWidth(st), voiceRecW))) // 预览框放不下全宽的提示，句子长了就截断
+		a.voicePill(c, style, dark, sk, st, bars, bars[voiceBars-1], gl, gr, 1, now, false, d.VoiceJoined).Width(float32(min(voiceWidth(st), voiceRecW))) // 预览框放不下全宽的提示，句子长了就截断
 	}
 }
 
 func (a *App) pagePolish(c *ui.Context, d *Config) {
 	pageTitle(c, T("润色"))
+	pageTabs(c, &a.set.polishTab, T("档位"), T("接口"))
+	if a.set.polishTab == 1 {
+		settingGroup(c, "", func() { a.apiPolish(c, d) })
+		return
+	}
 	settingGroup(c, "", func() {
 		settingRowW(c, T("档位"), "", selectW, func() {
 			optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}, {"prompt", T("提示词")}})
@@ -912,7 +921,6 @@ func (a *App) pagePolish(c *ui.Context, d *Config) {
 		switchRow(c, T("选中再说就改写"), T("先选中一段字再按触发键，说「翻成英文」「写正式点」「缩短一半」就照着改；说的不是要求就换成你说的话"), &d.VoiceRewrite)
 		switchRow(c, T("按程序自动换档"), T("在 Cursor、ChatGPT 这类 AI 工具里用「提示词」档，在微信、QQ 里用「轻润色」，其他地方用上面选的"), &d.PolishAuto)
 	})
-	settingGroup(c, T("接口"), func() { a.apiPolish(c, d) })
 }
 
 func (a *App) testPolishDraft() {
