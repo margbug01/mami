@@ -24,7 +24,7 @@ type rewriteSample struct {
 
 // 短句（聊天）只抽改错的词，不存样本；这几个数以后按数据再调
 const (
-	sampleMinRunes = 40                   // 贴入至少这么长才存
+	sampleMinRunes = 10                   // 贴入至少这么长才存
 	sampleMaxRunes = 1500                 // 再长不存：每次停手都要逐字对齐，太长了一次要几十 MB
 	sampleKeep     = 500                  // 最多留这么多条，旧的先删
 	sampleMaxAge   = 180 * 24 * time.Hour // 半年前的删掉

@@ -29,6 +29,21 @@ func TestSampleOf(t *testing.T) {
 	}
 }
 
+func TestSampleMinimumLength(t *testing.T) {
+	for _, length := range []int{9, 10, 11, 39, 40, 1500, 1501} {
+		pasted := strings.Repeat("字", length-1) + "甲"
+		edited := strings.Repeat("字", length-1) + "乙"
+		final, changed, ok := sampleOf(pasted, edited)
+		want := length >= 10 && length <= 1500
+		if got := ok && worthSample(pasted, final, changed); got != want {
+			t.Errorf("length %d: got %v, want %v", length, got, want)
+		}
+		if worthSample(pasted, pasted, 0) {
+			t.Errorf("length %d: unchanged text must not be kept", length)
+		}
+	}
+}
+
 func TestSampleLog(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "samples.jsonl")
 	s := newSampleLog(path)
