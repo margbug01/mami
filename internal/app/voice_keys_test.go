@@ -126,7 +126,7 @@ func TestVoiceSkins(t *testing.T) {
 		gaps(voiceViewState{text: "x", copy: true}) != [2]float32{0, 4} || gaps(voiceViewState{text: "x"}) != [2]float32{0, 0} {
 		t.Error("island gaps")
 	}
-	for _, style := range []string{"bars", "orb", "glass", "pixel", "mercury", "islands", "leds", "nope", ""} {
+	for _, style := range []string{"bars", "orb", "glass", "pixel", "mercury", "islands", "leds", "joined", "nope", ""} {
 		cfg := defaultConfig()
 		cfg.VoiceStyle = style
 		cfg.normalize()

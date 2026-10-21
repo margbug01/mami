@@ -132,7 +132,7 @@ func (c *Config) normalize() {
 	}
 	c.VoiceOrbSize = math.Round(min(96, max(40, c.VoiceOrbSize)))
 	switch c.VoiceStyle {
-	case "bars", "orb", "glass", "pixel", "mercury", "islands", "leds":
+	case "bars", "orb", "glass", "pixel", "mercury", "islands", "leds", "joined":
 	default:
 		c.VoiceStyle = "bars"
 	}

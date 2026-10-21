@@ -834,7 +834,7 @@ func (a *App) exportWords() {
 // voiceLook 「语音识别」页的外观 tab：录音时的样式
 func (a *App) voiceLook(c *ui.Context, d *Config) {
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
-		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}})
+		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}, {"joined", T("连体方条")}})
 	})
 	if d.VoiceStyle != "pixel" && d.VoiceStyle != "orb" { // 像素和果冻球的配色是固定的
 		settingRow(c, T("浮窗底色"), T("跟界面主题分开选"), func() {

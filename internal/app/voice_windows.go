@@ -768,7 +768,7 @@ const voiceBars = 9
 
 // 渐变波柱的底：深色是黑药丸，浅色是浅灰药丸（由「浮窗底色」决定，不跟主题）
 var (
-	pillBg          = ui.RGBA(20, 20, 20, 0.96)
+	pillBg          = ui.RGBA(0, 0, 0, 1)
 	pillBorder      = ui.RGBA(255, 255, 255, 0.12)
 	pillFg          = ui.RGBA(242, 242, 242, 1)
 	pillLightBg     = ui.RGBA(244, 245, 247, 0.97)
@@ -868,6 +868,10 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 	case "mercury":
 		bg, edge := mercuryShell(dark)
 		pill.Background(bg).Border(1, edge)
+	case "joined":
+		bg, edge := mercuryShell(dark)
+		bg.A = 255
+		pill.Background(bg).Border(1, edge).Radius(6)
 	case "islands", "leds":
 		bridge := style == "islands"
 		pill.Background(clearC).Border(0, clearC).Radius(0).Draw(func(p *ui.Painter, r ui.Rect) { drawIslands(p, r, dark, gl, gr, bridge) })
@@ -1218,6 +1222,9 @@ var (
 
 // skinFor 磨砂玻璃跟着深浅色走；像素和黑胶囊不跟主题
 func skinFor(style string, dark bool) voiceSkin {
+	if style == "joined" {
+		style = "leds"
+	}
 	switch {
 	case style == "pixel":
 		return voiceSkin{style, pixCyan, pixEdge, pixEdgeHi, pixCyan, ui.RGBA(190, 252, 255, 1), pixBg}
@@ -1283,11 +1290,11 @@ func (sk voiceSkin) dots(p *ui.Painter, r ui.Rect) {
 	drawDotsColor(p, r, sk.fg)
 }
 
-// drawGlass 磨砂玻璃：半透明底、一圈亮边、顶上一道高光；录音时中间垫一团随音量变大的紫青光晕。
+// drawGlass 磨砂玻璃：深色纯黑底，浅色半透明底带高光；录音时中间垫一团随音量变大的紫青光晕。
 // 没有背景模糊：mygo 的 Acrylic 只能整窗开，语音窗口比胶囊大，开了就是一整块模糊的长方形
 func drawGlass(p *ui.Painter, r ui.Rect, dark bool, level float32, halo bool) {
 	rad := r.H / 2
-	bg, edge, hi := ui.RGBA(58, 63, 80, 0.52), ui.RGBA(255, 255, 255, 0.10), ui.RGBA(255, 255, 255, 0.12)
+	bg, edge, hi := pillBg, ui.RGBA(255, 255, 255, 0.10), clearC
 	if !dark {
 		bg, edge, hi = ui.RGBA(244, 246, 252, 0.62), ui.RGBA(120, 130, 160, 0.12), ui.RGBA(255, 255, 255, 0.32)
 	}
@@ -1424,7 +1431,7 @@ func drawPixelIcon(p *ui.Painter, r ui.Rect, rows [8]string, c ui.Color) {
 // mercuryShell 水银样式的底：深浅色各一套灰，水银珠本身是镜面，两种底上都看得清
 func mercuryShell(dark bool) (bg, edge ui.Color) {
 	if dark {
-		return ui.RGBA(30, 32, 38, 0.96), ui.RGBA(255, 255, 255, 0.14)
+		return pillBg, ui.RGBA(255, 255, 255, 0.14)
 	}
 	return ui.RGBA(236, 238, 242, 0.97), ui.RGBA(0, 0, 0, 0.13)
 }

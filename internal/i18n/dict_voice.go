@@ -47,6 +47,7 @@ func init() {
 		"跟界面主题分开选":     {"跟介面主題分開選", "앱 테마와 별도로 선택", "Independiente del tema", "Indépendant du thème", "Unabhängig vom App-Design", "Не зависит от темы"},
 		"跟随主题":         {"跟隨主題", "테마에 맞춤", "Según el tema", "Selon le thème", "Wie App-Design", "Как тема"},
 		"分段电平":         {"分段電平", "LED 미터", "Medidor LED", "VU-mètre LED", "LED-Pegel", "LED-индикатор"},
+		"连体方条":         {"連體方條", "일체형 바", "Barra unificada", "Barre unifiée", "Durchgehender Balken", "Цельная панель"},
 		"复古像素":         {"復古像素", "레트로 픽셀", "Píxel retro", "Pixel rétro", "Retro-Pixel", "Ретро-пиксели"},
 		"已复制，到要用的地方按 Ctrl+V":                 {"已複製，到要用的地方按 Ctrl+V", "복사됨. 원하는 곳에서 Ctrl+V", "Copiado. Pulsa Ctrl+V donde lo necesites", "Copié. Appuyez sur Ctrl+V là où vous en avez besoin", "Kopiert. Mit Strg+V dort einfügen, wo du es brauchst", "Скопировано. Нажмите Ctrl+V там, где нужно"},
 		"按一个键或组合键…":                          {"按一個鍵或組合鍵…", "키 또는 조합 키를 누르세요…", "Pulsa una tecla o combinación…", "Appuyez sur une touche ou une combinaison…", "Taste oder Kombination drücken…", "Нажмите клавишу или сочетание…"},

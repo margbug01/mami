@@ -46,6 +46,7 @@ var Dict = map[string][2]string{
 	"跟界面主题分开选":     {"Independent of the app theme", "アプリのテーマとは別に選べます"},
 	"跟随主题":         {"Match app theme", "テーマに合わせる"},
 	"分段电平":         {"LED meter", "LEDメーター"},
+	"连体方条":         {"Unified bar", "一体型バー"},
 	"没地方贴时":        {"Nowhere to paste", "貼り付け先がないとき"},
 	"明天三点开会":       {"Meeting at 3 tomorrow", "明日3時に会議"},
 	"复古像素":         {"Retro pixel", "レトロピクセル"},
