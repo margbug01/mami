@@ -1287,16 +1287,19 @@ func (sk voiceSkin) dots(p *ui.Painter, r ui.Rect) {
 // 没有背景模糊：mygo 的 Acrylic 只能整窗开，语音窗口比胶囊大，开了就是一整块模糊的长方形
 func drawGlass(p *ui.Painter, r ui.Rect, dark bool, level float32, halo bool) {
 	rad := r.H / 2
-	bg, edge, hi := ui.RGBA(40, 44, 60, 0.82), ui.RGBA(255, 255, 255, 0.16), ui.RGBA(255, 255, 255, 0.14)
+	bg, edge, hi := ui.RGBA(58, 63, 80, 0.52), ui.RGBA(255, 255, 255, 0.10), ui.RGBA(255, 255, 255, 0.12)
 	if !dark {
-		bg, edge, hi = ui.RGBA(244, 246, 252, 0.86), ui.RGBA(120, 130, 160, 0.22), ui.RGBA(255, 255, 255, 0.55)
+		bg, edge, hi = ui.RGBA(244, 246, 252, 0.62), ui.RGBA(120, 130, 160, 0.12), ui.RGBA(255, 255, 255, 0.32)
 	}
 	p.Fill(r, bg, rad)
 	if halo {
 		cx, cy := r.X+r.W/2, r.Y+r.H/2
-		w, h := 28+30*level, 6+8*level
-		p.Shadow(ui.Rect{X: cx - w/2, Y: cy - h/2, W: w, H: h}, h/2, 0, 0, 12, 2, ui.RGBA(150, 140, 255, 0.45+0.5*level))
-		p.Shadow(ui.Rect{X: cx - w/4, Y: cy - h/2, W: w / 2, H: h}, h/2, 0, 0, 10, 0, ui.RGBA(93, 202, 165, 0.30+0.45*level))
+		for layer := 0; layer < 16; layer++ {
+			falloff := float32(layer) / 15
+			w, h := (76+16*level)*(1-0.65*falloff), (r.H-4)*(1-0.8*falloff)
+			p.Fill(ui.Rect{X: cx - w/2 - 5, Y: cy - h/2, W: w, H: h}, ui.RGBA(150, 140, 255, 0.012+0.014*level), h/2)
+			p.Fill(ui.Rect{X: cx - w/2 + 8, Y: cy - h/2, W: w, H: h}, ui.RGBA(93, 202, 165, 0.008+0.010*level), h/2)
+		}
 	}
 	// 高光是上半截的渐变，跟胶囊同一个圆角，两头顺着弧线淡掉（以前是一条直线，两端突兀）
 	clear := hi
