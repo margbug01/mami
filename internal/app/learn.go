@@ -774,3 +774,21 @@ func unswap(ins, v, w string) string {
 	}
 	return strings.Replace(ins, v, w, 1)
 }
+
+// imeComposing 快照里有贴入时没有的「ma'mi」这种带分隔符的拼音：输入法还在拼，没选字上屏。
+// shortcut: 只认这种分隔符写法，拼单个音节（没有 '）认不出，手打的 don't 会被误当成在拼（少学一次）；revisit when 这类误判多了
+func imeComposing(pasted, snap string) bool {
+	return strings.Count(snap, "'") > strings.Count(pasted, "'") && pinyinSplit(snap)
+}
+
+func pinyinSplit(s string) bool {
+	r := []rune(s)
+	for i := 1; i+1 < len(r); i++ {
+		if r[i] == '\'' && isASCIILetter(r[i-1]) && isASCIILetter(r[i+1]) {
+			return true
+		}
+	}
+	return false
+}
+
+func isASCIILetter(c rune) bool { return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' }

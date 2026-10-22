@@ -129,6 +129,9 @@ func (a *App) learnSnap(gen uint64) {
 		return
 	}
 	snap := before + after
+	if imeComposing(pasted, snap) { // 拼音还没上屏，等选字那一下再读
+		return
+	}
 	same := false
 	if n >= sampleMinRunes && n <= sampleMaxRunes {
 		_, _, same = sampleOf(pasted, snap)

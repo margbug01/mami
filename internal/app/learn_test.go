@@ -330,3 +330,19 @@ func TestApplyCorrections(t *testing.T) {
 		t.Error("fold helpers")
 	}
 }
+
+func TestIMEComposing(t *testing.T) {
+	for _, c := range []struct {
+		pasted, snap string
+		want         bool
+	}{
+		{"打开妈咪的设置", "打开Ma'mi的设置", true},
+		{"打开妈咪的设置", "打开Mami的设置", false},
+		{"I don't know", "I don't know yet", false}, // 原文本来就有
+		{"好的", "好的 don't", true},                    // 手打英文缩写也会被当成在拼：少学一次，无害
+	} {
+		if got := imeComposing(c.pasted, c.snap); got != c.want {
+			t.Errorf("%q → %q: got %v", c.pasted, c.snap, got)
+		}
+	}
+}
