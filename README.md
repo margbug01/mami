@@ -70,7 +70,7 @@ I write a lot every day in Alma, ChatGPT and WeChat, mostly long prompts for AI.
 
 Download `Mami Setup x.y.z amd64.exe` (installer) or `Mami.exe` (portable) from [Releases](https://github.com/margbug01/mami/releases/latest). Windows 10/11, x64.
 
-Settings open on first launch.
+On first launch a short hands-on tour lets you try both: press the voice key and read a sentence aloud (the pill follows your voice and the words light up as you speak, then the fillers drop out), and select a sentence to get the 文A button, the card and Replace. The microphone is only used for the volume; the results are scripted, so nothing is sent anywhere. Skip it at any point, or reopen it later from **Tutorial…** in the tray menu. The tour needs no keys; when it ends Mami goes to the tray, and the first time you press the voice key it takes you to the place to add a speech key.
 
 - **Translation**: under Translation → API, pick a provider and click Test connection. Out of the box Mami uses bilibili's **free** Index-Translate endpoint (no key needed, may return 504 at peak hours).
 - **Voice**: turn voice input on under Dictation → General, pick a recognition provider and paste its key under API, and add a key on the Polishing page (without one, the raw text is pasted).
@@ -142,6 +142,7 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds, an
 | `polish.go` | Polish, and the guard that only lets sound-alike swaps through when a learned fix backs them |
 | `learn.go` / `learn_windows.go` / `samples.go` | Vocabulary, auto-learning (checked with pinyin), long-form edit samples |
 | `history*.go` | History, stats, heatmap and the History page |
+| `guide.go` | First-launch tutorial pages inside the settings window and their demos |
 
 Windows, tray, global shortcuts, single instance and autostart come from MyGo. The hooks, recording, cross-process selection reading and non-activating windows are plain Win32 via `syscall`, no cgo.
 

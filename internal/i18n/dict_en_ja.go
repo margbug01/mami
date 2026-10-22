@@ -260,8 +260,7 @@ var Dict = map[string][2]string{
 	" · 连接中断，译文不完整": {" · Connection lost, translation incomplete", " · 接続が切れたため訳文は途中までです"},
 	"服务商":           {"Provider", "プロバイダー"},
 	"自定义":           {"Custom", "カスタム"},
-	"免费、不用 Key，但高峰期常超时":           {"Free, no key needed, but often times out at peak hours", "無料・キー不要。ただし混雑時はよくタイムアウトします"},
-	"先在「服务商」里选一家，点「测试连接」确认能用，再保存": {"Pick a provider, click Test connection to make sure it works, then save", "まず「プロバイダー」を選び、「接続テスト」で使えることを確認してから保存してください"},
+	"免费、不用 Key，但高峰期常超时": {"Free, no key needed, but often times out at peak hours", "無料・キー不要。ただし混雑時はよくタイムアウトします"},
 
 	// 边翻边显示、翻译记录
 	"边翻边显示": {"Show while translating", "翻訳中から表示"},

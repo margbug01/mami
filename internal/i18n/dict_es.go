@@ -72,8 +72,7 @@ var dictES = map[string]string{
 	" · 连接中断，译文不完整": " · Conexión interrumpida; traducción incompleta",
 	"服务商":           "Proveedor",
 	"自定义":           "Personalizado",
-	"免费、不用 Key，但高峰期常超时":           "Gratis y sin clave, pero suele agotar el tiempo en horas punta",
-	"先在「服务商」里选一家，点「测试连接」确认能用，再保存": "Elige un proveedor, haz clic en «Probar conexión» para comprobar que funciona y guarda",
+	"免费、不用 Key，但高峰期常超时": "Gratis y sin clave, pero suele agotar el tiempo en horas punta",
 
 	// 边翻边显示、翻译记录
 	"边翻边显示": "Mostrar mientras traduce",

@@ -108,8 +108,13 @@ type App struct {
 	busyMoved atomic.Bool // 转圈期间用户点过别处或按过键：焦点/选区可能变了，不能盲贴
 	btnBusy   atomic.Bool // 静默翻译中：按钮变成转圈，点别处/打字都不收，翻完才收
 	btnHover  atomic.Bool
-	btnGen    atomic.Int64
-	btnAnchor atomic.Uint64 // packPt(按钮对应的松开位置)
+
+	// 新手引导（guide.go）：哪一步正摆在设置窗口里，触发键和 Alt+T 先交给引导
+	guideVoice, guideTrans atomic.Bool
+	guideRec               atomic.Uint64  // 引导正在听的那次录音的代号
+	setHwnd                atomic.Uintptr // 设置窗口，引导只接在它前台时按的键
+	btnGen                 atomic.Int64
+	btnAnchor              atomic.Uint64 // packPt(按钮对应的松开位置)
 
 	// 鼠标手势状态，只在 mouseLoop 那个 goroutine 里用
 	downPt     POINT
@@ -403,6 +408,10 @@ func (a *App) endBusy() {
 // ---------- 翻译流程 ----------
 
 func (a *App) onHotkey(replace bool) {
+	if a.guideTrans.Load() && foreground() == a.setHwnd.Load() { // 引导里那句话：不抓选区、不发请求
+		a.setWin.Update(func() { a.guideHotkey(replace) })
+		return
+	}
 	theWorker.do(func(owner uintptr) {
 		if keyDown(VK_MENU) {
 			sendKeys(KEYBDINPUT{WVk: VK_MASK}, KEYBDINPUT{WVk: VK_MASK, DwFlags: KEYEVENTF_KEYUP})
@@ -764,6 +773,7 @@ func (a *App) createTray() {
 		}
 		menu := mygo.NewMenu(append(items, []*mygo.MenuItem{
 			{Label: T("设置…"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
+			{Label: T("新手引导…"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openGuide() }},
 			{Label: T("划词后显示翻译按钮"), Type: mygo.MenuItemCheckbox, Checked: cfg.ShowButton, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
 				a.toggleButton(item.Checked)
 			}},

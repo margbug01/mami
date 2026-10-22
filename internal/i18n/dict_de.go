@@ -72,8 +72,7 @@ var dictDE = map[string]string{
 	" · 连接中断，译文不完整": " · Verbindung abgebrochen, Übersetzung unvollständig",
 	"服务商":           "Anbieter",
 	"自定义":           "Benutzerdefiniert",
-	"免费、不用 Key，但高峰期常超时":           "Kostenlos, ohne Schlüssel, aber zu Stoßzeiten oft Zeitüberschreitungen",
-	"先在「服务商」里选一家，点「测试连接」确认能用，再保存": "Anbieter wählen, mit „Verbindung testen“ prüfen, dann speichern",
+	"免费、不用 Key，但高峰期常超时": "Kostenlos, ohne Schlüssel, aber zu Stoßzeiten oft Zeitüberschreitungen",
 
 	// 边翻边显示、翻译记录
 	"边翻边显示": "Während der Übersetzung anzeigen",

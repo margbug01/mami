@@ -188,6 +188,14 @@ func (a *App) voiceLoop() {
 					cancel()
 				}
 				id = event.id
+				if voiceEpoch.Load() == id && a.guideVoice.Load() && event.fg != 0 && event.fg == a.setHwnd.Load() {
+					// 新手引导那句话：只开麦看音量，不识别、不润色、不贴（guide.go）
+					var ctx context.Context
+					ctx, cancel = context.WithCancel(context.Background())
+					stop = make(chan struct{})
+					go a.guideListen(ctx, stop, id)
+					continue
+				}
 				cfg, _ := a.config()
 				if voiceEpoch.Load() != id || !cfg.VoiceEnabled || (cfg.DisableHotkeys && !event.manual) || event.fg == 0 || a.excluded(event.fg, cfg) {
 					if voiceEpoch.Load() == id {

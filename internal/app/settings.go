@@ -63,6 +63,10 @@ type settingsState struct {
 	copiedAt              time.Time
 	polishTestMsg         string
 	polishTestErr         bool
+	guide                 bool // 新手引导占着内容区（guide.go）
+	guideStep             int
+	voice                 guideVoiceState
+	trans                 guideTransState
 }
 
 func (a *App) openSettings() {
@@ -91,10 +95,12 @@ func (a *App) openSettings() {
 			Content:         ui.View(a.settingsView),
 		})
 		a.setWin.SetIcon(iconPNG)
+		a.setHwnd.Store(a.setWin.NativeHandle())
 		a.setWin.OnClose(func(e *mygo.CloseEvent) {
 			if !a.quitting {
 				e.PreventDefault()
 				a.stopCapture()
+				a.guideIdle() // 引导里关窗口也算跳过：别留着麦克风和快捷键接管
 				a.setWin.Hide()
 				saved, _ := a.config()
 				i18n.Set(i18n.Resolve(saved.Language, sysLocale)) // 没保存的语言预览收回
@@ -117,6 +123,10 @@ func (a *App) settingsView(c *ui.Context) {
 	ui.Column(c).Fill().Children(func() {
 		a.titleBar(c)
 		ui.Divider(c)
+		if s.guide {
+			a.guideView(c)
+			return
+		}
 		ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
 			ui.Column(c).Width(sidebarW).Children(func() {
 				ui.Sidebar(c, &s.page, func() {
@@ -1444,17 +1454,7 @@ func (a *App) hotkeyBox(c *ui.Context, id string, value *string, voice bool) {
 			ui.Text(c, hint).FontSize(13).TextColor(t.Accent).SingleLine().Grow(1)
 			return
 		}
-		v := strings.TrimSpace(*value)
-		if v == "" || v == "Off" {
-			ui.Text(c, T("未设置")).TextColor(t.TextMuted).SingleLine().Grow(1)
-			return
-		}
-		for _, part := range strings.Split(v, "+") {
-			w, _ := c.MeasureText(200, ui.Span{Text: part, Size: 13})
-			ui.Box(c).Shrink(0).Padding(2, 8).Radius(4).Background(t.Background).Border(1, t.Border).Children(func() {
-				ui.Text(c, part).FontSize(13).SingleLine().MinWidth(w + 2) // 量出来的宽度偏紧，RAlt 会被省略成 R…
-			})
-		}
+		keycaps(c, *value)
 	})
 	if box.Clicked() {
 		if rec {
@@ -1462,6 +1462,22 @@ func (a *App) hotkeyBox(c *ui.Context, id string, value *string, voice bool) {
 		} else {
 			a.startCapture(id, value, voice)
 		}
+	}
+}
+
+// keycaps 把「Alt+Shift+T」画成一个个键帽；空着或 Off 显示「未设置」
+func keycaps(c *ui.Context, acc string) {
+	t := c.Theme()
+	v := strings.TrimSpace(acc)
+	if v == "" || v == "Off" {
+		ui.Text(c, T("未设置")).TextColor(t.TextMuted).SingleLine().Grow(1)
+		return
+	}
+	for _, part := range strings.Split(v, "+") {
+		w, _ := c.MeasureText(200, ui.Span{Text: part, Size: 13})
+		ui.Box(c).Shrink(0).Padding(2, 8).Radius(4).Background(t.Background).Border(1, t.Border).Children(func() {
+			ui.Text(c, part).FontSize(13).SingleLine().MinWidth(w + 2) // 量出来的宽度偏紧，RAlt 会被省略成 R…
+		})
 	}
 }
 

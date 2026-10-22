@@ -72,8 +72,7 @@ var dictFR = map[string]string{
 	" · 连接中断，译文不完整": " · Connexion interrompue, traduction incomplète",
 	"服务商":           "Fournisseur",
 	"自定义":           "Personnalisé",
-	"免费、不用 Key，但高峰期常超时":           "Gratuit, sans clé, mais expire souvent aux heures de pointe",
-	"先在「服务商」里选一家，点「测试连接」确认能用，再保存": "Choisissez un fournisseur, cliquez sur « Tester la connexion » pour vérifier, puis enregistrez",
+	"免费、不用 Key，但高峰期常超时": "Gratuit, sans clé, mais expire souvent aux heures de pointe",
 
 	// 边翻边显示、翻译记录
 	"边翻边显示": "Afficher pendant la traduction",
