@@ -727,7 +727,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 		if !switched && !modsDown && !isTerminal(fg) {
 			in = focusedInput()
 		}
-		mode := voiceOutput(switched, modsDown, isTerminal(fg) || in.input, systemCaret(fg))
+		mode := voiceOutput(switched, modsDown, isTerminal(fg) || in.input, systemCaret(fg) || pasteBlind(processName(windowPID(fg))))
 		copied := mode != voicePaste
 		switch {
 		case mode == voicePaste && selected != "":

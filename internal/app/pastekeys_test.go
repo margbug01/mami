@@ -13,3 +13,14 @@ func TestPasteKeysFor(t *testing.T) {
 		}
 	}
 }
+
+func TestPasteBlind(t *testing.T) {
+	for exe, want := range map[string]bool{
+		`C:\Program Files\Tencent\Weixin\Weixin.exe`: true, "WeChat.exe": true,
+		"Cursor.exe": false, "": false,
+	} {
+		if got := pasteBlind(exe); got != want {
+			t.Errorf("%s → %v, want %v", exe, got, want)
+		}
+	}
+}
