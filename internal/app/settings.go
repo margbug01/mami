@@ -120,35 +120,41 @@ func (a *App) settingsView(c *ui.Context) {
 	i18n.Set(i18n.Resolve(d.Language, sysLocale)) // 在设置里改了立刻预览，保存才算数
 	applyTheme(c, d.Theme)
 	t = c.Theme()
-	ui.Column(c).Fill().Children(func() {
-		a.titleBar(c)
-		ui.Divider(c)
-		if s.guide {
-			a.guideView(c)
-			return
-		}
-		ui.Row(c).Grow(1).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Width(sidebarW).Children(func() {
-				ui.Sidebar(c, &s.page, func() {
-					ui.Box(c).Height(8)
-					ui.SidebarSection(c, T("划词翻译"), nil, func() {
-						ui.SidebarItem(c, pageTrans, iconTrans, T("翻译"))
-						ui.SidebarItem(c, pageBtn, iconBtn, T("划词按钮"))
-						ui.SidebarItem(c, pageKeys, iconKeys, T("快捷键"))
-					})
-					ui.SidebarSection(c, T("语音输入"), nil, func() {
-						ui.SidebarItem(c, pageVoice, iconMic, T("语音识别"))
-						ui.SidebarItem(c, pagePolish, iconPolish, T("润色"))
-						ui.SidebarItem(c, pageWords, iconWords, T("词库"))
-					})
-					ui.Box(c).Height(12)
-					ui.SidebarItem(c, pageHist, iconHist, T("记录"))
-					ui.SidebarItem(c, pageGen, iconGen, T("通用"))
-				}).Grow(1)
-			})
+	if s.guide {
+		a.guideScreen(c)
+		return
+	}
+	// 整窗一张雾灰颗粒底；侧边栏和内容区都不铺底，只有分组卡片是半透明的白
+	ui.Row(c).Fill().AlignItems(ui.Stretch).Draw(func(p *ui.Painter, r ui.Rect) { windowTexture(t.Dark).draw(p, r, 0) }).Children(func() {
+		base := t
+		c.SetTheme(sidebarTheme(base))
+		line := paneBorder(t)
+		ui.Column(c).Width(sidebarW).Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Fill(ui.Rect{X: r.X + r.W - 1, Y: r.Y, W: 1, H: r.H}, line, 0)
+		}).Children(func() {
+			a.brandMark(c)
+			ui.Sidebar(c, &s.page, func() {
+				ui.SidebarSection(c, T("划词翻译"), nil, func() {
+					a.sideItem(c, pageTrans, iconTrans, T("翻译"))
+					a.sideItem(c, pageBtn, iconBtn, T("划词按钮"))
+					a.sideItem(c, pageKeys, iconKeys, T("快捷键"))
+				})
+				ui.SidebarSection(c, T("语音输入"), nil, func() {
+					a.sideItem(c, pageVoice, iconMic, T("语音识别"))
+					a.sideItem(c, pagePolish, iconPolish, T("润色"))
+					a.sideItem(c, pageWords, iconWords, T("词库"))
+				})
+				ui.Box(c).Height(12)
+				a.sideItem(c, pageHist, iconHist, T("记录"))
+				a.sideItem(c, pageGen, iconGen, T("通用"))
+			}).Grow(1)
+		})
+		c.SetTheme(base)
+		ui.Column(c).Grow(1).Children(func() {
+			a.titleBar(c)
 			ui.Scroll(c).Grow(1).Children(func() {
 				// 每页、每个 tab 单独认控件：按位置认的话，上一页同位置的多行框（热词）会被沿用，Password 对它无效，Key 就明文了
-				ui.Column(c).Padding(8, 24, 16, 24).Key(fmt.Sprint(s.page, s.transTab, s.voiceTab, s.polishTab)).Children(func() {
+				ui.Column(c).Padding(0, 28, 16, 28).Key(fmt.Sprint(s.page, s.transTab, s.voiceTab, s.polishTab)).Children(func() {
 					switch s.page {
 					case pageVoice:
 						a.pageVoice(c, d)
@@ -169,31 +175,55 @@ func (a *App) settingsView(c *ui.Context) {
 					}
 				})
 			})
-		})
-		ui.Divider(c)
-		ui.Row(c).Padding(10, 24).Gap(8).Children(func() {
-			color := t.TextMuted
-			if s.statusErr {
-				color = t.Danger
-			}
-			pending, _, failed := a.hist.deletionState()
-			if len(pending) > 0 {
-				c.After(100 * time.Millisecond)
-				ui.Text(c, fmt.Sprintf(T("已删除 %d 条记录"), len(pending))).FontSize(12).TextColor(t.TextMuted)
-				if smallLink(c, T("撤销")).Clicked() {
-					a.hist.undoDeletes()
+			ui.Row(c).Padding(10, 28, 14, 28).Gap(8).AlignItems(ui.Center).Children(func() {
+				color := t.TextMuted
+				if s.statusErr {
+					color = t.Danger
 				}
-				ui.Spacer(c)
-			} else if failed {
-				ui.Text(c, T("删除失败，请重试")).FontSize(12).TextColor(t.Danger).Grow(1)
-			} else {
-				ui.Text(c, s.status).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
-			}
-			if accentButton(c, T("保存")).Clicked() {
-				a.saveDraft()
-			}
+				pending, _, failed := a.hist.deletionState()
+				if len(pending) > 0 {
+					c.After(100 * time.Millisecond)
+					ui.Text(c, fmt.Sprintf(T("已删除 %d 条记录"), len(pending))).FontSize(12).TextColor(t.TextMuted)
+					if smallLink(c, T("撤销")).Clicked() {
+						a.hist.undoDeletes()
+					}
+					ui.Spacer(c)
+				} else if failed {
+					ui.Text(c, T("删除失败，请重试")).FontSize(12).TextColor(t.Danger).Grow(1)
+				} else {
+					ui.Text(c, s.status).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+				}
+				if accentButton(c, T("保存")).MinWidth(88).Clicked() {
+					a.saveDraft()
+				}
+			})
 		})
 	})
+}
+
+// brandMark 侧边栏顶上：头像 + Mami + 版本号，安安静静的一行。整块能拖窗口
+func (a *App) brandMark(c *ui.Context) {
+	t := c.Theme()
+	ui.Row(c).Padding(18, 18, 8, 18).Gap(10).AlignItems(ui.Center).Children(func() {
+		if a.avatar != nil {
+			ui.Image(c, a.avatar).Size(28, 28).Radius(14).Clip().Border(1, t.Border).
+				Shadow(0, 2, 6, 0, ui.RGBA(10, 20, 35, 0.08)).Shrink(0)
+		}
+		ui.Column(c).Grow(1).Gap(1).Children(func() {
+			ui.Text(c, "Mami").FontSize(15).FontWeight(600).TextColor(t.Text).SingleLine()
+			if v := mygo.App.Version(); v != "" {
+				ui.Text(c, strings.TrimPrefix(v, "v")).FontSize(11).TextColor(t.TextMuted.Alpha(0.75)).SingleLine()
+			}
+		})
+	}).DragWindow()
+}
+
+// sideItem 侧边栏一项。选中的那项底盖成半透明的白再带一点影子：mygo 拿焦点时会拿 Accent 铺满，太重
+func (a *App) sideItem(c *ui.Context, id string, icon *ui.SVG, label string) {
+	e := ui.SidebarItem(c, id, icon, label)
+	if a.set.page == id {
+		e.Background(c.Theme().SurfacePressed).Shadow(0, 1, 3, 0, ui.RGBA(10, 20, 35, 0.07)).FontWeight(600)
+	}
 }
 
 const (
@@ -230,9 +260,10 @@ func settingGroup(c *ui.Context, title string, fn func()) {
 	if title == "" {
 		ui.Box(c).Height(8)
 	} else {
-		ui.Text(c, title).FontSize(12).TextColor(t.TextMuted).Padding(16, 4, 6, 4)
+		ui.Text(c, title).FontSize(12).TextColor(t.TextMuted).Padding(18, 4, 8, 4)
 	}
-	ui.Column(c).Padding(2, 16).Radius(t.Radius).Border(1, t.Border).Children(fn)
+	ui.Column(c).Padding(4, 16).Radius(12).Background(paneColor(t)).Border(1, paneBorder(t)).
+		Shadow(0, 1, 2, 0, ui.RGBA(10, 20, 35, 0.03)).Children(fn)
 }
 
 // selectW 只放几个字的下拉框用这个宽度
@@ -242,7 +273,7 @@ const selectW = 180
 const controlW = 240
 
 func pageTitle(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(20).Bold().Padding(10, 0, 4, 0)
+	ui.Text(c, title).FontSize(21).FontWeight(600).Padding(0, 0, 8, 0)
 }
 
 // pageTabs 页标题下的分段切换，页面太长时按用途拆开
@@ -1230,16 +1261,11 @@ func (a *App) saveDraft() {
 	s.status, s.statusErr = T("已保存"), false
 }
 
-// titleBar 自绘标题栏：整条可拖动，右上角最小化和关闭
+// titleBar 自绘标题栏：没有字，整条可拖动，右上角最小化和关闭。名字和头像在侧边栏的品牌卡上
 func (a *App) titleBar(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Height(36).AlignItems(ui.Center).AlignSelf(ui.Stretch).Children(func() {
-		ui.Row(c).Grow(1).Gap(8).Padding(0, 0, 0, 12).AlignItems(ui.Center).Height(36).Children(func() {
-			if a.avatar != nil {
-				ui.Image(c, a.avatar).Size(18, 18).Radius(9).Clip()
-			}
-			ui.Text(c, "Mami").FontSize(13).Bold()
-		}).DragWindow()
+	ui.Row(c).Height(36).AlignItems(ui.Center).AlignSelf(ui.Stretch).Shrink(0).Children(func() {
+		ui.Row(c).Grow(1).Height(36).DragWindow()
 		for _, b := range []struct {
 			glyph  string
 			danger bool
@@ -1419,13 +1445,13 @@ func (a *App) extraPromptBox(c *ui.Context, d *Config) {
 	})
 }
 
-// sidebarW 侧边栏宽度；controlPad 是额外要求框的文字区离窗口左右的距离之和（侧边栏 + 页面左右留白 48 + 输入框内边距）
+// sidebarW 侧边栏宽度；controlPad 是额外要求框的文字区离窗口左右的距离之和（侧边栏 + 页面左右留白 56 + 输入框内边距）
 const sidebarW = 212
 
 // settingsW, settingsH 设置窗口的默认尺寸；侧边栏放得下「Auswahl-Schaltfläche」这类长词
 const settingsW, settingsH = 732, 480
 
-const controlPad = sidebarW + 48 + 32 + 28 // 多出来的 32 是分组卡片左右内边距
+const controlPad = sidebarW + 56 + 32 + 28 // 多出来的 32 是分组卡片左右内边距
 
 var iconGen = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7"/><path d="M10 4H3"/><path d="M21 12h-9"/><path d="M8 12H3"/><path d="M21 20h-5"/><path d="M12 20H3"/><path d="M14 2v4"/><path d="M8 10v4"/><path d="M16 18v4"/></svg>`))
 

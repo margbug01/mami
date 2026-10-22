@@ -15,7 +15,7 @@ func TestGlassRemainsTranslucent(t *testing.T) {
 			tt := ui.NewTester(func(c *ui.Context) {
 				ui.Box(c).Size(160, 36).Draw(func(p *ui.Painter, r ui.Rect) {
 					p.Fill(r, ui.RGBA(backdrop, backdrop, backdrop, 1), 0)
-					drawGlass(p, r, dark, 0, false)
+					drawGlass(p, r, dark)
 				})
 			}, 160, 36)
 			red, _, _, _ := tt.Image().At(80, 24).RGBA()

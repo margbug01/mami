@@ -901,8 +901,11 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 	case "orb": // 果冻样式的提示：没有黑底，画一条会抖的渐变果冻
 		pill.Background(clearC).Border(0, clearC).Draw(func(p *ui.Painter, r ui.Rect) { drawJelly(p, r, now) })
 	case "glass":
-		halo := voiceKind(state) == 1
-		pill.Background(clearC).Border(0, clearC).Draw(func(p *ui.Painter, r ui.Rect) { drawGlass(p, r, dark, orbLv, halo) })
+		shadow := ui.RGBA(15, 22, 35, 0.14)
+		if dark {
+			shadow = ui.RGBA(0, 0, 0, 0.28)
+		}
+		pill.Background(clearC).Border(0, clearC).Shadow(0, 3, 10, 0, shadow).Draw(func(p *ui.Painter, r ui.Rect) { drawGlass(p, r, dark) })
 	case "pixel":
 		pill.Background(clearC).Border(0, clearC).Radius(0).Draw(drawPixelPill)
 	case "mercury":
@@ -1312,8 +1315,7 @@ func skinFor(style string, dark bool) voiceSkin {
 	case style == "pixel":
 		return voiceSkin{style, pixCyan, pixEdge, pixEdgeHi, pixCyan, ui.RGBA(190, 252, 255, 1), pixBg}
 	case style == "glass" && !dark:
-		ink := ui.RGBA(31, 37, 51, 1)
-		return voiceSkin{style, ink, ui.RGBA(255, 255, 255, 0.75), ui.RGBA(255, 255, 255, 1), ink, ui.RGBA(58, 66, 86, 1), ui.RGBA(255, 255, 255, 1)}
+		return voiceSkin{style, ui.RGBA(28, 32, 39, 1), ui.RGBA(20, 30, 45, 0.06), ui.RGBA(20, 30, 45, 0.11), ui.RGBA(35, 39, 46, 1), ui.RGBA(54, 59, 68, 1), ui.RGBA(255, 255, 255, 1)}
 	case style == "mercury" && !dark:
 		ink := ui.RGBA(28, 31, 38, 1)
 		return voiceSkin{style, ink, ui.RGBA(0, 0, 0, 0.07), ui.RGBA(0, 0, 0, 0.12), ink, ui.RGBA(58, 63, 74, 1), ui.RGBA(236, 238, 242, 1)}
@@ -1324,7 +1326,7 @@ func skinFor(style string, dark bool) voiceSkin {
 	case style == "islands" || style == "leds":
 		return voiceSkin{style, ui.RGBA(232, 234, 240, 1), clearC, ui.RGBA(255, 255, 255, 0.09), clearC, ui.RGBA(255, 255, 255, 0.09), islandAccentDark}
 	case style == "glass":
-		return voiceSkin{style, pillFg, ui.RGBA(255, 255, 255, 0.14), ui.RGBA(255, 255, 255, 0.26), ui.RGBA(255, 255, 255, 1), ui.RGBA(255, 255, 255, 1), ui.RGBA(27, 32, 48, 1)}
+		return voiceSkin{style, ui.RGBA(238, 240, 243, 1), ui.RGBA(255, 255, 255, 0.08), ui.RGBA(255, 255, 255, 0.16), ui.RGBA(242, 244, 247, 1), ui.RGBA(255, 255, 255, 1), ui.RGBA(22, 24, 28, 1)}
 	}
 	if !dark {
 		return voiceSkin{style, pillInk, ui.RGBA(0, 0, 0, 0.07), ui.RGBA(0, 0, 0, 0.12), pillInk, ui.RGBA(58, 63, 74, 1), ui.RGBA(244, 245, 247, 1)}
@@ -1373,28 +1375,19 @@ func (sk voiceSkin) dots(p *ui.Painter, r ui.Rect) {
 	drawDotsColor(p, r, sk.fg)
 }
 
-// drawGlass 磨砂玻璃：深浅色都用半透明底带高光；录音时中间垫一团随音量变大的紫青光晕。
+// drawGlass 磨砂玻璃（雾光）：半透明的白（深色是石墨）+ 顶边一道高光 + 一圈细边 + 一层淡颗粒，不垫色。
 // 没有背景模糊：mygo 的 Acrylic 只能整窗开，语音窗口比胶囊大，开了就是一整块模糊的长方形
-func drawGlass(p *ui.Painter, r ui.Rect, dark bool, level float32, halo bool) {
+func drawGlass(p *ui.Painter, r ui.Rect, dark bool) {
 	rad := r.H / 2
-	bg, edge, hi := ui.RGBA(28, 30, 35, 0.76), ui.RGBA(255, 255, 255, 0.10), ui.RGBA(255, 255, 255, 0.07)
-	if !dark {
-		bg, edge, hi = ui.RGBA(244, 246, 252, 0.62), ui.RGBA(120, 130, 160, 0.12), ui.RGBA(255, 255, 255, 0.32)
+	top, bottom, edge, line := ui.RGBA(250, 251, 253, 0.84), ui.RGBA(229, 234, 240, 0.86), ui.RGBA(20, 30, 45, 0.16), ui.RGBA(255, 255, 255, 0.95)
+	if dark {
+		top, bottom, edge, line = ui.RGBA(52, 56, 64, 0.84), ui.RGBA(24, 26, 31, 0.88), ui.RGBA(255, 255, 255, 0.10), ui.RGBA(255, 255, 255, 0.14)
 	}
-	p.Fill(r, bg, rad)
-	if halo {
-		cx, cy := r.X+r.W/2, r.Y+r.H/2
-		for layer := 0; layer < 16; layer++ {
-			falloff := float32(layer) / 15
-			w, h := (76+16*level)*(1-0.65*falloff), (r.H-4)*(1-0.8*falloff)
-			p.Fill(ui.Rect{X: cx - w/2 - 5, Y: cy - h/2, W: w, H: h}, ui.RGBA(150, 140, 255, 0.012+0.014*level), h/2)
-			p.Fill(ui.Rect{X: cx - w/2 + 8, Y: cy - h/2, W: w, H: h}, ui.RGBA(93, 202, 165, 0.008+0.010*level), h/2)
-		}
-	}
-	// 高光是上半截的渐变，跟胶囊同一个圆角，两头顺着弧线淡掉（以前是一条直线，两端突兀）
-	clear := hi
-	clear.A = 0
-	p.FillGradient(r, ui.LinearGradient{From: hi, To: clear, Angle: 180, Start: 0, End: 0.55}, rad)
+	p.FillGradient(r, ui.LinearGradient{From: top, To: bottom, Angle: 180}, rad)
+	p.Clip(r, rad, func() {
+		drawGrain(p, r, 0.45)
+		p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: 1}, line, 0)
+	})
 	p.Stroke(ui.Rect{X: r.X + 0.5, Y: r.Y + 0.5, W: r.W - 1, H: r.H - 1}, edge, rad-0.5, 1)
 }
 

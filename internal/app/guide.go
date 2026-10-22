@@ -151,6 +151,15 @@ func (a *App) guideStopListening() {
 	}
 }
 
+// guideScreen 引导和设置窗口铺同一张雾灰颗粒底
+func (a *App) guideScreen(c *ui.Context) {
+	t := c.Theme()
+	ui.Column(c).Fill().Draw(func(p *ui.Painter, r ui.Rect) { windowTexture(t.Dark).draw(p, r, 0) }).Children(func() {
+		a.titleBar(c)
+		a.guideView(c)
+	})
+}
+
 func (a *App) guideView(c *ui.Context) {
 	s := &a.set
 	a.guideVoice.Store(s.guideStep == stepVoice)
@@ -190,11 +199,11 @@ func (a *App) guideFooter(c *ui.Context) {
 		})
 		ui.Row(c).Gap(8).Children(func() {
 			for i := range guidePages {
-				dot := t.Border
+				dot, w := t.Text.Alpha(0.16), float32(6)
 				if i == s.guideStep {
-					dot = t.Accent
+					dot, w = t.Accent, 16
 				}
-				ui.Box(c).Size(6, 6).Radius(3).Background(dot)
+				ui.Box(c).Size(w, 6).Radius(3).Background(dot)
 			}
 		})
 		ui.Row(c).Grow(1).Justify(ui.End).AlignItems(ui.Center).Children(func() {
@@ -211,13 +220,14 @@ func (a *App) guideFooter(c *ui.Context) {
 
 func (a *App) guideAvatar(c *ui.Context) {
 	if a.avatar != nil {
-		ui.Image(c, a.avatar).Size(72, 72).Radius(36).Clip().
+		ui.Image(c, a.avatar).Size(76, 76).Radius(38).Clip().Border(2, ui.RGBA(255, 255, 255, 0.9)).
+			Shadow(0, 8, 24, 0, ui.RGBA(10, 20, 35, 0.14)).
 			Transition(ui.ElementTransition{Duration: 500 * time.Millisecond, Enter: &ui.Motion{Scale: 0.85}})
 	}
 }
 
 func guideHeading(c *ui.Context, text string) {
-	ui.Text(c, text).FontSize(24).Bold().TextAlign(ui.Center)
+	ui.Text(c, text).FontSize(26).FontWeight(600).TextAlign(ui.Center)
 }
 
 // guideLine 标题下那一行；换了内容就淡入淡出
@@ -244,7 +254,7 @@ func (a *App) guideHello(c *ui.Context) {
 	t := c.Theme()
 	a.guideAvatar(c)
 	ui.Box(c).Height(2)
-	ui.Text(c, T("你好，我是 Mami")).FontSize(28).Bold()
+	ui.Text(c, T("你好，我是 Mami")).FontSize(30).FontWeight(600)
 	guideLine(c, T("在你打字的地方，帮你说，也帮你译"), t.TextMuted)
 	ui.Box(c).Height(14)
 	if accentButton(c, T("开始")).MinWidth(140).Clicked() {
@@ -294,7 +304,8 @@ func (a *App) sayCard(c *ui.Context) {
 	t := c.Theme()
 	v := &a.set.voice
 	spans := scriptSpans(parseScript(guideScript()), v.phase, v.heard, t.Text, t.TextMuted)
-	ui.Column(c).Width(460).Padding(22, 28).Radius(16).Background(t.Surface).Border(1, t.Border).Children(func() {
+	ui.Column(c).Width(460).Padding(22, 28).Radius(18).Background(paneColor(t)).Border(1, paneBorder(t)).
+		Shadow(0, 8, 24, 0, ui.RGBA(10, 20, 35, 0.04)).Children(func() {
 		ui.RichText(c, spans...).LineHeight(1.6).TextAlign(ui.Center).ContentTransition(ui.ContentTransition{})
 	})
 }
@@ -349,11 +360,11 @@ func (a *App) micButton(c *ui.Context) {
 			grow = min(v.level*900, 36)
 		}
 		size := halo.Spring("halo", d+grow)
-		halo.Size(size, size).Radius(size/2).Background(t.Accent.Alpha(0.16)).Attach(ui.AnchorCenter, ui.AnchorCenter)
+		halo.Size(size, size).Radius(size/2).Background(t.Accent.Alpha(0.08)).Attach(ui.AnchorCenter, ui.AnchorCenter)
 
-		bg := t.Accent
+		bg, fg := t.Accent, t.AccentText
 		if v.phase == sayListening {
-			bg = t.Danger
+			bg, fg = ui.Hex("#e5484d"), ui.Hex("#ffffff")
 		}
 		b := ui.ButtonBase(c).Size(d, d).Radius(d/2).Center().Background(bg).Attach(ui.AnchorCenter, ui.AnchorCenter).Label(T("开始说话"))
 		if v.phase == sayIdle || v.phase == sayListening {
@@ -362,11 +373,11 @@ func (a *App) micButton(c *ui.Context) {
 		b.Children(func() {
 			switch v.phase {
 			case sayPolishing:
-				ui.Spinner(c).FontSize(22).TextColor(ui.RGBA(255, 255, 255, 1))
+				ui.Spinner(c).FontSize(22).TextColor(fg)
 			case sayDone:
-				ui.Icon(c, iconCheck).FontSize(24).TextColor(ui.RGBA(255, 255, 255, 1))
+				ui.Icon(c, iconCheck).FontSize(24).TextColor(fg)
 			default:
-				ui.Icon(c, iconMic).FontSize(24).TextColor(ui.RGBA(255, 255, 255, 1))
+				ui.Icon(c, iconMic).FontSize(24).TextColor(fg)
 			}
 		})
 		if b.Clicked() && (v.phase == sayIdle || v.phase == sayListening) {
@@ -542,7 +553,7 @@ func (a *App) guideTranslate(c *ui.Context) {
 func (a *App) guideCard(c *ui.Context, header, dst string) {
 	t := c.Theme()
 	tr := &a.set.trans
-	ui.Column(c).Width(popW).Padding(12, 14).Gap(8).Background(t.Background).Border(1, t.Border).Radius(cornerR).
+	ui.Column(c).Width(popW).Padding(12, 14).Gap(8).Background(t.Background).Border(1, t.Border).Radius(cornerR).TextColor(t.Text).
 		Shadow(0, 8, 24, 0, ui.RGBA(0, 0, 0, 0.14)).
 		Transition(ui.ElementTransition{Duration: 240 * time.Millisecond, Enter: &ui.Motion{Y: -6}}).Children(func() {
 		ui.Row(c).Height(22).Gap(6).AlignItems(ui.Center).Children(func() {
@@ -609,7 +620,7 @@ func (a *App) guideDone(c *ui.Context) {
 	cfg, _ := a.config()
 	a.guideAvatar(c)
 	ui.Box(c).Height(2)
-	ui.Text(c, T("好了，就这么简单")).FontSize(28).Bold()
+	ui.Text(c, T("好了，就这么简单")).FontSize(30).FontWeight(600)
 	guideLine(c, T("Mami 住在托盘里，单击图标打开设置"), t.TextMuted)
 	ui.Box(c).Height(6)
 	ui.Row(c).Gap(28).AlignItems(ui.Center).Children(func() {
