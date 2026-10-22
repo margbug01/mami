@@ -12,26 +12,30 @@ import (
 )
 
 type Config struct {
-	PolishStyle       string  `json:"polish_style"`
-	PolishBaseURL     string  `json:"polish_base_url"`
-	PolishModel       string  `json:"polish_model"`
-	PolishAPIKey      string  `json:"polish_api_key,omitempty"`
-	PolishAPIKeyDPAPI string  `json:"polish_api_key_dpapi,omitempty"`
-	VoiceEnabled      bool    `json:"voice_enabled"`
-	VoiceRewrite      bool    `json:"voice_rewrite"` // 选中文字再说话：按说的要求改写选中的那段
-	PolishAuto        bool    `json:"polish_auto"`   // 按程序自动换润色档位（AI 工具用提示词档、聊天软件用轻润色）
-	VoiceHotkey       string  `json:"voice_hotkey"`
-	VoiceJoined       bool    `json:"voice_joined"`
-	VoiceStyle        string  `json:"voice_style"`     // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
-	VoiceOrbSize      float64 `json:"voice_orb_size"`  // 果冻球直径（DIP），40~96
-	VoiceTone         string  `json:"voice_tone"`      // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
-	VoiceSound        bool    `json:"voice_sound"`     // 开始、结束、取消的提示音
-	VoiceLiveText     bool    `json:"voice_live_text"` // 说话时胶囊里实时出字（只有流式识别模型有中间结果）
-	VoiceLearn        bool    `json:"voice_learn"`     // 贴入后用户手改的词自动记成热词和纠错表
-	ASRBaseURL        string  `json:"asr_base_url"`
-	ASRModel          string  `json:"asr_model"`
-	ASRAPIKey         string  `json:"asr_api_key,omitempty"`
-	ASRAPIKeyDPAPI    string  `json:"asr_api_key_dpapi,omitempty"`
+	VoiceDock         bool         `json:"voice_dock"`
+	VoiceDockPosition dockPosition `json:"voice_dock_position"`
+	VoiceTranslate    bool         `json:"voice_translate"`
+	VoiceTarget       string       `json:"voice_target"`
+	PolishStyle       string       `json:"polish_style"`
+	PolishBaseURL     string       `json:"polish_base_url"`
+	PolishModel       string       `json:"polish_model"`
+	PolishAPIKey      string       `json:"polish_api_key,omitempty"`
+	PolishAPIKeyDPAPI string       `json:"polish_api_key_dpapi,omitempty"`
+	VoiceEnabled      bool         `json:"voice_enabled"`
+	VoiceRewrite      bool         `json:"voice_rewrite"` // 选中文字再说话：按说的要求改写选中的那段
+	PolishAuto        bool         `json:"polish_auto"`   // 按程序自动换润色档位（AI 工具用提示词档、聊天软件用轻润色）
+	VoiceHotkey       string       `json:"voice_hotkey"`
+	VoiceJoined       bool         `json:"voice_joined"`
+	VoiceStyle        string       `json:"voice_style"`     // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
+	VoiceOrbSize      float64      `json:"voice_orb_size"`  // 果冻球直径（DIP），40~96
+	VoiceTone         string       `json:"voice_tone"`      // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
+	VoiceSound        bool         `json:"voice_sound"`     // 开始、结束、取消的提示音
+	VoiceLiveText     bool         `json:"voice_live_text"` // 说话时胶囊里实时出字（只有流式识别模型有中间结果）
+	VoiceLearn        bool         `json:"voice_learn"`     // 贴入后用户手改的词自动记成热词和纠错表
+	ASRBaseURL        string       `json:"asr_base_url"`
+	ASRModel          string       `json:"asr_model"`
+	ASRAPIKey         string       `json:"asr_api_key,omitempty"`
+	ASRAPIKeyDPAPI    string       `json:"asr_api_key_dpapi,omitempty"`
 	// SavedKeys 各接口地址用过的 Key（keyFor 归一），切服务商再切回来能自动填上；内存里明文，存盘逐个 DPAPI
 	SavedKeys        map[string]string `json:"saved_keys_dpapi,omitempty"`
 	ASRHotwords      []string          `json:"asr_hotwords"`
@@ -66,39 +70,42 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{
-		PolishStyle:      "standard",
-		PolishAuto:       true,
-		VoiceRewrite:     true,
-		PolishBaseURL:    "https://api.deepseek.com/v1",
-		PolishModel:      "deepseek-flash",
-		VoiceHotkey:      "RAlt",
-		VoiceStyle:       "bars",
-		VoiceTone:        "dark",
-		VoiceSound:       true,
-		VoiceLearn:       true,
-		VoiceOrbSize:     voiceOrbW,
-		ASRBaseURL:       "https://api.stepfun.com/v1",
-		ASRModel:         "stepaudio-3-asr-max",
-		ASRHotwords:      []string{},
-		BaseURL:          "https://index-translate.bilibili.com/v1",
-		Model:            "Index-Translate-35B-A3B",
-		TargetForChinese: "English",
-		TargetForOther:   "Simplified Chinese",
-		Hotkey:           "Alt+T",
-		PopupHotkey:      "Alt+Shift+T",
-		ShowButton:       true,
-		RequireIBeam:     true,
-		OnlyInInputs:     true,
-		ShowInBlindApps:  true,
-		ButtonAction:     actionCard,
-		ButtonTimeoutMs:  4000,
-		SelectAllIfEmpty: true,
-		MaxChars:         6000,
-		TimeoutSec:       30,
-		ExcludeProcesses: []string{},
-		Language:         "auto",
-		Theme:            "auto",
-		HistoryDays:      30,
+		VoiceDock:         true,
+		VoiceDockPosition: dockPosition{Edge: "right", Fraction: 0.5},
+		VoiceTarget:       "English",
+		PolishStyle:       "standard",
+		PolishAuto:        true,
+		VoiceRewrite:      true,
+		PolishBaseURL:     "https://api.deepseek.com/v1",
+		PolishModel:       "deepseek-flash",
+		VoiceHotkey:       "RAlt",
+		VoiceStyle:        "bars",
+		VoiceTone:         "dark",
+		VoiceSound:        true,
+		VoiceLearn:        true,
+		VoiceOrbSize:      voiceOrbW,
+		ASRBaseURL:        "https://api.stepfun.com/v1",
+		ASRModel:          "stepaudio-3-asr-max",
+		ASRHotwords:       []string{},
+		BaseURL:           "https://index-translate.bilibili.com/v1",
+		Model:             "Index-Translate-35B-A3B",
+		TargetForChinese:  "English",
+		TargetForOther:    "Simplified Chinese",
+		Hotkey:            "Alt+T",
+		PopupHotkey:       "Alt+Shift+T",
+		ShowButton:        true,
+		RequireIBeam:      true,
+		OnlyInInputs:      true,
+		ShowInBlindApps:   true,
+		ButtonAction:      actionCard,
+		ButtonTimeoutMs:   4000,
+		SelectAllIfEmpty:  true,
+		MaxChars:          6000,
+		TimeoutSec:        30,
+		ExcludeProcesses:  []string{},
+		Language:          "auto",
+		Theme:             "auto",
+		HistoryDays:       30,
 	}
 }
 
@@ -110,6 +117,16 @@ const (
 )
 
 func (c *Config) normalize() {
+	c.VoiceDockPosition.Fraction = dockFraction(c.VoiceDockPosition.Fraction)
+	switch c.VoiceDockPosition.Edge {
+	case "left", "right", "top", "bottom":
+	default:
+		c.VoiceDockPosition.Edge = "right"
+	}
+	c.VoiceTarget = strings.TrimSpace(c.VoiceTarget)
+	if c.VoiceTarget == "" {
+		c.VoiceTarget = "English"
+	}
 	switch c.PolishStyle {
 	case "off", "light", "standard", "structured", "prompt":
 	default:

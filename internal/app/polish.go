@@ -68,13 +68,13 @@ const (
 
 func polish(ctx context.Context, cfg Config, text string, learned ...learnedWord) (string, error) {
 	cfg.normalize()
-	if cfg.PolishStyle == "off" {
+	if cfg.PolishStyle == "off" && !cfg.VoiceTranslate {
 		return text, nil
 	}
 	if cfg.PolishAPIKey == "" {
 		return "", errors.New(T("请先填写润色 API Key"))
 	}
-	prompt := polishBasePrompt + polishStyles[cfg.PolishStyle]
+	prompt := voicePolishPrompt(cfg)
 	if len(cfg.ASRHotwords) > 0 {
 		prompt += polishHotwordsLead + strings.Join(cfg.ASRHotwords, "、")
 	}
@@ -154,13 +154,17 @@ func cleanPolishOutput(text string) string {
 
 func polishVoice(ctx context.Context, cfg Config, source string, learned ...learnedWord) (string, int64) {
 	cfg.normalize()
-	if cfg.PolishStyle == "off" || cfg.PolishAPIKey == "" || utf8.RuneCountInString(strings.TrimSpace(source)) < polishMinRunes {
+	if !cfg.VoiceTranslate && (cfg.PolishStyle == "off" || cfg.PolishAPIKey == "" || utf8.RuneCountInString(strings.TrimSpace(source)) < polishMinRunes) {
 		return applyCorrections(source, learned), 0 // 不润色，词库里的纠错照样用
 	}
 	started := time.Now()
 	polishCtx, cancel := context.WithTimeout(ctx, polishDeadline(source))
 	defer cancel()
-	result, err := polish(polishCtx, cfg, source, learned...)
+	input := source
+	if cfg.VoiceTranslate {
+		input = applyCorrections(source, learned)
+	}
+	result, err := polish(polishCtx, cfg, input, learned...)
 	elapsed := time.Since(started).Milliseconds()
 	if err == nil {
 		err = polishCtx.Err()
@@ -182,7 +186,24 @@ func polishVoice(ctx context.Context, cfg Config, source string, learned ...lear
 			reason = "empty polish result"
 		}
 		log.Printf("polish: %dms: %s", elapsed, reason)
+		if cfg.VoiceTranslate {
+			fallbackCtx, fallbackCancel := context.WithTimeout(ctx, polishDeadline(source))
+			defer fallbackCancel()
+			translator, fallbackErr := newTranslator(cfg)
+			translated := ""
+			if fallbackErr == nil {
+				translated, fallbackErr = translator.Translate(fallbackCtx, input, cfg.VoiceTarget)
+			}
+			if fallbackErr == nil && fallbackCtx.Err() == nil && strings.TrimSpace(translated) != "" {
+				return translated, max(1, time.Since(started).Milliseconds())
+			}
+			log.Printf("voice translate: fallback failed (%T)", fallbackErr)
+			return source, 0
+		}
 		return applyCorrections(source, learned), 0 // 没润色成：耗时记 0，历史和统计就不会把它当成润色过
+	}
+	if cfg.VoiceTranslate {
+		return result, max(1, elapsed)
 	}
 	result = applyCorrections(guardPolish(source, result, learned), learned)
 	return result, elapsed

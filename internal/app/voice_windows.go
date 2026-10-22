@@ -27,6 +27,7 @@ var (
 )
 
 type voiceEvent struct {
+	manual bool
 	action int
 	id     uint64
 	fg     uintptr
@@ -89,11 +90,15 @@ func voiceHookKey(key *kbdLLHook, down bool) bool {
 }
 
 func postVoice(action int, id uint64) {
+	postVoiceSource(action, id, false)
+}
+
+func postVoiceSource(action int, id uint64, manual bool) {
 	if action == voiceCancel {
 		voiceEpoch.Add(1) // 当场作废，不能等队列处理后才取消粘贴。
 	}
 	select {
-	case voiceEvents <- voiceEvent{action: action, id: id, fg: foreground()}:
+	case voiceEvents <- voiceEvent{action: action, id: id, fg: foreground(), manual: manual}:
 	default:
 		voiceEpoch.Add(1) // 队列满时丢弃整次，而不是遗漏结束一直录音。
 	}
@@ -102,6 +107,10 @@ func postVoice(action int, id uint64) {
 // voiceToggle 组合键触发键（GlobalShortcut 回调）：没在录就开始，在录就结束。
 // 单键走钩子；两者不会同时启用（组合键时 voiceTrigger 是 0）。
 func voiceToggle() {
+	voiceToggleSource(false)
+}
+
+func voiceToggleSource(manual bool) {
 	if voiceRecording.Load() != 0 {
 		voiceClick(voiceStop)
 		return
@@ -112,7 +121,7 @@ func voiceToggle() {
 	id := voiceEpoch.Add(1)
 	voiceActive.Store(id)
 	voiceRecording.Store(id)
-	postVoice(voiceStart, id)
+	postVoiceSource(voiceStart, id, manual)
 }
 
 // voiceCommand 外部触发（Mami.exe -voice toggle|start|stop|cancel，转给已经在跑的实例）：
@@ -180,7 +189,7 @@ func (a *App) voiceLoop() {
 				}
 				id = event.id
 				cfg, _ := a.config()
-				if voiceEpoch.Load() != id || !cfg.VoiceEnabled || cfg.DisableHotkeys || event.fg == 0 || a.excluded(event.fg, cfg) {
+				if voiceEpoch.Load() != id || !cfg.VoiceEnabled || (cfg.DisableHotkeys && !event.manual) || event.fg == 0 || a.excluded(event.fg, cfg) {
 					if voiceEpoch.Load() == id {
 						voiceEpoch.Add(1)
 					}
@@ -328,7 +337,14 @@ func (a *App) orbSize() float32 {
 
 func (a *App) voiceWidth(state voiceViewState) int32 {
 	if a.voiceOrb(state) {
-		return int32(a.orbSize())
+		w := int32(a.orbSize())
+		if a.voiceTranslate {
+			w += 24
+		}
+		return w
+	}
+	if a.voiceTranslate && voiceKind(state) == 2 {
+		return voiceDotsW + voiceBtn
 	}
 	return voiceWidth(state)
 }
@@ -522,6 +538,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	a.voiceWin.Update(func() {
 		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, cfg.VoiceTone, float32(cfg.VoiceOrbSize)
 		a.voiceJoined = cfg.VoiceJoined
+		a.voiceTranslate, a.voiceTarget = cfg.VoiceTranslate, cfg.VoiceTarget
 	})
 	if cfg.ASRAPIKey == "" { // 还没填 Key：不录，直接带去填
 		voiceRecording.CompareAndSwap(id, 0)
@@ -699,6 +716,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 	} else {
 		text, polishMs = polishVoice(ctx, cfg, source, learned...)
 	}
+	translated := selected == "" && cfg.VoiceTranslate && polishMs > 0
 	if !valid() {
 		finish()
 		return
@@ -734,7 +752,9 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 			a.voiceUndoNotice(id)
 		case mode == voicePaste:
 			a.voiceDisplay(id, voiceViewState{}, false)
-			a.learnStart(fg, source, text, cfg)
+			if !translated {
+				a.learnStart(fg, source, text, cfg)
+			}
 		case !setClipboardText(owner, toCRLF(text), false):
 			a.voiceNotice(id, T("无法写入剪贴板"))
 		case mode == voicePasteKeep:
@@ -744,7 +764,9 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 			if selected != "" {
 				a.voiceUndoNotice(id)
 			} else {
-				a.learnStart(fg, source, text, cfg)
+				if !translated {
+					a.learnStart(fg, source, text, cfg)
+				}
 			}
 		default:
 			log.Printf("voice: no input box (switched=%v modifiers=%v), copied", switched, modsDown)
@@ -759,7 +781,11 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 			if selected != "" {
 				style = "rewrite"
 			}
-			go a.hist.write(historyEntry{Type: "voice", ID: "voice-" + historyID(started, int64(id)), Time: time.Now().Format(time.RFC3339), Model: cfg.ASRModel, BaseURL: cfg.ASRBaseURL, Source: source, Translation: text, PolishStyle: style, PolishMs: polishMs, TotalMs: time.Since(started).Milliseconds()})
+			target := ""
+			if translated {
+				target = cfg.VoiceTarget
+			}
+			go a.hist.write(historyEntry{Target: target, Type: "voice", ID: "voice-" + historyID(started, int64(id)), Time: time.Now().Format(time.RFC3339), Model: cfg.ASRModel, BaseURL: cfg.ASRBaseURL, Source: source, Translation: text, PolishStyle: style, PolishMs: polishMs, TotalMs: time.Since(started).Milliseconds()})
 		}
 		return !copied
 	})
@@ -826,22 +852,27 @@ func (a *App) voiceView(c *ui.Context) {
 	ui.Box(c).Fill().Center().Children(func() {
 		if a.voiceOrb(state) {
 			recognizing := state.recognizing
-			sz := a.orbSize()
-			orb := ui.ButtonBase(c).Size(sz, sz).Background(ui.RGBA(0, 0, 0, 0)).Opacity(opacity*(0.4+0.6*kind)).Scale(size, size).Translate(0, dy)
-			orb.Cursor(ui.CursorPointer)
-			if recognizing {
-				orb.Tooltip(T("取消"))
-			} else {
-				orb.Tooltip(T("点一下完成，Esc 取消"))
-			}
-			orb.DrawOver(func(p *ui.Painter, r ui.Rect) { drawOrb(p, r, orbLv, now, recognizing) })
-			if orb.Clicked() {
+			ui.Row(c).AlignItems(ui.Center).Gap(4).Children(func() {
+				sz := a.orbSize()
+				orb := ui.ButtonBase(c).Size(sz, sz).Background(ui.RGBA(0, 0, 0, 0)).Opacity(opacity*(0.4+0.6*kind)).Scale(size, size).Translate(0, dy)
+				orb.Cursor(ui.CursorPointer)
 				if recognizing {
-					go voiceClick(voiceCancel)
+					orb.Tooltip(T("取消"))
 				} else {
-					go voiceClick(voiceStop)
+					orb.Tooltip(T("点一下完成，Esc 取消"))
 				}
-			}
+				orb.DrawOver(func(p *ui.Painter, r ui.Rect) { drawOrb(p, r, orbLv, now, recognizing) })
+				if a.voiceTranslate {
+					ui.Text(c, voiceLanguageCode(a.voiceTarget)).FontSize(10).TextColor(sk.fg)
+				}
+				if orb.Clicked() {
+					if recognizing {
+						go voiceClick(voiceCancel)
+					} else {
+						go voiceClick(voiceStop)
+					}
+				}
+			})
 			return
 		}
 		gl, gr := a.islandGaps(now)
@@ -898,7 +929,13 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 				} else {
 					ui.Box(c).Grow(1).Height(20).Draw(func(p *ui.Painter, r ui.Rect) { sk.wave(p, r, bars) })
 				}
-				if pillButton(c, sk, true, T("完成")).Clicked() && live {
+				var finish ui.Element
+				if a.voiceTranslate {
+					finish = voiceTranslateBadge(c, sk, a.voiceTarget, true)
+				} else {
+					finish = pillButton(c, sk, true, T("完成"))
+				}
+				if finish.Clicked() && live {
 					go voiceClick(voiceStop)
 				}
 			})
@@ -908,6 +945,9 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 					go voiceClick(voiceCancel)
 				}
 				ui.Box(c).Grow(1).Height(20).Draw(sk.dots)
+				if a.voiceTranslate {
+					voiceTranslateBadge(c, sk, a.voiceTarget, false)
+				}
 			})
 		case 3:
 			if !state.copy && !state.retry && !state.undo {
@@ -1014,6 +1054,40 @@ func pillCopyButton(c *ui.Context, sk voiceSkin, done bool, tip string) ui.Eleme
 		}
 		p.StrokePath(path, 1.4, sk.fg)
 	})
+}
+
+func voiceTranslateBadge(c *ui.Context, sk voiceSkin, target string, recording bool) ui.Element {
+	rad := float32(voiceBtn / 2)
+	if sk.style == "pixel" {
+		rad = 0
+	} else if sk.island() {
+		rad = 6
+	}
+	bg, fg := clearC, sk.fg
+	if recording {
+		bg, fg = sk.ok, sk.okFg
+		if sk.island() {
+			bg, fg = sk.okFg, sk.fg
+			if sk.okFg == islandAccentDark {
+				fg = pillBg
+			} else {
+				fg = pillFg
+			}
+		}
+	}
+	badge := ui.Box(c)
+	if recording {
+		badge = ui.ButtonBase(c)
+	}
+	badge.Size(voiceBtn, voiceBtn).Shrink(0).Radius(rad).Background(bg).Center()
+	if !recording {
+		badge.Border(1, sk.fg)
+	}
+	badge.Children(func() { ui.Text(c, voiceLanguageCode(target)).FontSize(10).TextColor(fg) })
+	if recording {
+		badge.Cursor(ui.CursorPointer).Tooltip(T("完成并翻译成") + " " + target)
+	}
+	return badge
 }
 
 // pillButton 24px 圆钮：✕ 是半透明白底，✓ 是实心白底黑勾

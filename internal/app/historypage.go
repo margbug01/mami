@@ -26,6 +26,11 @@ var iconHist = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" v
 // historyStatsNow 打开这一页时现读文件，5 秒内不重复读
 func (a *App) historyStatsNow() *historyStats {
 	s := &a.set
+	_, revision, _ := a.hist.deletionState()
+	if s.historyDeleteRevision != revision {
+		s.stats = nil
+		s.historyDeleteRevision = revision
+	}
 	if s.stats == nil || time.Since(s.stats.loaded) > 5*time.Second {
 		dir := ""
 		if a.hist != nil {

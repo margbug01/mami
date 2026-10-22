@@ -4,7 +4,22 @@ package i18n
 // 新增界面文字时，先在代码里写 T("中文")，再回来补这张表；
 // TestI18nDictComplete 会扫源码，漏了会失败。
 var Dict = map[string][2]string{
-	"自动学习": {"Learn from edits", "編集から学習"},
+	"贴边小条": {"Edge dock", "エッジドック"},
+	"悬停展开，拖动可贴到屏幕任一边缘": {"Hover to expand; drag to any screen edge", "ホバーで展開、ドラッグで画面の端に固定"},
+	"更多设置":   {"More settings", "その他の設定"},
+	"实时文字":   {"Live text", "リアルタイム文字"},
+	"完整设置…":  {"All settings…", "すべての設定…"},
+	"开始说话":   {"Speak", "話す"},
+	"结束":     {"Finish", "完了"},
+	"轻":      {"Light", "軽め"},
+	"翻译成":    {"Translate into", "翻訳先"},
+	"说完直接翻译": {"Translate after speaking", "話し終わったら翻訳"},
+	"开着时说中文，贴进去的是润色好的译文；不分程序，全局生效": {"Speak Chinese and paste a polished translation; applies globally in every app", "中国語で話すと整えた訳文を貼り付けます。すべてのアプリで有効"},
+	"完成并翻译成":     {"Finish and translate into", "完了して翻訳："},
+	"语音直接翻译":     {"Translate voice dictation", "音声入力を直接翻訳"},
+	"已删除 %d 条记录": {"Deleted %d records", "%d 件の履歴を削除しました"},
+	"删除失败，请重试":   {"Could not delete, please retry", "削除に失敗しました。再試行してください"},
+	"自动学习":       {"Learn from edits", "編集から学習"},
 	"贴入后你手改过的词会记住，下次识别和润色都用对的写法": {"Words you fix after pasting are remembered, so transcription and polishing get them right next time", "貼り付け後に直した語を覚え、次回から認識と整文に反映します"},
 	"学到的词":       {"Learned words", "学習した語"},
 	"词库":         {"Vocabulary", "語彙"},

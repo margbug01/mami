@@ -36,6 +36,9 @@ func islandGapsFor(state voiceViewState) (l, r float32) {
 // islandGaps 眼下的缝宽：从上次切换时的缝宽往当前状态过渡
 func (a *App) islandGaps(now time.Time) (float32, float32) {
 	l, r := islandGapsFor(a.voiceUI)
+	if a.voiceTranslate && voiceKind(a.voiceUI) == 2 {
+		r = islandGap
+	}
 	t := ui.EaseOut(progress(now, a.voiceKindAt, voiceKindDur))
 	return a.voiceGapL + (l-a.voiceGapL)*t, a.voiceGapR + (r-a.voiceGapR)*t
 }

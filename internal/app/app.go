@@ -62,6 +62,8 @@ type App struct {
 	cfg Config
 	tr  *Translator
 
+	dock                   voiceDock
+	dockHwnd               atomic.Uintptr
 	voiceWin               *mygo.Window
 	voiceUI                voiceViewState
 	voiceWA                RECT // 以下三个只在界面线程读写：胶囊所在显示器的工作区
@@ -74,6 +76,8 @@ type App struct {
 	voiceWAt               time.Time
 	voiceWFrom, voiceWTo   float32
 	voiceStyle             string
+	voiceTranslate         bool
+	voiceTarget            string
 	voiceTone              string
 	voiceJoined            bool
 	voiceOrbSize           float32
@@ -183,12 +187,13 @@ func (a *App) createWindows() {
 	a.popHwnd.Store(h)
 	a.voiceWin, h = a.floatingWindow("mami-voice", voiceRecW, voiceWinH, voiceDotsW, voiceWinH, a.voiceView)
 	a.voiceHwnd.Store(h)
+	a.createDock()
 }
 
 func (a *App) isOurs(p POINT) bool {
 	h, _, _ := pWindowFromPoint.Call(packPt(p))
 	root, _, _ := pGetAncestor.Call(h, GA_ROOT)
-	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load())
+	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load())
 }
 
 // ---------- 鼠标手势 ----------
@@ -762,6 +767,12 @@ func (a *App) createTray() {
 			{Label: T("划词后显示翻译按钮"), Type: mygo.MenuItemCheckbox, Checked: cfg.ShowButton, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
 				a.toggleButton(item.Checked)
 			}},
+			{Label: T("贴边小条"), Type: mygo.MenuItemCheckbox, Checked: cfg.VoiceDock, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
+				a.changeDockConfig(func(cfg *Config) { cfg.VoiceDock = item.Checked })
+			}},
+			{Label: T("语音直接翻译"), Type: mygo.MenuItemCheckbox, Checked: cfg.VoiceTranslate, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
+				a.changeDockConfig(func(cfg *Config) { cfg.VoiceTranslate = item.Checked })
+			}},
 			{Label: T("打开日志"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.Shell.OpenPath(a.logPath) }},
 			{Label: T("打开翻译记录"), Disabled: !cfg.History, Click: func(*mygo.MenuItem, *mygo.Window) { a.openHistory() }},
 			mygo.Separator(),
@@ -777,12 +788,7 @@ func (a *App) updateTrayTip() {
 	if a.tray == nil {
 		return
 	}
-	cfg, _ := a.config()
-	tip := "Mami · " + cfg.Model
-	if cfg.Hotkey != "" && !cfg.DisableHotkeys {
-		tip += " · " + cfg.Hotkey + T(" 原地替换")
-	}
-	a.tray.SetToolTip(tip)
+	a.tray.SetToolTip("Mami")
 }
 
 func (a *App) toggleButton(on bool) {
@@ -798,6 +804,7 @@ func (a *App) toggleButton(on bool) {
 }
 
 func (a *App) quit() {
+	dockQuit.Store(true)
 	a.quitting = true
 	if a.tray != nil {
 		a.tray.Destroy()

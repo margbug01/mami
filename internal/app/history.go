@@ -41,8 +41,11 @@ type historyEntry struct {
 }
 
 type history struct {
-	mu  sync.Mutex
-	dir string
+	mu             sync.Mutex
+	dir            string
+	pendingDeletes map[string]*time.Timer
+	deleteRevision uint64
+	deleteFailed   bool
 }
 
 func (h *history) write(e historyEntry) {

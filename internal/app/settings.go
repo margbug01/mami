@@ -21,47 +21,48 @@ import (
 
 // settingsState 是设置窗口里正在改、还没保存的那份配置（主线程）
 type settingsState struct {
-	draft         Config
-	exclude       string
-	openAtLogin   bool
-	hotkeysOn     bool // 「启用快捷键」开关，保存时写回 DisableHotkeys 的反面
-	status        string
-	statusErr     bool
-	testing       bool
-	page          string
-	extraH        float32 // 额外要求输入框的高度（手动拖过之后才用）
-	extraManual   bool
-	gripMoved     bool   // 这次按住把手时拖动过
-	polishTab     int
-	transTab      int    // 「翻译」页：0 译文、1 接口
-	voiceTab      int    // 「语音识别」页：0 通用、1 外观、2 接口
-	wordAdd       bool   // 词库：「+ 添加」点开成了输入框
-	editWord      string // 词库：正在原地改的那个词
-	editText      string
-	editSeen      bool     // 输入框拿到过焦点，之后失焦就算提交
-	editAliases   []string // 词库编辑面板里还留着的听法，点 ✕ 去掉
-	aliasNew      string   // 编辑面板里正在手加的听法
-	aliasAdding   bool
-	wordsMsg      string
-	wordsErr      bool
-	stats         *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
-	customTrans   bool          // 接口区手动选了自定义（地址还是某家预设的也不跳回去）
-	customASR     bool
-	customPolish  bool
-	testMsg       string
-	testErr       bool
-	polishTesting bool
-	histTab       int // 「记录」页：0 语音、1 翻译
-	voiceTesting  bool
-	voiceTestMsg  string
-	voiceTestErr  bool
-	recID         string         // 正在录的快捷键框
-	recJob        *keyCaptureJob // 交给键盘钩子的那次录制
-	recHint       string
-	copiedID      string
-	copiedAt      time.Time
-	polishTestMsg string
-	polishTestErr bool
+	draft                 Config
+	exclude               string
+	openAtLogin           bool
+	hotkeysOn             bool // 「启用快捷键」开关，保存时写回 DisableHotkeys 的反面
+	status                string
+	statusErr             bool
+	testing               bool
+	page                  string
+	extraH                float32 // 额外要求输入框的高度（手动拖过之后才用）
+	extraManual           bool
+	gripMoved             bool // 这次按住把手时拖动过
+	polishTab             int
+	transTab              int    // 「翻译」页：0 译文、1 接口
+	voiceTab              int    // 「语音识别」页：0 通用、1 外观、2 接口
+	wordAdd               bool   // 词库：「+ 添加」点开成了输入框
+	editWord              string // 词库：正在原地改的那个词
+	editText              string
+	editSeen              bool     // 输入框拿到过焦点，之后失焦就算提交
+	editAliases           []string // 词库编辑面板里还留着的听法，点 ✕ 去掉
+	aliasNew              string   // 编辑面板里正在手加的听法
+	aliasAdding           bool
+	wordsMsg              string
+	wordsErr              bool
+	stats                 *historyStats // 「记录」页的统计，打开设置窗口时清空、5 秒内复用
+	customTrans           bool          // 接口区手动选了自定义（地址还是某家预设的也不跳回去）
+	customASR             bool
+	customPolish          bool
+	testMsg               string
+	testErr               bool
+	polishTesting         bool
+	histTab               int // 「记录」页：0 语音、1 翻译
+	voiceTesting          bool
+	voiceTestMsg          string
+	voiceTestErr          bool
+	recID                 string         // 正在录的快捷键框
+	recJob                *keyCaptureJob // 交给键盘钩子的那次录制
+	recHint               string
+	historyDeleteRevision uint64
+	copiedID              string
+	copiedAt              time.Time
+	polishTestMsg         string
+	polishTestErr         bool
 }
 
 func (a *App) openSettings() {
@@ -165,7 +166,19 @@ func (a *App) settingsView(c *ui.Context) {
 			if s.statusErr {
 				color = t.Danger
 			}
-			ui.Text(c, s.status).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+			pending, _, failed := a.hist.deletionState()
+			if len(pending) > 0 {
+				c.After(100 * time.Millisecond)
+				ui.Text(c, fmt.Sprintf(T("已删除 %d 条记录"), len(pending))).FontSize(12).TextColor(t.TextMuted)
+				if smallLink(c, T("撤销")).Clicked() {
+					a.hist.undoDeletes()
+				}
+				ui.Spacer(c)
+			} else if failed {
+				ui.Text(c, T("删除失败，请重试")).FontSize(12).TextColor(t.Danger).Grow(1)
+			} else {
+				ui.Text(c, s.status).FontSize(12).TextColor(color).Grow(1).MaxLines(2)
+			}
 			if accentButton(c, T("保存")).Clicked() {
 				a.saveDraft()
 			}
@@ -834,6 +847,7 @@ func (a *App) exportWords() {
 
 // voiceLook 「语音识别」页的外观 tab：录音时的样式
 func (a *App) voiceLook(c *ui.Context, d *Config) {
+	switchRow(c, T("贴边小条"), T("悬停展开，拖动可贴到屏幕任一边缘"), &d.VoiceDock)
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
 		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}})
 	})
@@ -919,6 +933,10 @@ func (a *App) pagePolish(c *ui.Context, d *Config) {
 			optionSelect(c, &d.PolishStyle, []option{{"off", T("关闭")}, {"light", T("轻润色")}, {"standard", T("标准")}, {"structured", T("结构化")}, {"prompt", T("提示词")}})
 		})
 		switchRow(c, T("选中再说就改写"), T("先选中一段字再按触发键，说「翻成英文」「写正式点」「缩短一半」就照着改；说的不是要求就换成你说的话"), &d.VoiceRewrite)
+		switchRow(c, T("说完直接翻译"), T("开着时说中文，贴进去的是润色好的译文；不分程序，全局生效"), &d.VoiceTranslate)
+		if d.VoiceTranslate {
+			settingRow(c, T("翻译成"), "", func() { langSelect(c, &d.VoiceTarget) })
+		}
 		switchRow(c, T("按程序自动换档"), T("在 Cursor、ChatGPT 这类 AI 工具里用「提示词」档，在微信、QQ 里用「轻润色」，其他地方用上面选的"), &d.PolishAuto)
 	})
 }

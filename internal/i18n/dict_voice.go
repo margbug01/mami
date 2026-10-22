@@ -3,7 +3,22 @@ package i18n
 // 语音页的新文案与现有各语言词典保持对应。
 func init() {
 	entries := map[string][6]string{
-		"自动学习": {"自動學習", "자동 학습", "Aprender de tus correcciones", "Apprendre de vos corrections", "Aus Korrekturen lernen", "Учиться на правках"},
+		"贴边小条": {"貼邊小條", "화면 가장자리 도크", "Panel lateral", "Volet de bord", "Rand-Dock", "Боковая панель"},
+		"悬停展开，拖动可贴到屏幕任一边缘": {"懸停展開，拖動可貼到螢幕任一邊緣", "마우스를 올려 펼치고 화면 가장자리로 드래그하세요", "Pasa el cursor para abrir; arrastra a cualquier borde", "Survolez pour ouvrir ; glissez vers un bord de l’écran", "Zum Öffnen darüberfahren; an einen Bildschirmrand ziehen", "Наведите для раскрытия; перетащите к краю экрана"},
+		"更多设置":   {"更多設定", "추가 설정", "Más ajustes", "Autres réglages", "Weitere Einstellungen", "Дополнительные настройки"},
+		"实时文字":   {"即時文字", "실시간 텍스트", "Texto en directo", "Texte en direct", "Live-Text", "Текст в реальном времени"},
+		"完整设置…":  {"完整設定…", "전체 설정…", "Todos los ajustes…", "Tous les réglages…", "Alle Einstellungen…", "Все настройки…"},
+		"开始说话":   {"開始說話", "말하기", "Hablar", "Parler", "Sprechen", "Говорить"},
+		"结束":     {"結束", "종료", "Terminar", "Terminer", "Beenden", "Завершить"},
+		"轻":      {"輕", "가볍게", "Ligero", "Léger", "Leicht", "Лёгкий"},
+		"翻译成":    {"翻譯成", "번역 언어", "Traducir a", "Traduire en", "Übersetzen in", "Перевести на"},
+		"说完直接翻译": {"說完直接翻譯", "말한 뒤 바로 번역", "Traducir al terminar de hablar", "Traduire après avoir parlé", "Nach dem Sprechen übersetzen", "Переводить после диктовки"},
+		"开着时说中文，贴进去的是润色好的译文；不分程序，全局生效": {"開著時說中文，貼進去的是潤飾好的譯文；不分程式，全域生效", "중국어로 말하면 다듬은 번역을 붙여넣습니다. 모든 앱에 적용됩니다", "Habla en chino y pega una traducción pulida en cualquier aplicación", "Parlez chinois et collez une traduction soignée dans toutes les applications", "Chinesisch sprechen und eine geglättete Übersetzung einfügen; gilt in allen Apps", "Говорите по-китайски и вставляйте отредактированный перевод во всех приложениях"},
+		"完成并翻译成":     {"完成並翻譯成", "완료 후 번역:", "Terminar y traducir a", "Terminer et traduire en", "Fertigstellen und übersetzen in", "Завершить и перевести на"},
+		"语音直接翻译":     {"語音直接翻譯", "음성 바로 번역", "Traducir dictado", "Traduire la dictée", "Spracheingabe übersetzen", "Переводить диктовку"},
+		"已删除 %d 条记录": {"已刪除 %d 條記錄", "기록 %d개 삭제됨", "%d registros eliminados", "%d entrées supprimées", "%d Einträge gelöscht", "Удалено записей: %d"},
+		"删除失败，请重试":   {"刪除失敗，請重試", "삭제 실패, 다시 시도하세요", "No se pudo eliminar, reintenta", "Échec de la suppression, réessayez", "Löschen fehlgeschlagen, erneut versuchen", "Не удалось удалить, повторите попытку"},
+		"自动学习":       {"自動學習", "자동 학습", "Aprender de tus correcciones", "Apprendre de vos corrections", "Aus Korrekturen lernen", "Учиться на правках"},
 		"贴入后你手改过的词会记住，下次识别和润色都用对的写法": {"貼入後你手改過的詞會記住，下次辨識和潤飾都用對的寫法", "붙여넣은 뒤 직접 고친 단어를 기억해 다음 인식과 다듬기에 반영합니다", "Las palabras que corrijas tras pegar se recuerdan para la próxima transcripción y pulido", "Les mots corrigés après collage sont mémorisés pour la transcription et la retouche suivantes", "Nach dem Einfügen korrigierte Wörter werden gemerkt und beim nächsten Mal richtig erkannt", "Исправленные после вставки слова запоминаются для следующих распознаваний"},
 		"学到的词":       {"學到的詞", "학습한 단어", "Palabras aprendidas", "Mots appris", "Gelernte Wörter", "Выученные слова"},
 		"词库":         {"詞庫", "단어장", "Vocabulario", "Vocabulaire", "Wortschatz", "Словарь"},

@@ -17,6 +17,17 @@ const voiceListMax = 100
 
 func (a *App) voiceHistory(c *ui.Context, d *Config, st *historyStats) {
 	t := c.Theme()
+	pending, _, _ := a.hist.deletionState()
+	if len(pending) > 0 {
+		filtered := *st
+		filtered.voice = make([]historyEntry, 0, len(st.voice))
+		for _, entry := range st.voice {
+			if !pending[entry.ID] {
+				filtered.voice = append(filtered.voice, entry)
+			}
+		}
+		st = &filtered
+	}
 	if !d.History {
 		ui.Text(c, T("还没打开「保存翻译记录」（在「通用」页），语音记录也不会保存。")).
 			FontSize(12).TextColor(t.TextMuted).Padding(0, 0, 8, 0)
@@ -78,7 +89,7 @@ func (a *App) voiceCard(c *ui.Context, e historyEntry, when time.Time) {
 	t := c.Theme()
 	final := strings.TrimSpace(voiceFinal(e))
 	source := strings.TrimSpace(e.Source)
-	card := ui.Column(c).Gap(6).Padding(10, 12).Margin(0, 0, 6, 0).Radius(t.Radius).Background(t.Surface).Border(1, t.Surface)
+	card := ui.Column(c).Key(e.ID).Gap(6).Padding(10, 12).Margin(0, 0, 6, 0).Radius(t.Radius).Background(t.Surface).Border(1, t.Surface)
 	hovered := card.Hovered()
 	if hovered {
 		card.Border(1, t.Border)
@@ -100,9 +111,12 @@ func (a *App) voiceCard(c *ui.Context, e historyEntry, when time.Time) {
 			if hovered || copied {
 				opacity = 1
 			}
-			if textButton(c, label).Height(22).Padding(0, 8).FontSize(12).Opacity(opacity).Clicked() {
+			if textButton(c, label).Height(22).Padding(0, 8).FontSize(12).Clicked() {
 				mygo.Clipboard.WriteText(final)
 				a.set.copiedID, a.set.copiedAt = e.ID, time.Now()
+			}
+			if e.ID != "" && textButton(c, "×").Size(24, 22).MinWidth(24).Padding(0).Border(0, clearC).Background(clearC).FontSize(16).TextColor(t.TextMuted).Opacity(opacity).Label(T("删除")).Tooltip(T("删除")).Clicked() {
+				a.hist.queueDelete(e.ID, 5*time.Second)
 			}
 		})
 		ui.Text(c, final).FontSize(14).Selectable()
