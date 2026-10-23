@@ -154,7 +154,7 @@ func startHook(isOurs func(POINT) bool, onCardKey func(vk uint32)) error {
 	go func() {
 		runtime.LockOSThread()
 		if !axIsProcessTrusted() {
-			promptAccessibility()
+			// 不在启动时弹系统对话框：新手引导的权限那屏（或设置「通用」页）点「去打开」才弹
 			ready <- errNeedAccessibility
 			for !axIsProcessTrusted() {
 				time.Sleep(time.Second)

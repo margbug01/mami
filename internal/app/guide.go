@@ -136,6 +136,10 @@ func (a *App) guideGo(step int) {
 func (a *App) endGuide() {
 	a.set.guide = false
 	a.guideIdle()
+	if needPermissions && !accessibilityOK() { // macOS 没给辅助功能，按触发键什么都不会发生：留在「通用」页的权限那里
+		a.set.page = pageGen
+		return
+	}
 	if a.setWin != nil { // 测试里没有真窗口
 		a.setWin.Close()
 	}
