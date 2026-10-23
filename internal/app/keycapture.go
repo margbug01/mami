@@ -30,7 +30,7 @@ func (k *keyCapture) step(vk uint32, down bool) (state int, acc, hint string) {
 		k.mods[m] = down
 		k.hint = ""
 		if mods := k.modText(); mods != "" {
-			k.hint = mods + "+…"
+			k.hint = keysLabel(mods + "+…")
 		}
 		return captureGoing, "", k.hint
 	}
