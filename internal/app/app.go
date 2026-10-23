@@ -162,6 +162,7 @@ func (a *App) floatingWindow(title string, w, h, minW, minH int, view func(c *ui
 			Title: "mami-anchor", Width: 1, Height: 1, Hidden: true, Frameless: true,
 			SkipTaskbar: true, Content: ui.View(func(c *ui.Context) {}),
 		})
+		makeAnchor(a.anchorWin.NativeHandle())
 	}
 	win := mygo.NewFlyout(mygo.FlyoutOptions{
 		Parent:  a.anchorWin,

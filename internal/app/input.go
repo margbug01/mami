@@ -46,6 +46,7 @@ const (
 
 	vkReturn = 0x0D
 	vkEscape = 0x1B
+	vkFn     = 0x0E // Windows 没用的码，借给 macOS 的 fn / 🌐 键
 )
 
 const (

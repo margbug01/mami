@@ -234,6 +234,9 @@ func makeFloating(h uintptr) {
 	pDwmSetWindowAttribute.Call(h, DWMWA_NCRENDERING_POLICY, uintptr(unsafe.Pointer(&nc)), 4)
 }
 
+// makeAnchor 浮窗的父窗口：Windows 上藏着就行，什么都不用做
+func makeAnchor(uintptr) {}
+
 // moveTo 按物理像素摆窗口（钩子和 GetCursorPos 给的都是物理像素）
 func moveTo(h uintptr, x, y int32) {
 	defer roundCorners(h)
