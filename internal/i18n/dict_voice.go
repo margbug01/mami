@@ -3,6 +3,7 @@ package i18n
 // 语音页的新文案与现有各语言词典保持对应。
 func init() {
 	entries := map[string][6]string{
+		"面板底色": {"面板底色", "도크 색상", "Color del panel", "Couleur du volet", "Dock-Farbe", "Цвет панели"},
 		"贴边小条": {"貼邊小條", "화면 가장자리 도크", "Panel lateral", "Volet de bord", "Rand-Dock", "Боковая панель"},
 		"悬停展开，拖动可贴到屏幕任一边缘": {"懸停展開，拖動可貼到螢幕任一邊緣", "마우스를 올려 펼치고 화면 가장자리로 드래그하세요", "Pasa el cursor para abrir; arrastra a cualquier borde", "Survolez pour ouvrir ; glissez vers un bord de l’écran", "Zum Öffnen darüberfahren; an einen Bildschirmrand ziehen", "Наведите для раскрытия; перетащите к краю экрана"},
 		"更多设置":   {"更多設定", "추가 설정", "Más ajustes", "Autres réglages", "Weitere Einstellungen", "Дополнительные настройки"},

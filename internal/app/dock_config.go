@@ -4,6 +4,9 @@ func syncDockDraft(draft *Config, before, after Config) {
 	if before.VoiceDock != after.VoiceDock {
 		draft.VoiceDock = after.VoiceDock
 	}
+	if before.VoiceDockTone != after.VoiceDockTone {
+		draft.VoiceDockTone = after.VoiceDockTone
+	}
 	if before.VoiceDockPosition != after.VoiceDockPosition {
 		draft.VoiceDockPosition = after.VoiceDockPosition
 	}

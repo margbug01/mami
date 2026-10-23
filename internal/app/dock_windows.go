@@ -21,23 +21,127 @@ type voiceDock struct {
 	armed                                           bool
 	hoverAt, leaveAt                                time.Time
 	down                                            POINT
+	grab                                            POINT
 	position                                        dockPosition
 	area                                            RECT
 	dpi                                             uint32
 	rect                                            RECT
+	texture                                         *texture
 }
 
 var dockQuit atomic.Bool
 
 var dockComctl = syscall.NewLazyDLL("comctl32.dll")
 var dockDefSubclass = dockComctl.NewProc("DefSubclassProc")
+var dockOwners = map[uintptr]*App{}
 var dockSubclass = syscall.NewCallback(func(hwnd uintptr, message uint32, wp, lp, id, data uintptr) uintptr {
 	if message == 0x21 {
 		return 3
 	}
+	if a := dockOwners[hwnd]; a != nil {
+		if message == 0x82 {
+			delete(dockOwners, hwnd)
+		} else if a.dockMouse(message) {
+			return 0
+		}
+	}
 	result, _, _ := dockDefSubclass.Call(hwnd, uintptr(message), wp, lp)
 	return result
 })
+
+var dockChildSubclass = syscall.NewCallback(func(hwnd, parent uintptr) uintptr {
+	if a := dockOwners[parent]; a != nil {
+		a.hookDockWindow(hwnd)
+	}
+	return 1
+})
+
+func (a *App) hookDockWindow(hwnd uintptr) {
+	if ok, _, err := dockComctl.NewProc("SetWindowSubclass").Call(hwnd, dockSubclass, 1, 0); ok == 0 {
+		log.Println("dock mouse hook:", err)
+		return
+	}
+	dockOwners[hwnd] = a
+}
+
+func (a *App) hookDockMouse() {
+	a.hookDockWindow(a.dock.hwnd)
+	user32.NewProc("EnumChildWindows").Call(a.dock.hwnd, dockChildSubclass, a.dock.hwnd)
+}
+
+func (d *voiceDock) dragHit(point POINT) bool {
+	return dockContains(d.rect, point) && (!d.expanded || point.Y < d.rect.Top+scale(32, d.dpi))
+}
+
+func (d *voiceDock) dragPoint(point POINT) POINT {
+	return POINT{X: point.X - d.grab.X, Y: point.Y - d.grab.Y}
+}
+
+func (d *voiceDock) dragMoved(point POINT) bool {
+	deltaX, deltaY := int64(point.X-d.down.X), int64(point.Y-d.down.Y)
+	threshold := int64(scale(4, d.dpi))
+	return deltaX*deltaX+deltaY*deltaY > threshold*threshold
+}
+
+func (a *App) finishDockDrag(commit bool) {
+	d := &a.dock
+	moved := d.dragging
+	d.armed, d.dragging = false, false
+	if capture, _, _ := user32.NewProc("GetCapture").Call(); capture == d.hwnd {
+		user32.NewProc("ReleaseCapture").Call()
+	}
+	if moved && commit {
+		point := cursorPos()
+		d.area, _, d.position.Monitor = dockMonitor(point)
+		d.dpi = dpiAt(point)
+		area := dockRect{W: int(d.area.w()) * 96 / int(d.dpi), H: int(d.area.h()) * 96 / int(d.dpi)}
+		monitor := d.position.Monitor
+		d.position = dockSnap(area, int(point.X-d.area.Left)*96/int(d.dpi), int(point.Y-d.area.Top)*96/int(d.dpi))
+		d.position.Monitor = monitor
+		position := d.position
+		d.win.Update(func() { a.changeDockConfig(func(cfg *Config) { cfg.VoiceDockPosition = position }) })
+	}
+	d.hoverAt, d.leaveAt = time.Now(), time.Time{}
+	d.win.Invalidate()
+}
+
+func (a *App) dockMouse(message uint32) bool {
+	d := &a.dock
+	switch message {
+	case 0x201, 0x203:
+		point := cursorPos()
+		if !d.shown || !d.dragHit(point) {
+			return false
+		}
+		d.down = point
+		d.grab = POINT{X: point.X - d.rect.Left, Y: point.Y - d.rect.Top}
+		d.armed, d.dragging = true, false
+		user32.NewProc("SetCapture").Call(d.hwnd)
+		return true
+	case 0x200:
+		if !d.armed {
+			return false
+		}
+		point := cursorPos()
+		if d.dragging || d.dragMoved(point) {
+			d.dragging = true
+			origin := d.dragPoint(point)
+			pSetWindowPos.Call(d.hwnd, HWND_TOPMOST, uintptr(origin.X), uintptr(origin.Y), 0, 0, SWP_NOSIZE|SWP_NOACTIVATE)
+			d.rect = windowRect(d.hwnd)
+		}
+		return true
+	case 0x202:
+		if d.armed {
+			a.finishDockDrag(true)
+			return true
+		}
+	case 0x215, 0x1F:
+		if d.armed {
+			a.finishDockDrag(false)
+		}
+	}
+	return false
+}
 
 type dockMonitorInfo struct {
 	MONITORINFO
@@ -80,7 +184,7 @@ func (a *App) createDock() {
 	d.dpi = dpiAt(point)
 	d.win, d.hwnd = a.floatingWindow("mami-dock", dockThick, dockLong, 1, 1, a.dockView)
 	a.dockHwnd.Store(d.hwnd)
-	dockComctl.NewProc("SetWindowSubclass").Call(d.hwnd, dockSubclass, 1, 0)
+	a.hookDockMouse()
 	go func() {
 		ticker := time.NewTicker(40 * time.Millisecond)
 		defer ticker.Stop()
@@ -125,12 +229,18 @@ func (a *App) tickDock() {
 	d.dpi = dpiAt(center)
 	visible := cfg.VoiceDock && cfg.VoiceEnabled && !dockFullscreen()
 	if !visible {
+		if d.armed {
+			a.finishDockDrag(false)
+		}
 		if d.shown {
 			d.win.Hide()
 			d.shown = false
 		}
 		d.expanded, d.more, d.langs, d.pressed, d.dragging, d.armed = false, false, false, false, false, false
 		d.hoverAt, d.leaveAt = time.Time{}, time.Time{}
+		return
+	}
+	if d.armed {
 		return
 	}
 	point, now := cursorPos(), time.Now()
@@ -141,40 +251,6 @@ func (a *App) tickDock() {
 	// 展开时在外面点一下（左键或右键）立刻收起，不用等一秒
 	if d.expanded && !inside && (pressed && !d.pressed || right&0x8000 != 0) {
 		d.expanded, d.more, d.langs, d.leaveAt = false, false, false, time.Time{}
-	}
-	if pressed && !d.pressed && inside && !d.expanded {
-		d.down = point
-		d.armed = true
-		d.dragging = false
-	}
-	if pressed && d.pressed && !d.expanded && d.armed {
-		deltaX, deltaY, threshold := int64(point.X-d.down.X), int64(point.Y-d.down.Y), int64(scale(4, d.dpi))
-		if deltaX*deltaX+deltaY*deltaY > threshold*threshold {
-			d.dragging = true
-		}
-		if d.dragging {
-			d.area, _, d.position.Monitor = dockMonitor(point)
-			d.dpi = dpiAt(point)
-			offsetX, offsetY := int32(dockThick/2), int32(dockLong/2)
-			if d.position.Edge == "top" || d.position.Edge == "bottom" {
-				offsetX, offsetY = int32(dockLong/2), int32(dockThick/2)
-			}
-			moveTo(d.hwnd, point.X-scale(offsetX, d.dpi), point.Y-scale(offsetY, d.dpi))
-			d.rect = windowRect(d.hwnd)
-		}
-	}
-	if !pressed && d.pressed && d.dragging {
-		d.area, _, d.position.Monitor = dockMonitor(point)
-		d.dpi = dpiAt(point)
-		area := dockRect{W: int(d.area.w()) * 96 / int(d.dpi), H: int(d.area.h()) * 96 / int(d.dpi)}
-		d.position = dockSnap(area, int(point.X-d.area.Left)*96/int(d.dpi), int(point.Y-d.area.Top)*96/int(d.dpi))
-		_, _, d.position.Monitor = dockMonitor(point)
-		a.changeDockConfig(func(cfg *Config) { cfg.VoiceDockPosition = d.position })
-		d.dragging = false
-		d.hoverAt = now
-	}
-	if !pressed {
-		d.armed = false
 	}
 	d.pressed = pressed
 	if !d.dragging {
@@ -196,9 +272,9 @@ func (a *App) tickDock() {
 				d.more, d.langs = false, false
 			}
 		}
-		height := 228
+		height := 248
 		if d.more || d.langs {
-			height = 396
+			height = 416
 		}
 		area := dockRect{W: int(d.area.w()) * 96 / int(d.dpi), H: int(d.area.h()) * 96 / int(d.dpi)}
 		rect := dockPlacement(area, d.position, d.expanded, height)
@@ -244,26 +320,28 @@ func dockCycle(value string, values []string) string {
 
 func (a *App) dockView(c *ui.Context) {
 	cfg, _ := a.config()
-	a.dockContent(c, cfg, a.dock.expanded, a.dock.more, toneDark(cfg.VoiceTone, a.themed(c).Dark))
+	a.dockContent(c, cfg, a.dock.expanded, a.dock.more, toneDark(cfg.VoiceDockTone, a.themed(c).Dark))
 }
 
 func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) {
-	bg, card, fg, muted, border, active := ui.RGB(11, 11, 12), ui.RGB(20, 20, 22), ui.RGB(245, 245, 247), ui.RGB(132, 132, 142), ui.RGB(35, 35, 38), ui.RGB(42, 42, 47)
-	if !dark {
-		bg, card, fg, muted, border, active = ui.RGB(250, 250, 252), ui.RGB(239, 239, 243), ui.RGB(25, 25, 29), ui.RGB(110, 110, 120), ui.RGB(220, 220, 226), ui.RGB(218, 218, 226)
+	t := ui.LightTheme()
+	if dark {
+		t = ui.DarkTheme()
 	}
-	accent := ui.RGB(138, 124, 245)
-	corners := func(radius float32) []float32 {
-		switch a.dock.position.Edge {
-		case "left":
-			return []float32{0, radius, radius, 0}
-		case "top":
-			return []float32{0, 0, radius, radius}
-		case "bottom":
-			return []float32{radius, radius, 0, 0}
-		default:
-			return []float32{radius, 0, 0, radius}
+	mamiColors(t)
+	card, fg, muted, border, active := paneColor(t), t.Text, t.TextMuted, t.Border, sideSelected(t)
+	accent := t.Accent
+	base := windowTexture(dark)
+	if a.dock.texture == nil || a.dock.texture.pal != base.pal {
+		a.dock.texture = &texture{pal: base.pal, grain: base.grain}
+	}
+	material := a.dock.texture
+	background := func(p *ui.Painter, r ui.Rect) {
+		radius := float32(10)
+		if expanded {
+			radius = 16
 		}
+		material.draw(p, r, radius)
 	}
 	if !expanded {
 		opacity := float32(0.4)
@@ -275,26 +353,13 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 		if horizontal {
 			layout = ui.Row
 		}
-		tabBg, tabEdge, mic := ui.RGB(28, 28, 32), ui.RGB(78, 78, 88), ui.RGB(235, 235, 240)
-		if !dark {
-			tabBg, tabEdge, mic = ui.RGB(250, 250, 252), ui.RGB(200, 200, 208), ui.RGB(40, 40, 46)
-		}
+		mic := fg
 		if voiceRecording.Load() != 0 {
 			mic = accent
 		}
-		tab := layout(c).Fill().AlignItems(ui.Center).Justify(ui.Center).Gap(5).Radius(corners(10)...).Background(tabBg).Border(1, tabEdge)
-		switch a.dock.position.Edge { // 贴屏幕的那一侧不描边
-		case "left":
-			tab.BorderWidth(1, 1, 1, 0)
-		case "top":
-			tab.BorderWidth(0, 1, 1, 1)
-		case "bottom":
-			tab.BorderWidth(1, 1, 0, 1)
-		default:
-			tab.BorderWidth(1, 0, 1, 1)
-		}
+		tab := layout(c).Fill().AlignItems(ui.Center).Justify(ui.Center).Gap(5).Radius(10).Clip().Draw(background).Border(1, border).Cursor(ui.CursorGrab)
 		tab.Children(func() {
-			// 话筒：圆角竖条 + 托 + 支杆，一眼认得出是语音；录音时变紫并呼吸
+			// 话筒：圆角竖条 + 托 + 支杆；录音时用主题强调色并呼吸
 			ui.Box(c).Size(14, 16).Opacity(max(opacity, 0.85)).Draw(func(p *ui.Painter, r ui.Rect) {
 				cx := r.X + r.W/2
 				p.Stroke(ui.Rect{X: cx - 3, Y: r.Y + 1, W: 6, H: 9}, mic, 3, 1.4)
@@ -317,18 +382,11 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 		})
 		return
 	}
-	panel := ui.Column(c).Fill().Padding(12).Gap(12).Radius(corners(16)...).Background(bg).Border(1, border)
-	switch a.dock.position.Edge {
-	case "left":
-		panel.BorderWidth(1, 1, 1, 0)
-	case "top":
-		panel.BorderWidth(0, 1, 1, 1)
-	case "bottom":
-		panel.BorderWidth(1, 1, 0, 1)
-	default:
-		panel.BorderWidth(1, 0, 1, 1)
-	}
+	panel := ui.Column(c).Fill().Padding(12).Gap(12).Radius(16).Clip().Draw(background).Border(1, border)
 	panel.Children(func() {
+		ui.Box(c).FillWidth().Height(8).Shrink(0).Cursor(ui.CursorGrab).Draw(func(p *ui.Painter, r ui.Rect) {
+			p.Line(r.X+r.W/2-10, r.Y+r.H/2, r.X+r.W/2+10, r.Y+r.H/2, 2, border)
+		})
 		button := func(label string, action func()) {
 			control := ui.ButtonBase(c).Label(label).Height(30).FillWidth().Padding(0, 6).Radius(6).AlignItems(ui.Center).Justify(ui.Start).Cursor(ui.CursorPointer)
 			if control.Hovered() {
@@ -362,7 +420,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 			// 语言列表：点一下就选上并回到主面板，不用一个个轮过去
 			button("‹  "+T("翻译成"), func() { a.dock.langs = false })
 			ui.Scroll(c).FillWidth().Grow(1).Children(func() {
-				ui.Column(c).FillWidth().Background(card).Radius(12).Padding(4).Children(func() {
+				ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
 					for _, l := range targetLangs {
 						value, picked := l.value, l.value == cfg.VoiceTarget
 						item := ui.ButtonBase(c).Label(l.label).FillWidth().Height(28).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
@@ -386,7 +444,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 		}
 		if more {
 			button("‹  "+T("更多设置"), func() { a.dock.more = false })
-			ui.Column(c).FillWidth().Background(card).Radius(12).Padding(4).Children(func() {
+			ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
 				toggle(T("按程序自动换档"), cfg.PolishAuto, func(v *Config) { v.PolishAuto = !v.PolishAuto })
 				toggle(T("实时文字"), cfg.VoiceLiveText, func(v *Config) { v.VoiceLiveText = !v.VoiceLiveText })
 				toggle(T("自动学习"), cfg.VoiceLearn, func(v *Config) { v.VoiceLearn = !v.VoiceLearn })
@@ -411,22 +469,21 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 					a.changeDockConfig(change)
 				}
 			}
-			ui.Column(c).FillWidth().Background(card).Radius(12).Padding(4).Children(func() {
+			ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
 				cycle(T("样式"), voiceStyleName(cfg.VoiceStyle), func(v *Config) {
 					v.VoiceStyle = dockCycle(v.VoiceStyle, []string{"bars", "orb", "glass", "pixel", "mercury", "islands", "leds"})
 				})
-				cycle(T("浮窗底色"), voiceToneName(cfg.VoiceTone), func(v *Config) { v.VoiceTone = dockCycle(v.VoiceTone, []string{"dark", "light", "auto"}) })
+				cycle(T("面板底色"), voiceToneName(cfg.VoiceDockTone), func(v *Config) { v.VoiceDockTone = dockCycle(v.VoiceDockTone, []string{"auto", "light", "dark"}) })
 			})
 			button(T("完整设置…"), a.openSettings)
 			return
 		}
-		micBg := ui.RGB(26, 26, 29)
-		if !dark {
-			micBg = ui.RGB(228, 228, 234)
+		mic := ui.ButtonBase(c).FillWidth().Height(40).Padding(6).Gap(6).Radius(20).Background(card).Border(1, paneBorder(t)).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+		if mic.Hovered() {
+			mic.Background(active)
 		}
-		mic := ui.ButtonBase(c).FillWidth().Height(40).Padding(6).Gap(6).Radius(20).Background(micBg).AlignItems(ui.Center).Cursor(ui.CursorPointer)
 		mic.Children(func() {
-			ui.Box(c).Size(28, 28).Radius(14).Background(accent).AlignItems(ui.Center).Justify(ui.Center).Children(func() { ui.Box(c).Size(7, 7).Radius(4).Background(ui.RGB(20, 20, 22)) })
+			ui.Box(c).Size(28, 28).Radius(14).Background(accent).AlignItems(ui.Center).Justify(ui.Center).Children(func() { ui.Box(c).Size(7, 7).Radius(4).Background(t.AccentText) })
 			label := T("开始说话")
 			if voiceRecording.Load() != 0 {
 				label = T("结束")
@@ -437,7 +494,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 		if mic.Clicked() {
 			go voiceToggleSource(true)
 		}
-		ui.Column(c).FillWidth().Background(card).Radius(12).Padding(4).Children(func() {
+		ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
 			toggle(T("说完直接翻译"), cfg.VoiceTranslate, func(v *Config) { v.VoiceTranslate = !v.VoiceTranslate })
 			ui.Box(c).FillWidth().Height(1).Background(border)
 			targetName := cfg.VoiceTarget
@@ -461,10 +518,14 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 			labels := []string{T("轻"), T("标准"), T("结构化"), T("提示词")}
 			for index, style := range styles {
 				segment := ui.ButtonBase(c).Grow(1).Height(22).Radius(6).AlignItems(ui.Center).Justify(ui.Center).Cursor(ui.CursorPointer)
+				text := fg
 				if cfg.PolishStyle == style {
+					segment.Background(accent)
+					text = t.AccentText
+				} else if segment.Hovered() {
 					segment.Background(active)
 				}
-				segment.Children(func() { ui.Text(c, labels[index]).FontSize(10).TextColor(fg).SingleLine() })
+				segment.Children(func() { ui.Text(c, labels[index]).FontSize(10).TextColor(text).SingleLine() })
 				if segment.Clicked() {
 					a.changeDockConfig(func(v *Config) { v.PolishStyle = style })
 				}

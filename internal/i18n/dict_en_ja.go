@@ -58,6 +58,7 @@ var Dict = map[string][2]string{
 	"水银":           {"Mercury", "水銀"},
 	"三岛连桥":         {"Islands", "連結アイランド"},
 	"浮窗底色":         {"Overlay color", "オーバーレイの色"},
+	"面板底色":         {"Dock color", "ドックの色"},
 	"跟界面主题分开选":     {"Independent of the app theme", "アプリのテーマとは別に選べます"},
 	"跟随主题":         {"Match app theme", "テーマに合わせる"},
 	"分段电平":         {"LED meter", "LEDメーター"},

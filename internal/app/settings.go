@@ -889,6 +889,9 @@ func (a *App) exportWords() {
 // voiceLook 「语音识别」页的外观 tab：录音时的样式
 func (a *App) voiceLook(c *ui.Context, d *Config) {
 	switchRow(c, T("贴边小条"), T("悬停展开，拖动可贴到屏幕任一边缘"), &d.VoiceDock)
+	settingRow(c, T("面板底色"), T("跟界面主题分开选"), func() {
+		optionSelect(c, &d.VoiceDockTone, []option{{"auto", T("跟随主题")}, {"light", T("浅色")}, {"dark", T("深色")}})
+	})
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
 		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}})
 	})

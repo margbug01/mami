@@ -14,6 +14,7 @@ import (
 type Config struct {
 	VoiceDock         bool         `json:"voice_dock"`
 	VoiceDockPosition dockPosition `json:"voice_dock_position"`
+	VoiceDockTone     string       `json:"voice_dock_tone"`
 	VoiceTranslate    bool         `json:"voice_translate"`
 	VoiceTarget       string       `json:"voice_target"`
 	PolishStyle       string       `json:"polish_style"`
@@ -71,6 +72,7 @@ type Config struct {
 func defaultConfig() Config {
 	return Config{
 		VoiceDock:         true,
+		VoiceDockTone:     "auto",
 		VoiceDockPosition: dockPosition{Edge: "right", Fraction: 0.5},
 		VoiceTarget:       "English",
 		PolishStyle:       "standard",
@@ -156,6 +158,11 @@ func (c *Config) normalize() {
 	case "bars", "orb", "glass", "pixel", "mercury", "islands", "leds":
 	default:
 		c.VoiceStyle = "bars"
+	}
+	switch c.VoiceDockTone {
+	case "light", "dark":
+	default:
+		c.VoiceDockTone = "auto"
 	}
 	switch c.VoiceTone {
 	case "light", "auto":
