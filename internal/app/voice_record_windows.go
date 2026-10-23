@@ -4,9 +4,7 @@ package app
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
-	"math"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -173,16 +171,4 @@ finish:
 		pcm = pcm[:5*60*32000]
 	}
 	return pcm, nil
-}
-
-func pcmRMS(data []byte) float64 {
-	if len(data) < 2 {
-		return 0
-	}
-	var sum float64
-	for index := 0; index+1 < len(data); index += 2 {
-		sample := float64(int16(binary.LittleEndian.Uint16(data[index:]))) / 32768
-		sum += sample * sample
-	}
-	return math.Sqrt(sum / float64(len(data)/2))
 }

@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -253,7 +251,7 @@ func (a *App) popupView(c *ui.Context) {
 				}
 				if textButton(c, label).Clicked() {
 					text := p.text
-					theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
+					theWorker.do(func(owner uintptr) { setClipboardText(owner, text, false) })
 					p.copied, p.acted = true, true
 					a.recordAction(p.histID, "copy")
 				}

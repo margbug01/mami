@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -101,8 +99,7 @@ func Run() {
 		log.Println(err)
 		a.setConfig(defaultConfig())
 	}
-	d, _, _ := pGetDoubleClickTime.Call()
-	a.dblTime = uint32(d)
+	a.dblTime = doubleClickTime()
 	a.avatar = loadAvatar()
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.quitting = true })
@@ -140,8 +137,6 @@ func Run() {
 		}
 		if err := startUIA(); err != nil {
 			log.Println("uia:", err, "— 只能靠系统光标判断输入框")
-		} else {
-			a.uiaOK = true
 		}
 		if err := startHook(a.isOurs, a.onCardKey); err != nil {
 			log.Println(err)

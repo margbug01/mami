@@ -6,32 +6,11 @@ import (
 	"fmt"
 	"log"
 	"runtime"
-	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
 
-const (
-	mouseDown = iota + 1
-	mouseUp
-	mouseOther
-	mouseWheel
-	keyPress // 键盘钩子报的：用户真按了键（不含我们自己模拟的、也不含单按修饰键）
-)
-
-// mouseEvent 是钩子线程报出来的一次鼠标动作。ours/ibeam 必须在钩子里当场判断：
-// 等事件被处理时，指针可能已经移开了。
-type mouseEvent struct {
-	kind  int
-	pt    POINT
-	time  uint32
-	ours  bool
-	ibeam bool
-	vk    uint32 // keyPress：按的哪个键
-}
-
 var (
-	mouseEvents = make(chan mouseEvent, 256)
 	ibeamCursor uintptr
 	isOursFn    func(POINT) bool
 )
@@ -65,44 +44,12 @@ func hookProc(nCode, wp, lp uintptr) uintptr {
 	return r
 }
 
-// KBDLLHOOKSTRUCT
-type kbdLLHook struct {
-	VkCode, ScanCode, Flags, Time uint32
-	ExtraInfo                     uintptr
-}
-
 const (
 	whKeyboardLL = 13
 	wmKeyDown    = 0x0100
 	wmSysKeyDown = 0x0104
 	ourKeyTag    = 0x48554143 // "HUAC"：sendKeys 发的按键带这个标记
 )
-
-// 卡片开着时拦 Enter / Esc：cardKeyMode 0=不拦 1=只拦 Esc 2=Enter 和 Esc 都拦；
-// 只在焦点还在原来那个窗口（cardKeyFg）、没按着修饰键时拦，Shift+Enter 换行之类照常
-var (
-	cardKeyMode atomic.Int32
-	cardKeyFg   atomic.Uintptr
-	cardKeyFn   func(vk uint32)
-)
-
-const (
-	vkReturn = 0x0D
-	vkEscape = 0x1B
-)
-
-func cardWantsKey(vk uint32) bool {
-	mode := cardKeyMode.Load()
-	if mode == 0 || cardKeyFn == nil || (vk != vkEscape && (vk != vkReturn || mode < 2)) {
-		return false
-	}
-	for _, m := range []uintptr{0x10, 0x11, 0x12, 0x5B, 0x5C} {
-		if keyDown(m) {
-			return false
-		}
-	}
-	return foreground() == cardKeyFg.Load()
-}
 
 func kbdProc(nCode, wp, lp uintptr) uintptr {
 	if int32(nCode) == 0 && (wp == wmKeyDown || wp == wmSysKeyDown || wp == 0x0101 || wp == 0x0105) {
@@ -127,15 +74,6 @@ func kbdProc(nCode, wp, lp uintptr) uintptr {
 	}
 	r, _, _ := pCallNextHookEx.Call(0, nCode, wp, lp)
 	return r
-}
-
-// isModifierVK Shift / Ctrl / Alt（含左右）、Win、CapsLock：单按这些不算改了选区
-func isModifierVK(vk uint32) bool {
-	switch vk {
-	case 0x10, 0x11, 0x12, 0x14, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5:
-		return true
-	}
-	return false
 }
 
 func cursorIsIBeam() bool {
@@ -176,39 +114,4 @@ func startHook(isOurs func(POINT) bool, onCardKey func(vk uint32)) error {
 		}
 	}()
 	return <-ready
-}
-
-// keyCaptureJob 设置页正在录的一个快捷键框；report 在钩子线程调用，自己别阻塞
-type keyCaptureJob struct {
-	keyCapture
-	hwnd   uintptr // 只在设置窗口在前台时接管键盘，切到别的程序照常打字
-	report func(state int, acc, hint string)
-}
-
-var (
-	keyCapturing atomic.Pointer[keyCaptureJob]
-	captureHeld  [256]bool // 录制时按下的键：录完之后它们的松开也吞掉，别漏给前台窗口（仅钩子线程）
-)
-
-// captureKey 录制中把按键交给 keyCaptureJob 并吞掉：录 Alt+T 时现有的 Alt+T 不会触发，语音键也不会开始录音
-func captureKey(vk uint32, down bool) bool {
-	if !down && vk < 256 && captureHeld[vk] {
-		captureHeld[vk] = false
-		if job := keyCapturing.Load(); job == nil || foreground() != job.hwnd {
-			return true
-		}
-	}
-	job := keyCapturing.Load()
-	if job == nil || foreground() != job.hwnd {
-		return false
-	}
-	if down && vk < 256 {
-		captureHeld[vk] = true
-	}
-	state, acc, hint := job.step(vk, down)
-	if state != captureGoing {
-		keyCapturing.CompareAndSwap(job, nil)
-	}
-	go job.report(state, acc, hint)
-	return true
 }

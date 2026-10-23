@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -126,7 +124,6 @@ type App struct {
 	learn   *learner
 	samples *sampleLog // 长文口述改前改后的样本，以后学说话习惯用
 	learnW  learnWatch
-	uiaOK   bool
 	set     settingsState // 主线程
 	avatar  *ui.Bitmap
 }
@@ -196,8 +193,7 @@ func (a *App) createWindows() {
 }
 
 func (a *App) isOurs(p POINT) bool {
-	h, _, _ := pWindowFromPoint.Call(packPt(p))
-	root, _, _ := pGetAncestor.Call(h, GA_ROOT)
+	root := rootWindowAt(p)
 	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load())
 }
 
@@ -298,9 +294,6 @@ func (a *App) onMouse(ev mouseEvent) {
 func (a *App) inInput(fg uintptr, pt POINT) focusInfo {
 	if fg == 0 {
 		return focusInfo{}
-	}
-	if !a.uiaOK {
-		return focusIsEditable(0, fg, pt)
 	}
 	return focusEditable(fg, pt)
 }
@@ -414,7 +407,7 @@ func (a *App) onHotkey(replace bool) {
 	}
 	theWorker.do(func(owner uintptr) {
 		if keyDown(VK_MENU) {
-			sendKeys(KEYBDINPUT{WVk: VK_MASK}, KEYBDINPUT{WVk: VK_MASK, DwFlags: KEYEVENTF_KEYUP})
+			muteAltMenu()
 		}
 		waitModifiersUp(time.Second) // 不然模拟的 Ctrl+C 会变成 Ctrl+Alt+C
 		a.btnGen.Add(1)
@@ -719,11 +712,6 @@ func (a *App) hidePopupNow() {
 func (a *App) resizePopup(w, h int, anchor POINT) {
 	a.popWin.SetContentSize(w, h)
 	a.placePopup(anchor)
-}
-
-func toCRLF(s string) string {
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	return strings.ReplaceAll(s, "\n", "\r\n")
 }
 
 // ---------- 快捷键 / 托盘 ----------

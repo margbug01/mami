@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -73,7 +71,7 @@ func voiceHookKey(key *kbdLLHook, down bool) bool {
 		swallow = true
 	}
 	if !down && key.VkCode == held && (held == 0xA5 || held == 0xA4) { // 单按 Alt 松开会激活菜单栏
-		sendKeys(KEYBDINPUT{WVk: VK_MASK}, KEYBDINPUT{WVk: VK_MASK, DwFlags: KEYEVENTF_KEYUP})
+		muteAltMenu()
 	}
 	if action == voiceNone {
 		return swallow
@@ -763,7 +761,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 			if !translated {
 				a.learnStart(fg, source, text, cfg)
 			}
-		case !setClipboardText(owner, toCRLF(text), false):
+		case !setClipboardText(owner, text, false):
 			a.voiceNotice(id, T("无法写入剪贴板"))
 		case mode == voicePasteKeep:
 			// 认不出是不是输入框（微信这类）：照样贴，但文字留在剪贴板里，贴空了还能手动 Ctrl+V
@@ -986,7 +984,7 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 				tip := T("已复制，到要用的地方按 Ctrl+V")
 				if pillCopyButton(c, sk, done, tip).Clicked() && !done && live {
 					text, id := state.text, voiceEpoch.Load()
-					theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
+					theWorker.do(func(owner uintptr) { setClipboardText(owner, text, false) })
 					a.voiceCopiedAt = now
 					time.AfterFunc(700*time.Millisecond, func() { a.voiceDisplay(id, voiceViewState{}, false) })
 				}
