@@ -259,6 +259,7 @@ func caretText(before, after int) (pre, post string, ok bool) {
 
 // promptAccessibility 弹系统的「Mami 想控制这台电脑」对话框（只在没授权时有效）
 func promptAccessibility() {
+	axPrompted.Store(true)
 	withPool(func() {
 		opts := send(class("NSMutableDictionary"), "dictionary")
 		send(opts, "setObject:forKey:", kCFBooleanTrue, dlvar(libAX, "kAXTrustedCheckOptionPrompt"))

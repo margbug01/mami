@@ -1,6 +1,12 @@
 package app
 
-import "sync/atomic"
+import (
+	"errors"
+	"sync/atomic"
+)
+
+// errNeedAccessibility macOS 上还没给「辅助功能」权限：钩子先不挂，给了以后自己挂上
+var errNeedAccessibility = errors.New("accessibility permission not granted")
 
 // 两个平台共用的坐标和键码。Windows 上 POINT/RECT 是物理像素；macOS 上是屏幕坐标的点
 // （主屏左上角为原点，和 mygo、CGEvent、辅助功能 API 一致），dpiAt 恒为 96，scale 不缩放。

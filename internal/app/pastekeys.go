@@ -22,10 +22,10 @@ func pasteKeysFor(exe string) int {
 	return pasteCtrlV
 }
 
-// pasteBlind 焦点在输入框里，但 UIA 认不出、也没有系统光标的程序（微信 4.x 是 Qt 自绘）：照样贴
+// pasteBlind 焦点在输入框里，但 UIA / 辅助功能认不出、也没有系统光标的程序（微信 4.x 是 Qt 自绘）：照样贴
 func pasteBlind(exe string) bool {
 	switch strings.ToLower(filepath.Base(exe)) {
-	case "weixin.exe", "wechat.exe":
+	case "weixin.exe", "wechat.exe", "wechat.app":
 		return true
 	}
 	return false

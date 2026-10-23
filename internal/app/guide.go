@@ -11,13 +11,15 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// 新手引导：第一次启动时占住设置窗口，四屏——你好 → 自己说一句 → 自己划一句 → 好了。
+// 新手引导：第一次启动时占住设置窗口，四屏——你好 → 自己说一句 → 自己划一句 → 好了
+// （macOS 在「你好」后面多一屏：先把辅助功能和麦克风打开）。
 // 中间两屏是真上手：按真的触发键（或点麦克风），真开麦，底部胶囊跟着声音动，那句话跟着念一个个字亮起来；
 // 在真的输入框里选字，冒出「文A」，点开卡片，Enter 替换。结果是写死的：不识别、不润色、不发请求，也不要 Key。
 // 看完或跳过就收起窗口，Mami 留在托盘；托盘菜单「新手引导…」能再来一遍。关窗口也算跳过。
 
 const (
 	stepHello = iota
+	stepAllow // macOS：打开辅助功能和麦克风；Windows 跳过
 	stepVoice
 	stepTrans
 	stepDone
@@ -118,6 +120,9 @@ func (a *App) openGuide() {
 
 // guideGo 换一屏：语音那屏没说完就停掉，回来时从头开始
 func (a *App) guideGo(step int) {
+	if step == stepAllow && !needPermissions {
+		step = stepVoice
+	}
 	a.guideStopListening()
 	a.set.guideStep = step
 	a.set.voice = guideVoiceState{}
@@ -167,6 +172,8 @@ func (a *App) guideView(c *ui.Context) {
 			switch s.guideStep {
 			case stepHello:
 				a.guideHello(c)
+			case stepAllow:
+				a.guideAllow(c)
 			case stepVoice:
 				a.guideSay(c)
 			case stepTrans:
@@ -176,7 +183,7 @@ func (a *App) guideView(c *ui.Context) {
 			}
 		})
 	})
-	if s.guideStep == stepVoice || s.guideStep == stepTrans {
+	if s.guideStep == stepAllow || s.guideStep == stepVoice || s.guideStep == stepTrans {
 		a.guideFooter(c)
 	}
 }
@@ -186,7 +193,10 @@ func (a *App) guideFooter(c *ui.Context) {
 	t := c.Theme()
 	s := &a.set
 	finished := s.voice.phase == sayDone
-	if s.guideStep == stepTrans {
+	switch s.guideStep {
+	case stepAllow:
+		finished = accessibilityOK() && micOK()
+	case stepTrans:
 		finished = s.trans.done
 	}
 	ui.Row(c).Padding(12, 24, 16, 24).AlignItems(ui.Center).Children(func() {
@@ -197,6 +207,9 @@ func (a *App) guideFooter(c *ui.Context) {
 		})
 		ui.Row(c).Gap(8).Children(func() {
 			for i := range guidePages {
+				if i == stepAllow && !needPermissions {
+					continue
+				}
 				dot, w := t.Text.Alpha(0.16), float32(6)
 				if i == s.guideStep {
 					dot, w = t.Accent, 16
@@ -256,11 +269,19 @@ func (a *App) guideHello(c *ui.Context) {
 	guideLine(c, T("在你打字的地方，帮你说，也帮你译"), t.TextMuted)
 	ui.Box(c).Height(14)
 	if accentButton(c, T("开始")).MinWidth(140).Clicked() {
-		a.guideGo(stepVoice)
+		a.guideGo(stepAllow)
 	}
 	if smallLink(c, T("跳过")).Clicked() {
 		a.endGuide()
 	}
+}
+
+// guideAllow macOS：先打开两个权限。没打开的那行给按钮，打开了就打勾（refreshPermissions 每秒看一次）
+func (a *App) guideAllow(c *ui.Context) {
+	guideHeading(c, T("先打开两个权限"))
+	guideLine(c, T("macOS 要你点头，Mami 才能听触发键、往输入框里贴字、用麦克风"), c.Theme().TextMuted)
+	ui.Box(c).Height(6)
+	ui.Column(c).Width(440).Gap(10).Children(func() { a.permissionRows(c) })
 }
 
 // voiceKeyUsable 触发键现在按了有用（开着语音、没关快捷键、设了键）
@@ -619,7 +640,11 @@ func (a *App) guideDone(c *ui.Context) {
 	a.guideAvatar(c)
 	ui.Box(c).Height(2)
 	ui.Text(c, T("好了，就这么简单")).FontSize(30).FontWeight(600)
-	guideLine(c, T("Mami 住在托盘里，单击图标打开设置"), t.TextMuted)
+	if onMac {
+		guideLine(c, T("Mami 住在菜单栏里，点图标打开菜单"), t.TextMuted)
+	} else {
+		guideLine(c, T("Mami 住在托盘里，单击图标打开设置"), t.TextMuted)
+	}
 	ui.Box(c).Height(6)
 	ui.Row(c).Gap(28).AlignItems(ui.Center).Children(func() {
 		if key, ok := a.voiceKeyUsable(); ok {

@@ -15,8 +15,6 @@ import (
 // macOS 的全局鼠标/键盘监听：CGEventTap 挂在自己的线程和 run loop 上。
 // 能吞按键的 tap 要「辅助功能」权限；没给就先报错，后台每秒看一次，给了就挂上，不用重启。
 
-var errNeedAccessibility = errors.New("accessibility permission not granted")
-
 const (
 	evLeftDown     = 1
 	evLeftUp       = 2

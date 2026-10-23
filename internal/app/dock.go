@@ -382,7 +382,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 				label = T("结束")
 			}
 			ui.Text(c, label).FontSize(11).TextColor(fg).Grow(1).SingleLine()
-			ui.Text(c, cfg.VoiceHotkey).FontSize(9).TextColor(muted).SingleLine()
+			ui.Text(c, keysLabel(cfg.VoiceHotkey)).FontSize(9).TextColor(muted).SingleLine()
 		})
 		if mic.Clicked() {
 			go voiceToggleSource(true)

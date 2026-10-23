@@ -982,6 +982,9 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 					return
 				}
 				tip := T("已复制，到要用的地方按 Ctrl+V")
+				if onMac {
+					tip = T("已复制，到要用的地方按 ⌘V")
+				}
 				if pillCopyButton(c, sk, done, tip).Clicked() && !done && live {
 					text, id := state.text, voiceEpoch.Load()
 					theWorker.do(func(owner uintptr) { setClipboardText(owner, text, false) })

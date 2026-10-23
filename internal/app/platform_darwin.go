@@ -3,6 +3,7 @@
 package app
 
 import (
+	_ "embed"
 	"math"
 	"os"
 	"path/filepath"
@@ -36,6 +37,23 @@ func init() {
 	kWinLayer = dlvar(libCG, "kCGWindowLayer")
 	kWinNumber = dlvar(libCG, "kCGWindowNumber")
 	kWinBounds = dlvar(libCG, "kCGWindowBounds")
+}
+
+const onMac = true
+
+const excludeExample = "Steam.app, Terminal.app" // 设置里「不弹的程序」框的示例
+
+//go:embed assets/tray_mac.png
+var trayTemplatePNG []byte
+
+// trayIcon 菜单栏用黑白模板图，系统按菜单栏深浅自己上色
+func trayIcon() (png []byte, template bool) { return trayTemplatePNG, true }
+
+func init() {
+	// macOS 上单按左右 ⌘ 或 fn 也能当语音触发键（Windows 上单按 Win 会弹开始菜单，不给用）
+	voiceKeyNames["LWin"] = VK_LWIN
+	voiceKeyNames["RWin"] = VK_RWIN
+	voiceKeyNames["Fn"] = vkFn
 }
 
 func nsApp() objc.ID { return send(class("NSApplication"), "sharedApplication") }

@@ -237,6 +237,20 @@ func makeFloating(h uintptr) {
 // makeAnchor 浮窗的父窗口：Windows 上藏着就行，什么都不用做
 func makeAnchor(uintptr) {}
 
+const onMac = false
+
+const excludeExample = "game.exe, WindowsTerminal.exe" // 设置里「不弹的程序」框的示例
+
+// 下面这几个是 macOS 才有的隐私权限，Windows 上恒为「已就绪」
+const needPermissions = false
+
+func accessibilityOK() bool { return true }
+func micOK() bool           { return true }
+func askAccessibility()     {}
+func askMicrophone()        {}
+
+func trayIcon() (png []byte, template bool) { return trayPNG, false }
+
 // moveTo 按物理像素摆窗口（钩子和 GetCursorPos 给的都是物理像素）
 func moveTo(h uintptr, x, y int32) {
 	defer roundCorners(h)

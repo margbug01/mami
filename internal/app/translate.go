@@ -183,6 +183,9 @@ func (e *errPartial) Unwrap() error { return e.err }
 // 接口不支持流式、直接回整段 JSON 也照样能用。
 func (t *Translator) TranslateStream(ctx context.Context, text, target string, onPartial func(string)) (string, error) {
 	if strings.TrimSpace(t.cfg.APIKey) == "" && !isIndexTranslate(t.cfg.Model) {
+		if onMac {
+			return "", errors.New(T("还没填 API Key：菜单栏图标 → 设置…"))
+		}
 		return "", errors.New(T("还没填 API Key：托盘图标右键 → 设置"))
 	}
 	body := map[string]any{
