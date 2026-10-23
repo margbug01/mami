@@ -893,7 +893,7 @@ func (a *App) voiceLook(c *ui.Context, d *Config) {
 		optionSelect(c, &d.VoiceDockTone, []option{{"auto", T("跟随主题")}, {"light", T("浅色")}, {"dark", T("深色")}})
 	})
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
-		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}})
+		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}})
 	})
 	if d.VoiceStyle != "pixel" && d.VoiceStyle != "orb" { // 像素和果冻球的配色是固定的
 		settingRow(c, T("浮窗底色"), T("跟界面主题分开选"), func() {
@@ -902,6 +902,15 @@ func (a *App) voiceLook(c *ui.Context, d *Config) {
 	}
 	if d.VoiceStyle == "islands" || d.VoiceStyle == "leds" {
 		switchRow(c, T("连体"), "", &d.VoiceJoined)
+	}
+	if d.VoiceStyle == "flow" {
+		settingRow(c, T("流光配色"), "", func() {
+			options := make([]option, 0, len(flowPalettes))
+			for _, palette := range flowPalettes {
+				options = append(options, option{palette.id, T(palette.name)})
+			}
+			optionSelect(c, &d.VoiceFlowPalette, options)
+		})
 	}
 	a.voicePreview(c, d)
 	if d.VoiceStyle == "orb" {
@@ -956,12 +965,16 @@ func (a *App) voicePreview(c *ui.Context, d *Config) {
 
 // previewShape 预览里的一个状态：果冻球样式录音/识别时是球，其余是胶囊
 func (a *App) previewShape(c *ui.Context, d *Config, style string, dark bool, sk voiceSkin, st voiceViewState, bars [voiceBars]float32, now time.Time) {
-	if style == "orb" && voiceKind(st) != 3 {
+	if style == "flow" && voiceKind(st) != 3 {
+		ui.Box(c).Size(flowSize, flowSize).Draw(func(p *ui.Painter, r ui.Rect) {
+			drawFlowOrb(p, r, bars[voiceBars-1], now, st.recognizing, d.VoiceFlowPalette)
+		})
+	} else if style == "orb" && voiceKind(st) != 3 {
 		sz, rec := float32(math.Round(d.VoiceOrbSize)), st.recognizing
 		ui.Box(c).Size(sz, sz).Draw(func(p *ui.Painter, r ui.Rect) { drawOrb(p, r, bars[voiceBars-1], now, rec) })
 	} else {
 		gl, gr := islandGapsFor(st)
-		a.voicePill(c, style, dark, sk, st, bars, bars[voiceBars-1], gl, gr, 1, now, false, d.VoiceJoined).Width(float32(min(voiceWidth(st), voiceRecW))) // 预览框放不下全宽的提示，句子长了就截断
+		a.voicePill(c, style, dark, sk, st, bars, bars[voiceBars-1], gl, gr, 1, now, false, d.VoiceJoined, d.VoiceFlowPalette).Width(float32(min(voiceWidth(st), voiceRecW))) // 预览框放不下全宽的提示，句子长了就截断
 	}
 }
 

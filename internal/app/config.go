@@ -27,7 +27,8 @@ type Config struct {
 	PolishAuto        bool         `json:"polish_auto"`   // 按程序自动换润色档位（AI 工具用提示词档、聊天软件用轻润色）
 	VoiceHotkey       string       `json:"voice_hotkey"`
 	VoiceJoined       bool         `json:"voice_joined"`
-	VoiceStyle        string       `json:"voice_style"`     // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
+	VoiceStyle        string       `json:"voice_style"` // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
+	VoiceFlowPalette  string       `json:"voice_flow_palette"`
 	VoiceOrbSize      float64      `json:"voice_orb_size"`  // 果冻球直径（DIP），40~96
 	VoiceTone         string       `json:"voice_tone"`      // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
 	VoiceSound        bool         `json:"voice_sound"`     // 开始、结束、取消的提示音
@@ -86,6 +87,7 @@ func defaultConfig() Config {
 		VoiceSound:        true,
 		VoiceLearn:        true,
 		VoiceOrbSize:      voiceOrbW,
+		VoiceFlowPalette:  "ice",
 		ASRBaseURL:        "https://api.stepfun.com/v1",
 		ASRModel:          "stepaudio-3-asr-max",
 		ASRHotwords:       []string{},
@@ -147,6 +149,7 @@ func (c *Config) normalize() {
 	if c.VoiceHotkey != "Off" && voiceKey(c.VoiceHotkey) == 0 && !strings.Contains(c.VoiceHotkey, "+") {
 		c.VoiceHotkey = "RAlt" // 组合键是否有效由注册时报错
 	}
+	c.VoiceFlowPalette = flowPalettes[flowPaletteIndex(c.VoiceFlowPalette)].id
 	if c.VoiceOrbSize <= 0 {
 		c.VoiceOrbSize = voiceOrbW
 	}
@@ -155,7 +158,7 @@ func (c *Config) normalize() {
 		c.VoiceStyle, c.VoiceJoined = "leds", true
 	}
 	switch c.VoiceStyle {
-	case "bars", "orb", "glass", "pixel", "mercury", "islands", "leds":
+	case "bars", "orb", "flow", "glass", "pixel", "mercury", "islands", "leds":
 	default:
 		c.VoiceStyle = "bars"
 	}

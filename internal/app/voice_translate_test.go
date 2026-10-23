@@ -32,7 +32,7 @@ func TestVoiceTranslatePreview(t *testing.T) {
 							for i := range bars {
 								bars[i] = float32(i+1) / voiceBars
 							}
-							a.voicePill(c, style, dark, skinFor(style, dark), state, bars, 0.4, islandGap, islandGap, 1, time.Now(), false, false).Width(float32(voiceRecW))
+							a.voicePill(c, style, dark, skinFor(style, dark), state, bars, 0.4, islandGap, islandGap, 1, time.Now(), false, false, "ice").Width(float32(voiceRecW))
 						}
 					})
 				}

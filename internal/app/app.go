@@ -81,6 +81,7 @@ type App struct {
 	voiceTone              string
 	voiceJoined            bool
 	voiceOrbSize           float32
+	voiceFlowPalette       string
 	voiceFrameAt           time.Time
 	voiceHover             bool               // 鼠标在胶囊上：带复制钮的提示先不收
 	voiceCopiedAt          time.Time          // 点了胶囊上的复制，钮变成 ✓

@@ -333,10 +333,13 @@ func voiceKind(state voiceViewState) int {
 
 // voiceOrb 果冻球样式的录音和识别；提示文字在果冻样式下是一条果冻（见 drawJelly）
 func (a *App) voiceOrb(state voiceViewState) bool {
-	return a.voiceStyle == "orb" && voiceKind(state) != 3 && state.live == "" // 出字了就变成一条果冻
+	return (a.voiceStyle == "flow" || a.voiceStyle == "orb" && state.live == "") && voiceKind(state) != 3 // 出字了就变成一条果冻
 }
 
 func (a *App) orbSize() float32 {
+	if a.voiceStyle == "flow" {
+		return flowSize
+	}
 	if a.voiceOrbSize <= 0 {
 		return voiceOrbW
 	}
@@ -354,12 +357,15 @@ func (a *App) voiceWidth(state voiceViewState) int32 {
 	if a.voiceTranslate && voiceKind(state) == 2 {
 		return voiceDotsW + voiceBtn
 	}
+	if a.voiceStyle == "flow" && voiceKind(state) == 3 && (state.copy || state.retry || state.undo) {
+		return voiceWidth(state) + 26
+	}
 	return voiceWidth(state)
 }
 
 // voiceWinHeight 窗口高度要装得下最大的果冻球，上下再留一点给弹出动画
 func (a *App) voiceWinHeight() int32 {
-	if a.voiceStyle == "orb" {
+	if a.voiceStyle == "orb" || a.voiceStyle == "flow" {
 		return max(voiceWinH, int32(a.orbSize())+12)
 	}
 	return voiceWinH
@@ -546,6 +552,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	a.voiceWin.Update(func() {
 		a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, cfg.VoiceStyle, cfg.VoiceTone, float32(cfg.VoiceOrbSize)
 		a.voiceJoined = cfg.VoiceJoined
+		a.voiceFlowPalette = cfg.VoiceFlowPalette
 		a.voiceTranslate, a.voiceTarget = cfg.VoiceTranslate, cfg.VoiceTarget
 	})
 	if cfg.ASRAPIKey == "" { // 还没填 Key：不录，直接带去填
@@ -869,7 +876,13 @@ func (a *App) voiceView(c *ui.Context) {
 				} else {
 					orb.Tooltip(T("点一下完成，Esc 取消"))
 				}
-				orb.DrawOver(func(p *ui.Painter, r ui.Rect) { drawOrb(p, r, orbLv, now, recognizing) })
+				orb.DrawOver(func(p *ui.Painter, r ui.Rect) {
+					if a.voiceStyle == "flow" {
+						drawFlowOrb(p, r, orbLv, now, recognizing, a.voiceFlowPalette)
+					} else {
+						drawOrb(p, r, orbLv, now, recognizing)
+					}
+				})
 				if a.voiceTranslate {
 					ui.Text(c, voiceLanguageCode(a.voiceTarget)).FontSize(10).TextColor(sk.fg)
 				}
@@ -884,20 +897,24 @@ func (a *App) voiceView(c *ui.Context) {
 			return
 		}
 		gl, gr := a.islandGaps(now)
-		pill := a.voicePill(c, a.voiceStyle, dark, sk, state, bars, orbLv, gl, gr, kind, now, true, a.voiceJoined)
+		pill := a.voicePill(c, a.voiceStyle, dark, sk, state, bars, orbLv, gl, gr, kind, now, true, a.voiceJoined, a.voiceFlowPalette)
 		a.voiceHover = pill.Hovered()
 		pill.Width(a.voicePillW(now)).Opacity(opacity).Scale(size, size).Translate(0, dy)
 	})
 }
 
 // voicePill 画胶囊本体（不含进出场动画）。live=false 是设置页里的预览：按钮只是样子，点了没反应
-func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, state voiceViewState, bars [voiceBars]float32, orbLv, gl, gr, kind float32, now time.Time, live, joined bool) ui.Element {
+func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, state voiceViewState, bars [voiceBars]float32, orbLv, gl, gr, kind float32, now time.Time, live, joined bool, palette string) ui.Element {
 	pill := ui.Row(c).Height(voiceH).AlignItems(ui.Center).Justify(ui.Center).Clip().
 		Background(pillBg).Border(1, pillBorder).Radius(voiceH / 2)
 	if !dark {
 		pill.Background(pillLightBg).Border(1, pillLightBorder)
 	}
 	switch style {
+	case "flow":
+		bg, edge := flowShell(palette, dark)
+		sk = flowSkin(palette, dark)
+		pill.Background(bg).Border(1, edge).Shadow(0, 3, 10, 0, ui.RGBA(13, 79, 106, 0.15))
 	case "orb": // 果冻样式的提示：没有黑底，画一条会抖的渐变果冻
 		pill.Background(clearC).Border(0, clearC).Draw(func(p *ui.Painter, r ui.Rect) { drawJelly(p, r, now) })
 	case "glass":
@@ -969,6 +986,9 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 			}
 			done := live && !a.voiceCopiedAt.IsZero()
 			row.Padding(0, 5, 0, 14).Gap(6).Children(func() {
+				if style == "flow" {
+					ui.Box(c).Size(20, 20).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) { drawFlowOrb(p, r, 0, now, false, palette) })
+				}
 				ui.Text(c, state.text).FontSize(12).TextColor(sk.fg).MaxLines(1).Grow(1).Shrink(1).Tooltip(state.text)
 				if state.retry {
 					if pillRetryButton(c, sk, T("重试"), false).Clicked() && live && a.voiceRetry != nil {
@@ -1255,6 +1275,7 @@ func (a *App) runVoiceDemo(only string) {
 		a.voiceWin.Update(func() {
 			a.voiceWA, a.voiceDPI, a.voiceStyle, a.voiceTone, a.voiceOrbSize = wa, dpi, style, cfg.VoiceTone, voiceOrbW
 			a.voiceJoined = cfg.VoiceJoined
+			a.voiceFlowPalette = cfg.VoiceFlowPalette
 		})
 		playSound(soundStart)
 		var levels []float64
@@ -1312,6 +1333,8 @@ var (
 // skinFor 磨砂玻璃跟着深浅色走；像素和黑胶囊不跟主题
 func skinFor(style string, dark bool) voiceSkin {
 	switch {
+	case style == "flow":
+		return flowSkin("ice", dark)
 	case style == "pixel":
 		return voiceSkin{style, pixCyan, pixEdge, pixEdgeHi, pixCyan, ui.RGBA(190, 252, 255, 1), pixBg}
 	case style == "glass" && !dark:
