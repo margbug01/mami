@@ -1,13 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>mojs-orb</title>
-<!--
-  Mami 网页胶囊示例。Mami 每次更新胶囊都会发 voice:state 事件：
-    { kind: "recording" | "recognizing" | "text" | "hidden",
-      levels: [音量…旧的在前，约 0~0.1], live, text, hint, copy, retry, undo, tone: "dark"|"light"|"auto" }
-  按钮调 mygo.call("VoiceWeb.Click", "cancel" | "stop" | "close" | "copy" | "retry" | "undo")。
-  直接用浏览器打开这个文件会播一段假数据，方便调样式。
--->
+<!-- Mami 网页胶囊示例：mo.js 光环 + 音量冲高时炸开粒子。接口见 skills/mami-capsule-style/SKILL.md。 -->
 <style>
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
     font: 13px/1.3 "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif; user-select: none; }
@@ -38,7 +32,7 @@
   body.recognizing #stop { visibility: hidden; }
 </style>
 <div id="stage"></div>
-<div class="pill" id="pill">
+<div class="pill" id="pill" data-mami-hit>
   <button class="btn" id="cancel" title="取消">✕</button>
   <button class="btn" id="close" title="关闭">✕</button>
   <div class="mid"><div id="orb"></div><div id="text"></div></div>
@@ -47,12 +41,11 @@
   <button class="btn" id="retry" title="重试">↻</button>
   <button class="btn" id="undo" title="撤销">↺</button>
 </div>
+<script src="mami-sim.js"></script>
 <script src="mo.umd.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
-  const host = window.mygo;
-  const click = (action) => host ? host.call("VoiceWeb.Click", action) : console.log("click", action);
-  for (const a of ["cancel", "stop", "close", "copy", "retry", "undo"]) $(a).onclick = () => click(a);
+  for (const a of ["cancel", "stop", "close", "copy", "retry", "undo"]) $(a).onclick = () => mami.action(a);
 
   const stage = $("stage");
   const colors = ["#8fd8ff", "#4d7cff", "#8b4dff", "#ff7ad9"];
@@ -64,7 +57,7 @@
   const bursts = Array.from({ length: 4 }, () => new mojs.Burst({ parent: stage, left: "50%", top: "calc(100% - 30px)",
     radius: { 10: 40 }, count: 7, degree: 360, isShowStart: false,
     children: { shape: "circle", radius: { 3: 0 }, fill: colors, duration: 560, easing: "quad.out" } }));
-  let burstIdx = 0, lastBurst = 0, painted = false, kind = "hidden";
+  let burstIdx = 0, lastBurst = 0, kind = "hidden";
 
   function render(s) {
     const prev = kind;
@@ -81,8 +74,8 @@
     } else {
       pill.style.width = "132px";
     }
-    if (s.kind === "recording" && s.levels && s.levels.length) {
-      const level = Math.min(1, Math.pow(s.levels[s.levels.length - 1] / 0.08, 0.6));
+    if (s.kind === "recording") {
+      const level = s.level;
       $("orb").style.transform = `scale(${0.75 + level * 0.9})`;
       const now = performance.now();
       if (level > 0.72 && now - lastBurst > 220) {
@@ -90,27 +83,7 @@
         bursts[burstIdx++ % bursts.length].tune({ children: { fill: colors } }).replay();
       }
     }
-    if (!painted && s.kind !== "hidden") {
-      painted = true;
-      requestAnimationFrame(() => host && host.call("VoiceWeb.Painted"));
-    }
   }
 
-  if (host) {
-    host.on("voice:state", render);
-  } else { // 浏览器里预览：假装说 4 秒、识别 1 秒、出结果
-    document.body.style.background = "#556";
-    const t0 = performance.now(), levels = [];
-    const tick = () => {
-      const t = (performance.now() - t0) / 1000 % 8;
-      if (t < 4) {
-        levels.push(0.06 * Math.abs(Math.sin(t * 3) + 0.6 * Math.sin(t * 7.3)));
-        render({ kind: "recording", levels, tone: "dark" });
-      } else if (t < 5) render({ kind: "recognizing", tone: "dark" });
-      else if (t < 7.5) render({ kind: "text", text: "帮我把这个接口改成用 Go 写，然后四点开会。", copy: true, tone: "dark" });
-      else render({ kind: "hidden", tone: "dark" });
-      setTimeout(tick, 50);
-    };
-    tick();
-  }
+  mami.onState(render);
 </script>

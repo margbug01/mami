@@ -895,7 +895,12 @@ func (a *App) voiceLook(c *ui.Context, d *Config) {
 		optionSelect(c, &d.VoiceDockTone, []option{{"auto", T("跟随主题")}, {"light", T("浅色")}, {"dark", T("深色")}})
 	})
 	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
-		optionSelect(c, &d.VoiceStyle, []option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}})
+		optionSelect(c, &d.VoiceStyle, append([]option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}}, a.webStyleOptions()...))
+	})
+	settingRow(c, T("自定义样式"), T("网页样式的文件夹放进这里，就会出现在上面的样式里"), func() {
+		if smallLink(c, T("打开样式文件夹")).Clicked() {
+			a.openWebStyles()
+		}
 	})
 	if d.VoiceStyle != "pixel" && d.VoiceStyle != "orb" { // 像素和果冻球的配色是固定的
 		settingRow(c, T("浮窗底色"), T("跟界面主题分开选"), func() {

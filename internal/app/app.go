@@ -71,6 +71,7 @@ type App struct {
 	dockHwnd                                          atomic.Uintptr
 	voiceWin                                          *mygo.Window
 	voiceWeb                                          webVoice // 网页胶囊（voice_web_windows.go），只在界面线程用
+	voiceWebHwnd                                      atomic.Uintptr
 	voiceUI                                           voiceViewState
 	voicePrevious                                     voiceViewState
 	voiceWA                                           RECT // 以下三个只在界面线程读写：胶囊所在显示器的工作区
@@ -211,7 +212,7 @@ func (a *App) createWindows() {
 func (a *App) isOurs(p POINT) bool {
 	h, _, _ := pWindowFromPoint.Call(packPt(p))
 	root, _, _ := pGetAncestor.Call(h, GA_ROOT)
-	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load())
+	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load() || root == a.voiceWebHwnd.Load())
 }
 
 // ---------- 鼠标手势 ----------

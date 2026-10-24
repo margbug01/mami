@@ -3,6 +3,9 @@ package i18n
 // 语音页的新文案与现有各语言词典保持对应。
 func init() {
 	networkEntries := map[string][8]string{
+		"自定义样式": {"Custom styles", "カスタムスタイル", "自訂樣式", "사용자 스타일", "Estilos personalizados", "Styles personnalisés", "Eigene Stile", "Свои стили"},
+		"网页样式的文件夹放进这里，就会出现在上面的样式里": {"Put a web style folder here and it shows up in Style above", "Web スタイルのフォルダーをここに置くと上のスタイルに出ます", "把網頁樣式的資料夾放進這裡，就會出現在上面的樣式裡", "웹 스타일 폴더를 여기에 넣으면 위 스타일 목록에 나타납니다", "Pon aquí la carpeta de un estilo web y aparecerá en Estilo", "Placez ici le dossier d'un style web : il apparaîtra dans Style", "Leg hier den Ordner eines Web-Stils ab, dann erscheint er oben unter Stil", "Положите сюда папку веб-стиля — он появится в списке стилей"},
+		"打开样式文件夹":   {"Open styles folder", "スタイルフォルダーを開く", "打開樣式資料夾", "스타일 폴더 열기", "Abrir carpeta de estilos", "Ouvrir le dossier des styles", "Stilordner öffnen", "Открыть папку стилей"},
 		"响应较慢，可取消":  {"Taking longer · cancel anytime", "応答待ち・キャンセル可", "回應較慢，可取消", "응답 대기 중 · 취소 가능", "Tarda más · puedes cancelar", "Réponse lente · annulation possible", "Dauert länger · Abbruch möglich", "Ответ задерживается · можно отменить"},
 		"识别未完成":     {"Transcription failed", "認識できませんでした", "辨識未完成", "인식 실패", "Transcripción fallida", "Échec de transcription", "Erkennung fehlgeschlagen", "Не удалось распознать"},
 		"润色失败，保留原话": {"Polish failed · original kept", "整文失敗・原文を保持", "潤飾失敗，保留原話", "다듬기 실패 · 원문 유지", "Pulido fallido · original conservado", "Retouche échouée · original conservé", "Glättung fehlgeschlagen · Original behalten", "Правка не удалась · исходный текст сохранён"},

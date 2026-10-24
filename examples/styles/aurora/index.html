@@ -1,0 +1,109 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>aurora</title>
+<!-- Mami 网页胶囊示例：整条极光跟着声音流动，中间一颗玻璃胶囊。只有胶囊接鼠标（data-mami-hit），极光那片点击穿透。 -->
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none;
+    font: 13px/1.3 "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; transition: opacity .25s; }
+  body.hidden canvas { opacity: 0; }
+  .glass { position: absolute; left: 50%; bottom: 14px; height: 42px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px; padding: 0 7px; box-sizing: border-box; border-radius: 21px;
+    color: #f4f7ff; background: rgba(18, 22, 40, .55); backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, .18); box-shadow: 0 8px 30px rgba(20, 0, 60, .35), inset 0 1px 0 rgba(255, 255, 255, .15);
+    transition: opacity .22s, transform .3s cubic-bezier(.2, .9, .3, 1.3), width .3s; }
+  body.light .glass { color: #1b1d2b; background: rgba(255, 255, 255, .62); border-color: rgba(255, 255, 255, .7); }
+  body.hidden .glass { opacity: 0; transform: translateX(-50%) translateY(16px) scale(.9); }
+  .btn { flex: none; width: 28px; height: 28px; border-radius: 14px; border: 0; padding: 0; cursor: pointer; display: none;
+    place-items: center; color: inherit; font-size: 13px; background: rgba(255, 255, 255, .14); }
+  .btn:hover { background: rgba(255, 255, 255, .28); }
+  body.light .btn { background: rgba(0, 0, 0, .07); }
+  #say { min-width: 70px; max-width: 300px; padding: 0 6px; text-align: center; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; letter-spacing: .02em; text-shadow: 0 0 12px rgba(140, 200, 255, .6); }
+  body.recording #cancel, body.recording #stop, body.recognizing #cancel, body.text #close { display: grid; }
+  body.copy #copy, body.retry #retry, body.undo #undo { display: grid; }
+</style>
+<canvas id="sky"></canvas>
+<div class="glass" data-mami-hit>
+  <button class="btn" id="cancel" title="取消">✕</button>
+  <button class="btn" id="close" title="关闭">✕</button>
+  <div id="say"></div>
+  <button class="btn" id="stop" title="完成">✓</button>
+  <button class="btn" id="copy" title="复制">⧉</button>
+  <button class="btn" id="retry" title="重试">↻</button>
+  <button class="btn" id="undo" title="撤销">↺</button>
+</div>
+<script src="mami-sim.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  for (const a of ["cancel", "stop", "close", "copy", "retry", "undo"]) $(a).onclick = () => mami.action(a);
+
+  const cv = $("sky"), g = cv.getContext("2d");
+  let W = 0, H = 0, level = 0, target = 0, kind = "hidden", running = false, hue = 0;
+  function size() { const r = devicePixelRatio || 1; W = innerWidth; H = innerHeight; cv.width = W * r; cv.height = H * r; g.setTransform(r, 0, 0, r, 0, 0); }
+  size(); addEventListener("resize", size);
+
+  const ribbons = [
+    { c: [120, 220, 255], f: 0.011, s: 0.9, p: 0, y: 0.62 },
+    { c: [150, 110, 255], f: 0.008, s: -0.6, p: 2, y: 0.68 },
+    { c: [255, 120, 210], f: 0.014, s: 1.3, p: 4, y: 0.74 },
+    { c: [110, 255, 200], f: 0.006, s: 0.4, p: 1, y: 0.58 },
+  ];
+  function frame(now) {
+    const t = now / 1000;
+    level += (target - level) * 0.18;
+    g.clearRect(0, 0, W, H);
+    g.globalCompositeOperation = "lighter";
+    const calm = kind === "text" ? 0.25 : kind === "recognizing" ? 0.45 : 1;
+    if (kind === "recognizing") hue = (hue + 1.2) % 360;
+    for (const r of ribbons) {
+      const amp = (8 + level * 46) * calm;
+      const base = H * r.y;
+      const grad = g.createLinearGradient(0, base - amp - 30, 0, base + 40);
+      const [cr, cg, cb] = r.c;
+      grad.addColorStop(0, `rgba(${cr},${cg},${cb},0)`);
+      grad.addColorStop(0.55, `rgba(${cr},${cg},${cb},${0.16 + level * 0.3})`);
+      grad.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+      g.fillStyle = grad;
+      g.filter = kind === "recognizing" ? `hue-rotate(${hue}deg)` : "none";
+      g.beginPath();
+      g.moveTo(0, H);
+      for (let x = 0; x <= W; x += 6) {
+        const edge = Math.sin((x / W) * Math.PI); // 两头收细，像一束光
+        const y = base - edge * (amp * Math.sin(x * r.f + t * r.s + r.p) + amp * 0.5 * Math.sin(x * r.f * 2.3 - t * r.s * 1.7) + 20 * edge * (0.4 + level));
+        g.lineTo(x, y);
+      }
+      g.lineTo(W, H);
+      g.closePath();
+      g.fill();
+    }
+    g.filter = "none";
+    // 两头和底边渐隐，别留一刀切的边
+    g.globalCompositeOperation = "destination-in";
+    const fade = g.createLinearGradient(0, 0, W, 0);
+    fade.addColorStop(0, "rgba(0,0,0,0)");
+    fade.addColorStop(0.22, "rgba(0,0,0,1)");
+    fade.addColorStop(0.78, "rgba(0,0,0,1)");
+    fade.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = fade;
+    g.fillRect(0, 0, W, H);
+    const floor = g.createLinearGradient(0, 0, 0, H);
+    floor.addColorStop(0.7, "rgba(0,0,0,1)");
+    floor.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = floor;
+    g.fillRect(0, 0, W, H);
+    if (kind !== "hidden") requestAnimationFrame(frame);
+    else running = false;
+  }
+
+  mami.onState((s) => {
+    const dark = s.tone === "dark" || (s.tone === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+    kind = s.kind;
+    document.body.className = [s.kind, dark ? "" : "light", s.copy && "copy", s.retry && "retry", s.undo && "undo"].filter(Boolean).join(" ");
+    target = s.kind === "recording" ? s.level : 0;
+    $("say").textContent = s.kind === "text" ? (s.hint ? s.text + " · " + s.hint : s.text)
+      : s.kind === "recognizing" ? "识别中…" : s.live || "";
+    $("say").title = s.text || "";
+    if (s.kind !== "hidden" && !running) { running = true; requestAnimationFrame(frame); }
+  });
+</script>
