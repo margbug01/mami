@@ -217,6 +217,7 @@ func (a *App) voiceLoop() {
 				}
 			case voiceCancel:
 				if cancel != nil {
+					log.Printf("voice: cancelled")
 					a.voiceBeep(soundAbort)
 					cancel()
 					cancel = nil
@@ -687,7 +688,12 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		job := &asrJob{done: make(chan struct{})}
 		jobs = append(jobs, job)
 		go func() {
-			job.text, job.err = stream.finish()
+			job.text, job.err = stream.finish(asrFinishWait)
+			if job.err != nil && valid() {
+				// 这条连接卡了或断了：整段录音换新连接再识别一次，还不行才给重试钮
+				log.Printf("voice: stream failed, resending %dms of audio on a new connection: %v", len(pcm)/32, job.err)
+				job.text, job.err = transcribe(ctx, cfg, pcm)
+			}
 			close(job.done)
 		}()
 	} else if stream == nil && !voiceTooQuiet(seg, segPeak) {

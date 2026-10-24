@@ -1,9 +1,15 @@
 package app
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
+
+	"github.com/coder/websocket"
 )
 
 func TestStreamASRRouting(t *testing.T) {
@@ -62,5 +68,48 @@ func TestLiveText(t *testing.T) {
 	}
 	if liveTail("短句") != "短句" {
 		t.Error("liveTail short")
+	}
+}
+
+// 服务端卡住时，流式识别要在时限内报错，而不是等满 asrTimeout
+func TestASRStreamStallTimesOut(t *testing.T) {
+	defer func(s, f time.Duration) { asrStartWait, asrFinishWait = s, f }(asrStartWait, asrFinishWait)
+	asrStartWait, asrFinishWait = 300*time.Millisecond, 300*time.Millisecond
+	for _, tc := range []struct {
+		name, started, want string
+	}{
+		{"no task-started", "", "no response"},
+		{"no task-finished", `{"header":{"event":"task-started"}}`, "no result"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				c, err := websocket.Accept(w, r, nil)
+				if err != nil {
+					return
+				}
+				defer c.CloseNow()
+				if tc.started != "" {
+					c.Write(r.Context(), websocket.MessageText, []byte(tc.started))
+				}
+				for { // 收着音频，就是不回结果
+					if _, _, err := c.Read(r.Context()); err != nil {
+						return
+					}
+				}
+			}))
+			defer srv.Close()
+			cfg := Config{ASRBaseURL: srv.URL + "/compatible-mode/v1", ASRModel: "x-streaming", ASRAPIKey: "k"}
+			s := startASRStream(context.Background(), cfg, nil)
+			defer s.stop()
+			s.feed(make([]byte, 3200))
+			t0 := time.Now()
+			_, err := s.finish(asrFinishWait)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want %q", err, tc.want)
+			}
+			if d := time.Since(t0); d > 2*time.Second {
+				t.Fatalf("took %v", d)
+			}
+		})
 	}
 }

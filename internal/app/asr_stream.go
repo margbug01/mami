@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -32,26 +33,44 @@ func streamURL(base string) (string, error) {
 	return u.String(), nil
 }
 
+// 连接卡住时别干等：握手到 task-started 的时限、停止后等最后结果的时限（正常各约 0.2s / 0.1s）。
+// 超时就报错，实时录音那边会换新连接把整段重识别一次（runVoice）。变量是为了测试能调小
+var (
+	asrStartWait  = 6 * time.Second
+	asrFinishWait = 12 * time.Second
+)
+
 // asrStream 边录边发：录音开始就连上，每块音频直接推过去，停止时 finish 只等最后一句。
 type asrStream struct {
 	audio  chan []byte
 	onText func(string) // 边说边出字：每来一次识别结果（含没说完的半句）就给一次全文；nil=不要
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
+	startT *time.Timer // 收到 task-started 就停
+	phase  string      // 卡在哪一步，只在 run 所在的协程里读写
 	done   chan struct{}
 	text   string
 	err    error
 }
 
 func startASRStream(ctx context.Context, cfg Config, onText func(string)) *asrStream {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancelCause(ctx)
 	// 10 分钟的 100ms 块；连接还没握好时先在这里排队，不丢开头
 	s := &asrStream{audio: make(chan []byte, 6000), onText: onText, cancel: cancel, done: make(chan struct{})}
+	s.startT = time.AfterFunc(asrStartWait, func() { cancel(fmt.Errorf("ASR: no response within %v", asrStartWait)) })
+	begun := time.Now()
 	go func() {
 		defer close(s.done)
-		defer cancel()
+		defer cancel(nil)
+		defer s.startT.Stop()
 		s.text, s.err = s.run(ctx, cfg)
+		if s.err != nil && ctx.Err() != nil {
+			s.err = context.Cause(ctx) // 超时、发送失败：报真正的原因，而不是笼统的 context canceled
+		}
 		if s.err != nil && cfg.ASRAPIKey != "" {
 			s.err = errors.New(strings.ReplaceAll(s.err.Error(), cfg.ASRAPIKey, "[redacted]"))
+		}
+		if s.err != nil && !errors.Is(s.err, context.Canceled) {
+			log.Printf("asr stream: %v (stuck at %s, %dms in)", s.err, s.phase, time.Since(begun).Milliseconds())
 		}
 	}()
 	return s
@@ -64,16 +83,16 @@ func (s *asrStream) feed(data []byte) {
 	}
 }
 
-// finish 告诉服务端说完了，等识别结果
-func (s *asrStream) finish() (string, error) {
+// finish 告诉服务端说完了，最多等 wait 拿识别结果
+func (s *asrStream) finish(wait time.Duration) (string, error) {
 	close(s.audio)
-	t := time.AfterFunc(asrTimeout, s.cancel)
+	t := time.AfterFunc(wait, func() { s.cancel(fmt.Errorf("ASR: no result %v after stop", wait)) })
 	defer t.Stop()
 	<-s.done
 	return s.text, s.err
 }
 
-func (s *asrStream) stop() { s.cancel() }
+func (s *asrStream) stop() { s.cancel(nil) }
 
 type dsEvent struct {
 	Header struct {
@@ -98,6 +117,7 @@ func (s *asrStream) run(ctx context.Context, cfg Config) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	s.phase = "connect"
 	conn, resp, err := websocket.Dial(ctx, addr, &websocket.DialOptions{
 		HTTPClient: directClient(0),
 		HTTPHeader: http.Header{"Authorization": {"bearer " + cfg.ASRAPIKey}},
@@ -134,6 +154,7 @@ func (s *asrStream) run(ctx context.Context, cfg Config) (string, error) {
 	}}); err != nil {
 		return "", err
 	}
+	s.phase = "task-started"
 	sentences, partial := map[int]string{}, map[int]string{}
 	started := false
 	for {
@@ -149,15 +170,21 @@ func (s *asrStream) run(ctx context.Context, cfg Config) (string, error) {
 		case "task-started":
 			if !started {
 				started = true
+				s.startT.Stop()
+				s.phase = "result"
 				go func() {
 					for {
 						select {
 						case chunk, ok := <-s.audio:
 							if !ok {
-								send(map[string]any{"header": header("finish-task"), "payload": map[string]any{"input": map[string]any{}}})
+								if err := send(map[string]any{"header": header("finish-task"), "payload": map[string]any{"input": map[string]any{}}}); err != nil {
+									s.cancel(fmt.Errorf("ASR: send finish: %w", err))
+								}
 								return
 							}
-							if conn.Write(ctx, websocket.MessageBinary, chunk) != nil {
+							// 发不出去就别让读那边干等到超时
+							if err := conn.Write(ctx, websocket.MessageBinary, chunk); err != nil {
+								s.cancel(fmt.Errorf("ASR: send audio: %w", err))
 								return
 							}
 						case <-ctx.Done():
@@ -226,5 +253,5 @@ func transcribeStream(ctx context.Context, cfg Config, pcm []byte) (string, erro
 	for i := 0; i < len(pcm); i += 3200 {
 		s.feed(pcm[i:min(i+3200, len(pcm))])
 	}
-	return s.finish()
+	return s.finish(asrTimeout) // 整段一次推完、可能很长，照旧等足
 }
