@@ -70,6 +70,7 @@ type settingsState struct {
 }
 
 func (a *App) openSettings() {
+	markBusy()
 	cfg, _ := a.config()
 	reset := func() {
 		keyCapturing.Store(nil)
@@ -81,8 +82,9 @@ func (a *App) openSettings() {
 			page:        pageTrans,
 		}
 	}
-	if a.setWin == nil {
+	if a.setWin == nil || a.setGone {
 		reset()
+		a.setGone = false
 		a.setWin = mygo.NewWindow(mygo.WindowOptions{
 			Title:           "Mami · Settings",
 			Width:           settingsW,
@@ -96,14 +98,17 @@ func (a *App) openSettings() {
 		})
 		a.setWin.SetIcon(iconPNG)
 		a.setHwnd.Store(a.setWin.NativeHandle())
+		// 关掉就真关：窗口连同画面、预览用的脚本和纹理都放掉（藏起来的话这些一直占着）。
+		// a.setWin 不置空：后台的回调还会往它 Update，关掉的窗口照样跑 fn、只是不画；下次打开重新建一个
 		a.setWin.OnClose(func(e *mygo.CloseEvent) {
 			if !a.quitting {
-				e.PreventDefault()
 				a.stopCapture()
 				a.guideIdle() // 引导里关窗口也算跳过：别留着麦克风和快捷键接管
-				a.setWin.Hide()
 				saved, _ := a.config()
 				i18n.Set(i18n.Resolve(saved.Language, sysLocale)) // 没保存的语言预览收回
+				a.setGone = true
+				a.setHwnd.Store(0)
+				a.settingsClosed(saved)
 			}
 		})
 	} else if !a.setWin.IsVisible() {
@@ -111,6 +116,13 @@ func (a *App) openSettings() {
 	}
 	a.setWin.Show()
 	a.setWin.Focus()
+}
+
+// closeSettings 关设置窗口。关掉会销毁窗口，按钮是在这个窗口自己画的那一帧里点的，所以排到这一帧画完再关
+func (a *App) closeSettings() {
+	if w := a.setWin; w != nil { // 测试里没有真窗口
+		w.Update(w.Close)
+	}
 }
 
 func (a *App) settingsView(c *ui.Context) {
@@ -1304,7 +1316,7 @@ func (a *App) titleBar(c *ui.Context) {
 			glyph  string
 			danger bool
 			act    func()
-		}{{"–", false, a.setWin.Minimize}, {"✕", true, a.setWin.Close}} {
+		}{{"–", false, a.setWin.Minimize}, {"✕", true, a.closeSettings}} {
 			btn := ui.Row(c).Width(46).Height(36).Justify(ui.Center).AlignItems(ui.Center).Cursor(ui.CursorPointer)
 			if btn.Hovered() {
 				if b.danger {

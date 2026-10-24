@@ -257,6 +257,7 @@ func (a *App) voiceBeep(wav []byte) {
 }
 
 func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
+	markBusy()
 	a.voiceWin.Update(func() {
 		if voiceEpoch.Load() != id {
 			return

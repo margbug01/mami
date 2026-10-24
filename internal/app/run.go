@@ -134,6 +134,7 @@ func Run() {
 			return
 		}
 		a.createTray()
+		go a.memoryLoop()
 		probs := a.registerHotkeys(cfg)
 		if len(probs) > 0 {
 			log.Println("hotkeys:", probs)

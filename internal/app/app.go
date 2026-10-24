@@ -102,6 +102,7 @@ type App struct {
 	voiceGapL, voiceGapR                              float32 // 三岛样式：上次切换时两道缝的宽度，从这里过渡到新状态
 	voiceHideGen                                      int
 	btnWin, popWin, setWin                            *mygo.Window
+	setGone                                           bool // 设置窗口关过、已经销毁，下次打开重新建（界面线程）
 	anchorWin                                         *mygo.Window
 	btnHwnd, popHwnd                                  atomic.Uintptr
 	voiceHwnd                                         atomic.Uintptr
@@ -641,6 +642,7 @@ func (a *App) showPopup(st popupState) {
 		a.popBusy.Store(st.status == statusLoading)
 		a.popVisible.Store(true)
 		a.popWin.ShowInactive()
+		markBusy()
 	})
 }
 
