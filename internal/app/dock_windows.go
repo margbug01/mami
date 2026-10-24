@@ -361,7 +361,16 @@ func (a *App) dockView(c *ui.Context) {
 	a.dockContent(c, cfg, a.dock.expanded || a.dock.reveal > 0, a.dock.more, toneDark(cfg.VoiceDockTone, a.themed(c).Dark), a.dock.reveal)
 }
 
+// dockContent 贴边小条本体；设置页的外观预览用 renderDockContent(…, interactive=false) 画一个不能点的
 func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, reveal ...float32) {
+	a.renderDockContent(c, cfg, expanded, more, dark, true, reveal...)
+}
+
+func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark, interactive bool, reveal ...float32) {
+	pointer, grab := ui.CursorDefault, ui.CursorDefault
+	if interactive {
+		pointer, grab = ui.CursorPointer, ui.CursorGrab
+	}
 	t := ui.LightTheme()
 	if dark {
 		t = ui.DarkTheme()
@@ -398,7 +407,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 		if voiceRecording.Load() != 0 {
 			mic = accent
 		}
-		tab := layout(c).Fill().AlignItems(ui.Center).Justify(ui.Center).Gap(5).Radius(10).Clip().Draw(background).Border(1, border).Cursor(ui.CursorGrab)
+		tab := layout(c).Fill().AlignItems(ui.Center).Justify(ui.Center).Gap(5).Radius(10).Clip().Draw(background).Border(1, border).Cursor(grab)
 		tab.Children(func() {
 			// 话筒：圆角竖条 + 托 + 支杆；录音时用主题强调色并呼吸
 			ui.Box(c).Size(14, 16).Opacity(max(opacity, 0.85)).Draw(func(p *ui.Painter, r ui.Rect) {
@@ -434,23 +443,23 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 		control.Scale(size, size)
 	}
 	content := func() {
-		ui.Box(c).FillWidth().Height(8).Shrink(0).Cursor(ui.CursorGrab).Draw(func(p *ui.Painter, r ui.Rect) {
+		ui.Box(c).FillWidth().Height(8).Shrink(0).Cursor(grab).Draw(func(p *ui.Painter, r ui.Rect) {
 			p.Line(r.X+r.W/2-10, r.Y+r.H/2, r.X+r.W/2+10, r.Y+r.H/2, 2, border)
 		})
 		button := func(label string, action func()) {
-			control := ui.ButtonBase(c).Label(label).Height(30).FillWidth().Padding(0, 6).Radius(6).AlignItems(ui.Center).Justify(ui.Start).Cursor(ui.CursorPointer)
-			if control.Hovered() {
+			control := ui.ButtonBase(c).Label(label).Height(30).FillWidth().Padding(0, 6).Radius(6).AlignItems(ui.Center).Justify(ui.Start).Cursor(pointer)
+			if interactive && control.Hovered() {
 				control.Background(active)
 			}
 			feedback(control)
 			control.Children(func() { ui.Text(c, label).FontSize(11).TextColor(fg).SingleLine() })
-			if control.Clicked() {
+			if interactive && control.Clicked() {
 				action()
 			}
 		}
 		toggle := func(label string, value bool, change func(*Config)) {
-			control := ui.ButtonBase(c).Label(label).FillWidth().Height(30).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
-			if control.Hovered() {
+			control := ui.ButtonBase(c).Label(label).FillWidth().Height(30).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(pointer)
+			if interactive && control.Hovered() {
 				control.Background(active)
 			}
 			feedback(control)
@@ -469,7 +478,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 					dot.Translate(dot.Animate("dock-toggle", offset, 140*time.Millisecond), 0)
 				})
 			})
-			if control.Clicked() {
+			if interactive && control.Clicked() {
 				a.changeDockConfig(change)
 			}
 		}
@@ -480,8 +489,8 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 				ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
 					for _, l := range targetLangs {
 						value, picked := l.value, l.value == cfg.VoiceTarget
-						item := ui.ButtonBase(c).Label(l.label).FillWidth().Height(28).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
-						if item.Hovered() || picked {
+						item := ui.ButtonBase(c).Label(l.label).FillWidth().Height(28).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(pointer)
+						if interactive && item.Hovered() || picked {
 							item.Background(active)
 						}
 						feedback(item)
@@ -491,7 +500,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 								ui.Text(c, "✓").FontSize(11).TextColor(accent)
 							}
 						})
-						if item.Clicked() {
+						if interactive && item.Clicked() {
 							a.changeDockConfig(func(v *Config) { v.VoiceTarget = value })
 							a.dock.langs = false
 						}
@@ -518,8 +527,8 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 			})
 			// 点一下换下一个，右边显示当前选的名字（和设置页同一套叫法）
 			cycle := func(label, value string, change func(*Config)) {
-				control := ui.ButtonBase(c).Label(label).FillWidth().Height(30).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
-				if control.Hovered() {
+				control := ui.ButtonBase(c).Label(label).FillWidth().Height(30).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(pointer)
+				if interactive && control.Hovered() {
 					control.Background(active)
 				}
 				feedback(control)
@@ -527,7 +536,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 					ui.Text(c, label).FontSize(11).TextColor(fg).Grow(1).SingleLine()
 					ui.Text(c, value+"  ›").FontSize(11).TextColor(muted).SingleLine()
 				})
-				if control.Clicked() {
+				if interactive && control.Clicked() {
 					a.changeDockConfig(change)
 				}
 			}
@@ -540,8 +549,8 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 			button(T("完整设置…"), a.openSettings)
 			return
 		}
-		mic := ui.ButtonBase(c).FillWidth().Height(40).Padding(6).Gap(6).Radius(20).Background(card).Border(1, paneBorder(t)).AlignItems(ui.Center).Cursor(ui.CursorPointer)
-		if mic.Hovered() {
+		mic := ui.ButtonBase(c).FillWidth().Height(40).Padding(6).Gap(6).Radius(20).Background(card).Border(1, paneBorder(t)).AlignItems(ui.Center).Cursor(pointer)
+		if interactive && mic.Hovered() {
 			mic.Background(active)
 		}
 		feedback(mic)
@@ -554,7 +563,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 			ui.Text(c, label).FontSize(11).TextColor(fg).Grow(1).SingleLine()
 			ui.Text(c, cfg.VoiceHotkey).FontSize(9).TextColor(muted).SingleLine()
 		})
-		if mic.Clicked() {
+		if interactive && mic.Clicked() {
 			go voiceToggleSource(true)
 		}
 		ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
@@ -566,9 +575,9 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 					targetName = langLabel(target.value, target.label)
 				}
 			}
-			target := ui.ButtonBase(c).Label(T("翻译成")).FillWidth().Height(30).Padding(0, 6).Gap(6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+			target := ui.ButtonBase(c).Label(T("翻译成")).FillWidth().Height(30).Padding(0, 6).Gap(6).AlignItems(ui.Center).Cursor(pointer)
 			target.Radius(6)
-			if target.Hovered() {
+			if interactive && target.Hovered() {
 				target.Background(active)
 			}
 			feedback(target)
@@ -577,7 +586,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 				ui.Text(c, targetName).FontSize(10).TextColor(muted).SingleLine().Grow(1).Shrink(1)
 				ui.Text(c, "›").FontSize(12).TextColor(muted)
 			})
-			if target.Clicked() {
+			if interactive && target.Clicked() {
 				a.dock.langs = true
 			}
 		})
@@ -585,17 +594,17 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 			styles := []string{"light", "standard", "structured", "prompt"}
 			labels := []string{T("轻"), T("标准"), T("结构化"), T("提示词")}
 			for index, style := range styles {
-				segment := ui.ButtonBase(c).Grow(1).Height(22).Radius(6).AlignItems(ui.Center).Justify(ui.Center).Cursor(ui.CursorPointer)
+				segment := ui.ButtonBase(c).Grow(1).Height(22).Radius(6).AlignItems(ui.Center).Justify(ui.Center).Cursor(pointer)
 				text := fg
 				if cfg.PolishStyle == style {
 					segment.Background(accent)
 					text = t.AccentText
-				} else if segment.Hovered() {
+				} else if interactive && segment.Hovered() {
 					segment.Background(active)
 				}
 				feedback(segment)
 				segment.Children(func() { ui.Text(c, labels[index]).FontSize(10).TextColor(text).SingleLine() })
-				if segment.Clicked() {
+				if interactive && segment.Clicked() {
 					a.changeDockConfig(func(v *Config) { v.PolishStyle = style })
 				}
 			}

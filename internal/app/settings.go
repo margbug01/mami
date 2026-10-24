@@ -147,6 +147,7 @@ func (a *App) settingsView(c *ui.Context) {
 				ui.Box(c).Height(12)
 				a.sideItem(c, pageHist, iconHist, T("记录"))
 				a.sideItem(c, pageGen, iconGen, T("通用"))
+				a.sideItem(c, pageCustom, iconCustom, T("自定义"))
 			}).Grow(1)
 		})
 		c.SetTheme(base)
@@ -172,6 +173,8 @@ func (a *App) settingsView(c *ui.Context) {
 						a.pageGeneral(c, d)
 					case pageHist:
 						a.pageHistory(c, d)
+					case pageCustom:
+						a.pageCustom(c, d)
 					default:
 						a.pageTranslate(c, d)
 					}
@@ -510,7 +513,7 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 	pageTabs(c, &a.set.voiceTab, T("通用"), T("外观"), T("接口"))
 	switch a.set.voiceTab {
 	case 1:
-		settingGroup(c, "", func() { a.voiceLook(c, d) })
+		a.voiceLook(c, d)
 		return
 	case 2:
 		settingGroup(c, "", func() { a.apiASR(c, d) })
@@ -888,51 +891,61 @@ func (a *App) exportWords() {
 	a.wordsStatus(T("已导出"), false)
 }
 
-// voiceLook 「语音识别」页的外观 tab：录音时的样式
+// voiceLook 「语音识别」页的外观 tab：贴边小条一组、录音浮窗一组，各自带预览
 func (a *App) voiceLook(c *ui.Context, d *Config) {
-	switchRow(c, T("贴边小条"), T("悬停展开，拖动可贴到屏幕任一边缘"), &d.VoiceDock)
-	settingRow(c, T("面板底色"), T("跟界面主题分开选"), func() {
-		optionSelect(c, &d.VoiceDockTone, []option{{"auto", T("跟随主题")}, {"light", T("浅色")}, {"dark", T("深色")}})
-	})
-	settingRow(c, T("样式"), T("录音时屏幕底部的样子"), func() {
-		optionSelect(c, &d.VoiceStyle, append([]option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}}, a.webStyleOptions()...))
-	})
-	settingRow(c, T("自定义样式"), T("网页样式的文件夹放进这里，就会出现在上面的样式里"), func() {
-		if smallLink(c, T("打开样式文件夹")).Clicked() {
-			a.openWebStyles()
+	settingGroup(c, "", func() {
+		switchRow(c, T("贴边小条"), T("悬停展开，拖动可贴到屏幕任一边缘"), &d.VoiceDock)
+		if d.VoiceDock {
+			settingRow(c, T("展开面板外观"), "", func() { voiceToneSelector(c, &d.VoiceDockTone) })
+			dockAppearancePreview(c, *d)
 		}
 	})
-	if d.VoiceStyle != "pixel" && d.VoiceStyle != "orb" { // 像素和果冻球的配色是固定的
-		settingRow(c, T("浮窗底色"), T("跟界面主题分开选"), func() {
-			optionSelect(c, &d.VoiceTone, []option{{"dark", T("深色")}, {"light", T("浅色")}, {"auto", T("跟随主题")}})
+	ui.Box(c).Height(8)
+	settingGroup(c, "", func() {
+		ui.Text(c, T("录音浮窗")).FontSize(15).Padding(14, 0, 2, 0)
+		settingRow(c, T("浮窗样式"), "", func() {
+			optionSelect(c, &d.VoiceStyle, append([]option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}}, a.webStyleOptions()...))
 		})
-	}
-	if d.VoiceStyle == "islands" || d.VoiceStyle == "leds" {
-		switchRow(c, T("连体"), "", &d.VoiceJoined)
-	}
-	if d.VoiceStyle == "flow" {
-		settingRow(c, T("流光配色"), "", func() {
-			options := make([]option, 0, len(flowPalettes))
-			for _, palette := range flowPalettes {
-				options = append(options, option{palette.id, T(palette.name)})
+		if strings.HasPrefix(d.VoiceStyle, "web:") { // 网页样式自己画，这里不预览
+			t := c.Theme()
+			ui.Row(c).Gap(12).Padding(4, 0, 12, 0).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, T("自定义的网页样式，效果在说话时看；在「自定义」里管理和新建。")).FontSize(12).TextColor(t.TextMuted).Grow(1).Shrink(1)
+				if smallLink(c, T("去自定义")).Clicked() {
+					a.set.page = pageCustom
+				}
+			})
+			settingRow(c, T("浮窗外观"), T("传给网页，样式自己决定怎么用"), func() { voiceToneSelector(c, &d.VoiceTone) })
+			return
+		}
+		a.voicePreview(c, d)
+		if d.VoiceStyle == "flow" {
+			ui.Text(c, T("球体配色")).FontSize(13).Padding(0, 0, 10, 0)
+			flowPaletteChoices(c, &d.VoiceFlowPalette)
+		}
+		if d.VoiceStyle != "pixel" && d.VoiceStyle != "orb" { // 像素和果冻球的配色是固定的
+			title := T("浮窗外观")
+			if d.VoiceStyle == "flow" {
+				title = T("结果条外观")
 			}
-			optionSelect(c, &d.VoiceFlowPalette, options)
-		})
-	}
-	a.voicePreview(c, d)
-	if d.VoiceStyle == "orb" {
-		settingRow(c, T("果冻球大小"), T("右边是实际大小的预览"), func() {
-			ui.Row(c).Width(controlW).Gap(12).AlignItems(ui.Center).Children(func() {
-				ui.Slider(c, &d.VoiceOrbSize, 40, 96).Grow(1).Label(T("果冻球大小"))
-				size := float32(math.Round(d.VoiceOrbSize))
-				ui.Box(c).Size(96, 96).Draw(func(p *ui.Painter, r ui.Rect) {
-					now := time.Now()
-					level := float32(0.35 + 0.25*math.Sin(float64(now.UnixMilli()%600000)/1000*2.2))
-					drawOrb(p, ui.Rect{X: r.X + (r.W-size)/2, Y: r.Y + (r.H-size)/2, W: size, H: size}, level, now, false)
+			settingRow(c, title, "", func() { voiceToneSelector(c, &d.VoiceTone) })
+		}
+		if d.VoiceStyle == "islands" || d.VoiceStyle == "leds" {
+			switchRow(c, T("连体"), "", &d.VoiceJoined)
+		}
+		if d.VoiceStyle == "orb" {
+			settingRow(c, T("果冻球大小"), T("右边是实际大小的预览"), func() {
+				ui.Row(c).Width(controlW).Gap(12).AlignItems(ui.Center).Children(func() {
+					ui.Slider(c, &d.VoiceOrbSize, 40, 96).Grow(1).Label(T("果冻球大小"))
+					size := float32(math.Round(d.VoiceOrbSize))
+					ui.Box(c).Size(96, 96).Draw(func(p *ui.Painter, r ui.Rect) {
+						now := time.Now()
+						level := float32(0.35 + 0.25*math.Sin(float64(now.UnixMilli()%600000)/1000*2.2))
+						drawOrb(p, ui.Rect{X: r.X + (r.W-size)/2, Y: r.Y + (r.H-size)/2, W: size, H: size}, level, now, false)
+					})
 				})
 			})
-		})
-	}
+		}
+	})
 }
 
 // voicePreview 外观 tab 的预览：在一块假桌面上把三种状态并排画出来，选了就能看到，不用保存。
@@ -954,15 +967,15 @@ func (a *App) voicePreview(c *ui.Context, d *Config) {
 	dark = toneDark(d.VoiceTone, themeDark) // 假桌面跟主题，浮窗按「浮窗底色」
 	style, sk := d.VoiceStyle, skinFor(d.VoiceStyle, dark)
 	states := []voiceViewState{{recording: true}, {recognizing: true}, {text: T("明天三点开会"), copy: true}}
-	captions := []string{T("录音中"), T("识别中…"), T("没地方贴时")}
+	captions := []string{T("录音中"), T("识别中…"), T("结果待复制")}
 	h := float32(voiceOrbW) // 图形区固定高度：切到果冻球时预览框不跳
 	if style == "orb" {
 		h = max(h, float32(math.Round(d.VoiceOrbSize)))
 	}
 	c.After(voiceFrame)
-	ui.Row(c).Padding(16, 12).Margin(4, 0, 12, 0).Gap(20).Justify(ui.Center).AlignItems(ui.End).Background(desk).Radius(c.Theme().Radius).Children(func() {
+	ui.Row(c).FillWidth().Wrap().Padding(16, 12).Margin(4, 0, 12, 0).Gap(20).Justify(ui.Center).AlignItems(ui.End).Background(desk).Radius(c.Theme().Radius).Children(func() {
 		for i, st := range states {
-			ui.Column(c).Gap(4).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Shrink(0).Label(captions[i]).Gap(4).AlignItems(ui.Center).Children(func() {
 				ui.Box(c).Height(h).Center().Children(func() { a.previewShape(c, d, style, dark, sk, st, bars, now) })
 				ui.Text(c, captions[i]).FontSize(11).TextColor(label)
 			})
@@ -981,7 +994,11 @@ func (a *App) previewShape(c *ui.Context, d *Config, style string, dark bool, sk
 		ui.Box(c).Size(sz, sz).Draw(func(p *ui.Painter, r ui.Rect) { drawOrb(p, r, bars[voiceBars-1], now, rec) })
 	} else {
 		gl, gr := islandGapsFor(st)
-		a.voicePill(c, style, dark, sk, st, bars, bars[voiceBars-1], gl, gr, 1, now, false, d.VoiceJoined, d.VoiceFlowPalette).Width(float32(min(voiceWidth(st), voiceRecW))) // 预览框放不下全宽的提示，句子长了就截断
+		width := float32(min(voiceWidth(st), voiceRecW))
+		if style == "flow" && voiceKind(st) == 3 {
+			width = 184
+		}
+		a.voicePill(c, style, dark, sk, st, bars, bars[voiceBars-1], gl, gr, 1, now, false, d.VoiceJoined, d.VoiceFlowPalette).Width(width) // 预览框放不下全宽的提示，句子长了就截断
 	}
 }
 

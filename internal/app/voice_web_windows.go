@@ -101,8 +101,14 @@ type webVoice struct {
 	hitSet  bool // 页面报过可点区域；没报过就整窗都接鼠标
 	through bool // 眼下鼠标穿透
 
-	optAt   time.Time // 设置页样式列表的缓存
-	options []option
+	listAt time.Time // 设置页样式列表的缓存
+	list   []webStyleEntry
+}
+
+// webStyleEntry styles 文件夹里一个能用的样式
+type webStyleEntry struct {
+	folder string
+	man    webStyleManifest
 }
 
 func (a *App) webVoiceStylesDir() string { return filepath.Join(filepath.Dir(a.cfgPath), "styles") }
@@ -352,24 +358,33 @@ func (a *App) watchWebStyle(win *mygo.Window, dir string) {
 	}
 }
 
-// webStyleOptions 设置页样式下拉里的网页样式，2 秒内读一次目录（界面线程）
-func (a *App) webStyleOptions() []option {
+// webStyles styles 文件夹里能用的样式，按名字排，2 秒内只读一次目录（界面线程）
+func (a *App) webStyles() []webStyleEntry {
 	w := &a.voiceWeb
-	if time.Since(w.optAt) < 2*time.Second {
-		return w.options
+	if time.Since(w.listAt) < 2*time.Second {
+		return w.list
 	}
-	w.optAt, w.options = time.Now(), nil
+	w.listAt, w.list = time.Now(), nil
 	entries, _ := os.ReadDir(a.webVoiceStylesDir())
 	for _, e := range entries {
 		if !e.IsDir() || strings.ContainsAny(e.Name(), ".:") {
 			continue
 		}
 		if m, err := loadWebStyle(filepath.Join(a.webVoiceStylesDir(), e.Name())); err == nil {
-			w.options = append(w.options, option{"web:" + e.Name(), m.Name})
+			w.list = append(w.list, webStyleEntry{e.Name(), m})
 		}
 	}
-	sort.Slice(w.options, func(i, j int) bool { return w.options[i].label < w.options[j].label })
-	return w.options
+	sort.Slice(w.list, func(i, j int) bool { return w.list[i].man.Name < w.list[j].man.Name })
+	return w.list
+}
+
+// webStyleOptions 样式下拉里的网页样式
+func (a *App) webStyleOptions() []option {
+	var opts []option
+	for _, e := range a.webStyles() {
+		opts = append(opts, option{"web:" + e.folder, e.man.Name})
+	}
+	return opts
 }
 
 func (a *App) openWebStyles() {
