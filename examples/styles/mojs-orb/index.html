@@ -1,0 +1,116 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>mojs-orb</title>
+<!--
+  Mami 网页胶囊示例。Mami 每次更新胶囊都会发 voice:state 事件：
+    { kind: "recording" | "recognizing" | "text" | "hidden",
+      levels: [音量…旧的在前，约 0~0.1], live, text, hint, copy, retry, undo, tone: "dark"|"light"|"auto" }
+  按钮调 mygo.call("VoiceWeb.Click", "cancel" | "stop" | "close" | "copy" | "retry" | "undo")。
+  直接用浏览器打开这个文件会播一段假数据，方便调样式。
+-->
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font: 13px/1.3 "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif; user-select: none; }
+  #stage { position: absolute; inset: 0; }
+  .pill { position: absolute; left: 50%; bottom: 10px; height: 40px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 0 6px; border-radius: 20px; box-sizing: border-box;
+    background: rgba(22, 22, 28, .92); color: #f2f2f5; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+    transition: width .28s cubic-bezier(.2, .9, .3, 1.2), opacity .2s, transform .25s; width: 132px; }
+  body.light .pill { background: rgba(255, 255, 255, .96); color: #1d1d22; box-shadow: 0 6px 20px rgba(0, 0, 0, .12); }
+  body.hidden .pill { opacity: 0; transform: translateX(-50%) translateY(14px) scale(.9); }
+  .btn { flex: none; width: 28px; height: 28px; border-radius: 14px; border: 0; padding: 0; cursor: pointer;
+    background: rgba(255, 255, 255, .12); color: inherit; font-size: 13px; display: grid; place-items: center; }
+  body.light .btn { background: rgba(0, 0, 0, .07); }
+  .btn:hover { background: rgba(255, 255, 255, .22); }
+  body.light .btn:hover { background: rgba(0, 0, 0, .14); }
+  .mid { flex: 1; min-width: 0; height: 100%; position: relative; display: grid; place-items: center; }
+  #orb { width: 22px; height: 22px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff 0, #8fd8ff 25%, #4d7cff 60%, #8b4dff 100%);
+    box-shadow: 0 0 14px #5aa8ff; transition: transform .07s linear; }
+  body.recognizing #orb { animation: spin 1s linear infinite; transform: scale(.8) !important;
+    background: conic-gradient(#8fd8ff, #4d7cff, #8b4dff, #8fd8ff); }
+  @keyframes spin { to { rotate: 360deg; } }
+  #text { display: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+  body.text #orb, body.text #cancel, body.text #stop { display: none; }
+  body.text #text { display: block; }
+  #copy, #retry, #undo, #close { display: none; }
+  body.text.copy #copy, body.text.retry #retry, body.text.undo #undo, body.text #close { display: grid; }
+  body.recognizing #stop { visibility: hidden; }
+</style>
+<div id="stage"></div>
+<div class="pill" id="pill">
+  <button class="btn" id="cancel" title="取消">✕</button>
+  <button class="btn" id="close" title="关闭">✕</button>
+  <div class="mid"><div id="orb"></div><div id="text"></div></div>
+  <button class="btn" id="stop" title="完成">✓</button>
+  <button class="btn" id="copy" title="复制">⧉</button>
+  <button class="btn" id="retry" title="重试">↻</button>
+  <button class="btn" id="undo" title="撤销">↺</button>
+</div>
+<script src="mo.umd.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const host = window.mygo;
+  const click = (action) => host ? host.call("VoiceWeb.Click", action) : console.log("click", action);
+  for (const a of ["cancel", "stop", "close", "copy", "retry", "undo"]) $(a).onclick = () => click(a);
+
+  const stage = $("stage");
+  const colors = ["#8fd8ff", "#4d7cff", "#8b4dff", "#ff7ad9"];
+  // 出场：一圈光环散开
+  const ring = new mojs.Shape({ parent: stage, shape: "circle", left: "50%", top: "calc(100% - 30px)",
+    radius: { 14: 46 }, fill: "none", stroke: { "#8fd8ff": "#8b4dff" }, strokeWidth: { 6: 0 },
+    opacity: { 1: 0 }, duration: 520, easing: "cubic.out", isShowStart: false });
+  // 说话冲高：炸开一圈粒子，轮流用几个，前一个还没放完也不打断
+  const bursts = Array.from({ length: 4 }, () => new mojs.Burst({ parent: stage, left: "50%", top: "calc(100% - 30px)",
+    radius: { 10: 40 }, count: 7, degree: 360, isShowStart: false,
+    children: { shape: "circle", radius: { 3: 0 }, fill: colors, duration: 560, easing: "quad.out" } }));
+  let burstIdx = 0, lastBurst = 0, painted = false, kind = "hidden";
+
+  function render(s) {
+    const prev = kind;
+    kind = s.kind;
+    const dark = s.tone === "dark" || (s.tone !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+    document.body.className = [s.kind, dark ? "" : "light", s.copy ? "copy" : "", s.retry ? "retry" : "", s.undo ? "undo" : ""].join(" ");
+    if (prev === "hidden" && s.kind !== "hidden") ring.replay();
+    const pill = $("pill");
+    if (s.kind === "text") {
+      $("text").textContent = s.hint || s.text || "";
+      $("text").title = s.text || "";
+      const buttons = 1 + !!s.copy + !!s.retry + !!s.undo;
+      pill.style.width = Math.min(248, 24 + buttons * 36 + Math.min(150, (s.hint || s.text || "").length * 13)) + "px";
+    } else {
+      pill.style.width = "132px";
+    }
+    if (s.kind === "recording" && s.levels && s.levels.length) {
+      const level = Math.min(1, Math.pow(s.levels[s.levels.length - 1] / 0.08, 0.6));
+      $("orb").style.transform = `scale(${0.75 + level * 0.9})`;
+      const now = performance.now();
+      if (level > 0.72 && now - lastBurst > 220) {
+        lastBurst = now;
+        bursts[burstIdx++ % bursts.length].tune({ children: { fill: colors } }).replay();
+      }
+    }
+    if (!painted && s.kind !== "hidden") {
+      painted = true;
+      requestAnimationFrame(() => host && host.call("VoiceWeb.Painted"));
+    }
+  }
+
+  if (host) {
+    host.on("voice:state", render);
+  } else { // 浏览器里预览：假装说 4 秒、识别 1 秒、出结果
+    document.body.style.background = "#556";
+    const t0 = performance.now(), levels = [];
+    const tick = () => {
+      const t = (performance.now() - t0) / 1000 % 8;
+      if (t < 4) {
+        levels.push(0.06 * Math.abs(Math.sin(t * 3) + 0.6 * Math.sin(t * 7.3)));
+        render({ kind: "recording", levels, tone: "dark" });
+      } else if (t < 5) render({ kind: "recognizing", tone: "dark" });
+      else if (t < 7.5) render({ kind: "text", text: "帮我把这个接口改成用 Go 写，然后四点开会。", copy: true, tone: "dark" });
+      else render({ kind: "hidden", tone: "dark" });
+      setTimeout(tick, 50);
+    };
+    tick();
+  }
+</script>

@@ -157,8 +157,10 @@ func (c *Config) normalize() {
 	if c.VoiceStyle == "joined" {
 		c.VoiceStyle, c.VoiceJoined = "leds", true
 	}
-	switch c.VoiceStyle {
-	case "bars", "orb", "flow", "glass", "pixel", "mercury", "islands", "leds":
+	switch {
+	case c.VoiceStyle == "bars", c.VoiceStyle == "orb", c.VoiceStyle == "flow", c.VoiceStyle == "glass", c.VoiceStyle == "pixel",
+		c.VoiceStyle == "mercury", c.VoiceStyle == "islands", c.VoiceStyle == "leds":
+	case strings.HasPrefix(c.VoiceStyle, "web:") && len(c.VoiceStyle) > 4: // 网页胶囊（试验，voice_web_windows.go）
 	default:
 		c.VoiceStyle = "bars"
 	}

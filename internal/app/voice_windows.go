@@ -265,6 +265,13 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 			a.voiceLeave()
 			return
 		}
+		if a.showWebVoice(state) { // 网页胶囊（voice_web_windows.go）
+			if state.recording || state.recognizing || !state.retry {
+				a.voiceRetry = nil
+			}
+			a.voiceUI = state
+			return
+		}
 		// 窗口只在出现时定宽、之后只会变宽：药丸在窗口里自己伸缩，窗口不跟着每帧改尺寸
 		appearing := a.voiceShownW == 0
 		if w := scale(max(voiceRecW, a.voiceWidth(state)), a.voiceDPI); appearing || w > a.voiceShownW {
@@ -320,6 +327,9 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 
 // voiceLeave 先让药丸沉下去淡出，动画走完再真正藏窗口；中途又要显示就作罢（界面线程调用）
 func (a *App) voiceLeave() {
+	if a.hideWebVoice() {
+		return
+	}
 	if a.voiceShownW == 0 || a.voiceLeaving {
 		return
 	}

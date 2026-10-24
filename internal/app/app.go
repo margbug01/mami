@@ -70,6 +70,7 @@ type App struct {
 	dock                                              voiceDock
 	dockHwnd                                          atomic.Uintptr
 	voiceWin                                          *mygo.Window
+	voiceWeb                                          webVoice // 网页胶囊（voice_web_windows.go），只在界面线程用
 	voiceUI                                           voiceViewState
 	voicePrevious                                     voiceViewState
 	voiceWA                                           RECT // 以下三个只在界面线程读写：胶囊所在显示器的工作区
@@ -159,6 +160,9 @@ func (a *App) setConfig(cfg Config) error {
 	voiceEpoch.Add(1)
 	if cfg.VoiceEnabled && !cfg.DisableHotkeys {
 		voiceTrigger.Store(voiceKey(cfg.VoiceHotkey))
+	}
+	if a.voiceWin != nil {
+		a.warmWebVoice(cfg.VoiceStyle)
 	}
 	return nil
 }
