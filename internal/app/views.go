@@ -110,6 +110,7 @@ func (a *App) buttonView(c *ui.Context) {
 		b.Children(func() { ui.Spinner(c).FontSize(18).TextColor(fg) })
 		return
 	}
+	b.Transition(ui.ElementTransition{Duration: 120 * time.Millisecond, Colors: true})
 	hovered := b.Hovered()
 	a.btnHover.Store(hovered)
 	if hovered {
@@ -157,6 +158,7 @@ func segmented(c *ui.Context, selected *int, labels ...string) ui.Element {
 			if i == *selected {
 				color = t.Text
 			}
+			s.Transition(ui.ElementTransition{Duration: 120 * time.Millisecond, Colors: true})
 			s.Children(func() { ui.Text(c, label).SingleLine().TextColor(color) })
 		}
 	})
@@ -166,6 +168,7 @@ func segmented(c *ui.Context, selected *int, labels ...string) ui.Element {
 func fitLabel(c *ui.Context, b ui.Element, label string) ui.Element {
 	t := c.Theme()
 	w, _ := c.MeasureText(10000, ui.Span{Text: label, Size: t.FontSize})
+	b.Transition(ui.ElementTransition{Duration: 120 * time.Millisecond, Colors: true})
 	return b.MinWidth(w + 2*t.Space(3.5) + 8) // 两边内边距 + 边框；正好等宽时 MyGo 仍会按小数误差截成省略号，多留几像素
 }
 
@@ -179,6 +182,10 @@ func (a *App) popupView(c *ui.Context) {
 
 	// streaming：流式翻译已经收到一部分，卡片先显示出来，标题栏转圈表示还没完
 	streaming := p.status == statusLoading && p.text != ""
+	slow := p.status == statusLoading && time.Since(p.shownAt) >= 8*time.Second
+	if p.status == statusLoading && !slow {
+		c.After(time.Second)
+	}
 	body := p.text
 	if p.status == statusLoading && !streaming {
 		body = ""
@@ -193,10 +200,25 @@ func (a *App) popupView(c *ui.Context) {
 		want += gap + footH
 	}
 	// 边收边显示时高度只增不减：换行位置一变就缩回去再撑开，卡片会上下跳
+	now := time.Now()
 	if a.popVisible.Load() && (want > p.h || (want < p.h && !streaming)) {
-		p.h = want
-		w, anchor := p.w, p.anchor
-		go a.resizePopup(w, want, anchor)
+		p.heightFrom = p.animatedHeight(now)
+		p.h, p.heightAt = want, now
+	}
+	if a.popVisible.Load() {
+		height := int(p.animatedHeight(now) + 0.5)
+		if progress(now, p.heightAt, 180*time.Millisecond) < 1 {
+			c.After(16 * time.Millisecond)
+		}
+		if height != p.placedH {
+			w, anchor, shownAt, heightAt := p.w, p.anchor, p.shownAt, p.heightAt
+			a.popWin.Update(func() {
+				if a.popVisible.Load() && a.pop.shownAt == shownAt && a.pop.heightAt == heightAt {
+					a.resizePopup(w, height, anchor)
+					a.pop.placedH = height
+				}
+			})
+		}
 	}
 
 	// 告诉键盘钩子现在 Enter / Esc 归卡片管
@@ -210,58 +232,71 @@ func (a *App) popupView(c *ui.Context) {
 	cardKeyFg.Store(p.fg)
 	cardKeyMode.Store(mode)
 
-	ui.Column(c).Fill().Padding(pad, 14).Gap(gap).Background(t.Background).Border(1, t.Border).Radius(cornerR).Children(func() {
-		ui.Row(c).Height(headH).Gap(6).Children(func() {
-			if a.avatar != nil {
-				ui.Image(c, a.avatar).Size(18, 18).Radius(9).Clip()
-			}
-			ui.Text(c, p.header).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
-			if streaming {
-				ui.Spinner(c).FontSize(12).TextColor(t.TextMuted)
-			}
-			if !p.toast {
-				x := ui.ButtonBase(c).Size(22, 22).Radius(6).Cursor(ui.CursorPointer).Label(T("关闭"))
-				if x.Hovered() {
-					x.Background(t.SurfaceHover)
+	progress := min(float32(time.Since(p.shownAt))/float32(140*time.Millisecond), 1)
+	fade := 1 - (1-progress)*(1-progress)*(1-progress)
+	if progress < 1 {
+		c.AnimationFrame()
+	}
+	size := 0.985 + 0.015*fade
+	ui.Column(c).Fill().Clip().Background(t.Background).Border(1, t.Border).Radius(cornerR).
+		Opacity(fade).Scale(size, size).Children(func() {
+		ui.Column(c).FillWidth().Height(float32(p.h)).Shrink(0).Padding(pad, 14).Gap(gap).Children(func() {
+			ui.Row(c).Height(headH).Gap(6).Children(func() {
+				if a.avatar != nil {
+					ui.Image(c, a.avatar).Size(18, 18).Radius(9).Clip()
 				}
-				if x.Children(func() { ui.Icon(c, iconClose).FontSize(14).TextColor(t.TextMuted) }).Clicked() {
-					a.closeCard()
+				header := p.header
+				if slow {
+					header = T("响应较慢，可取消")
 				}
+				ui.Text(c, header).FontSize(12).TextColor(t.TextMuted).SingleLine().Grow(1)
+				if streaming {
+					ui.Spinner(c).FontSize(12).TextColor(t.TextMuted)
+				}
+				if !p.toast || slow {
+					x := ui.ButtonBase(c).Size(22, 22).Radius(6).Cursor(ui.CursorPointer).Label(T("关闭"))
+					if x.Hovered() {
+						x.Background(t.SurfaceHover)
+					}
+					if x.Children(func() { ui.Icon(c, iconClose).FontSize(14).TextColor(t.TextMuted) }).Clicked() {
+						a.closeCard()
+					}
+				}
+			})
+			switch {
+			case p.status == statusLoading && !streaming:
+				ui.Row(c).Height(20).Gap(8).Children(func() {
+					ui.Spinner(c).FontSize(14)
+					ui.Text(c, T("翻译中…")).FontSize(14).TextColor(t.TextMuted)
+				})
+			default:
+				color := t.Text
+				if p.status == statusError {
+					color = t.Danger
+				}
+				ui.Scroll(c).Height(bodyH).Children(func() {
+					ui.Text(c, body).FontSize(14).TextColor(color).Width(textW)
+				})
+			}
+			if p.status == statusDone {
+				ui.Row(c).Height(footH).Gap(8).Children(func() {
+					ui.Spacer(c)
+					label := T("复制")
+					if p.copied {
+						label = T("已复制")
+					}
+					if textButton(c, label).Clicked() {
+						text := p.text
+						theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
+						p.copied, p.acted = true, true
+						a.recordAction(p.histID, "copy")
+					}
+					if !p.terminal && accentButton(c, T("替换")+" ↵").Clicked() {
+						a.replaceFromCard()
+					}
+				})
 			}
 		})
-		switch {
-		case p.status == statusLoading && !streaming:
-			ui.Row(c).Height(20).Gap(8).Children(func() {
-				ui.Spinner(c).FontSize(14)
-				ui.Text(c, T("翻译中…")).FontSize(14).TextColor(t.TextMuted)
-			})
-		default:
-			color := t.Text
-			if p.status == statusError {
-				color = t.Danger
-			}
-			ui.Scroll(c).Height(bodyH).Children(func() {
-				ui.Text(c, body).FontSize(14).TextColor(color).Width(textW)
-			})
-		}
-		if p.status == statusDone {
-			ui.Row(c).Height(footH).Gap(8).Children(func() {
-				ui.Spacer(c)
-				label := T("复制")
-				if p.copied {
-					label = T("已复制")
-				}
-				if textButton(c, label).Clicked() {
-					text := p.text
-					theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
-					p.copied, p.acted = true, true
-					a.recordAction(p.histID, "copy")
-				}
-				if !p.terminal && accentButton(c, T("替换")+" ↵").Clicked() {
-					a.replaceFromCard()
-				}
-			})
-		}
 	})
 }
 

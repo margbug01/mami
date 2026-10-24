@@ -239,6 +239,8 @@ func (a *App) voiceLoop() {
 
 type voiceViewState struct {
 	text                   string
+	hint                   string
+	slow                   bool
 	copy                   bool // text 是识别结果、已经在剪贴板里：胶囊右边带一个复制钮
 	retry                  bool // 识别失败、录音还留着：胶囊右边带一个重试钮
 	undo                   bool // 刚改写了选中的文字：胶囊右边带一个撤销钮
@@ -273,19 +275,41 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 		switch {
 		case appearing:
 			a.voiceShowAt, a.voiceKindAt = now, time.Time{}
+			a.voiceResumeAt = time.Time{}
 			a.voiceWFrom, a.voiceWTo, a.voiceWAt = target, target, now
 		case target != a.voiceWTo:
 			a.voiceWFrom, a.voiceWTo, a.voiceWAt = a.voicePillW(now), target, now
 		}
-		if !appearing && voiceKind(state) != voiceKind(a.voiceUI) {
+		contentChanged := voiceKind(state) != voiceKind(a.voiceUI) || state.slow != a.voiceUI.slow ||
+			voiceKind(state) == 3 && (state.text != a.voiceUI.text || state.copy != a.voiceUI.copy || state.retry != a.voiceUI.retry || state.undo != a.voiceUI.undo)
+		if !appearing && contentChanged {
 			a.voiceGapL, a.voiceGapR = a.islandGaps(now) // 切到一半又切：从眼下的缝宽接着走
+			a.voicePrevious = a.voiceUI
 			a.voiceKindAt = now
 		}
-		if a.voiceLeaving { // 退到一半又要显示：重新弹出来
-			a.voiceLeaving, a.voiceShowAt = false, now
+		if a.voiceLeaving {
+			a.voiceResumeOpacity, a.voiceResumeSize, a.voiceResumeY = a.voicePose(now)
+			a.voiceLeaving, a.voiceResumeAt = false, now
+			a.voiceHideGen++
 		}
 		if state.copy && (!a.voiceUI.copy || a.voiceUI.text != state.text) {
 			a.voiceCopiedAt = time.Time{}
+		}
+		if state.recognizing && !a.voiceUI.recognizing {
+			started := a.voiceKindAt
+			time.AfterFunc(8*time.Second, func() {
+				a.voiceWin.Update(func() {
+					if voiceEpoch.Load() != id || !a.voiceUI.recognizing || a.voiceLeaving || a.voiceKindAt != started {
+						return
+					}
+					waiting := a.voiceUI
+					waiting.slow = true
+					a.voiceDisplay(id, waiting, true)
+				})
+			})
+		}
+		if state.recording || state.recognizing || !state.retry {
+			a.voiceRetry = nil
 		}
 		a.voiceUI = state
 		a.voiceWin.ShowInactive()
@@ -333,7 +357,7 @@ func voiceKind(state voiceViewState) int {
 
 // voiceOrb 果冻球样式的录音和识别；提示文字在果冻样式下是一条果冻（见 drawJelly）
 func (a *App) voiceOrb(state voiceViewState) bool {
-	return (a.voiceStyle == "flow" || a.voiceStyle == "orb" && state.live == "") && voiceKind(state) != 3 // 出字了就变成一条果冻
+	return !state.slow && (a.voiceStyle == "flow" || a.voiceStyle == "orb" && state.live == "") && voiceKind(state) != 3 // 出字了就变成一条果冻
 }
 
 func (a *App) orbSize() float32 {
@@ -347,6 +371,9 @@ func (a *App) orbSize() float32 {
 }
 
 func (a *App) voiceWidth(state voiceViewState) int32 {
+	if state.slow {
+		return max(196, voiceWidth(state))
+	}
 	if a.voiceOrb(state) {
 		w := int32(a.orbSize())
 		if a.voiceTranslate {
@@ -381,6 +408,9 @@ func liveTail(s string) string {
 }
 
 func voiceWidth(state voiceViewState) int32 {
+	if state.retry || state.hint != "" {
+		return voiceCopyW
+	}
 	switch voiceKind(state) {
 	case 1:
 		return voiceRecW // 边说边出字也不变宽
@@ -465,24 +495,13 @@ func (a *App) voiceUndoNotice(id uint64) {
 	time.AfterFunc(4*time.Second, check)
 }
 
-// voiceRetryNotice 识别失败：录音留着，胶囊显示「识别失败」和重试钮，10 秒后收起，鼠标停在上面时不收
 func (a *App) voiceRetryNotice(id uint64, pcm []byte, cfg Config) {
-	a.voiceWin.Update(func() { a.voiceRetry = func() { go a.retryVoice(pcm, cfg) } })
-	a.voiceDisplay(id, voiceViewState{text: T("识别失败，点右边重试"), retry: true}, true)
-	var check func()
-	check = func() {
-		a.voiceWin.Update(func() {
-			if voiceEpoch.Load() != id || !a.voiceUI.retry {
-				return
-			}
-			if a.voiceHover {
-				time.AfterFunc(time.Second, check)
-				return
-			}
-			a.voiceLeave()
-		})
-	}
-	time.AfterFunc(10*time.Second, check)
+	a.voiceWin.Update(func() {
+		if voiceEpoch.Load() == id {
+			a.voiceRetry = func() { go a.retryVoice(pcm, cfg) }
+		}
+	})
+	a.voiceDisplay(id, voiceViewState{text: T("识别未完成"), retry: true}, true)
 }
 
 // retryVoice 拿失败那次的整段录音再识别一次，成了就照常润色、贴到眼下的前台窗口
@@ -519,8 +538,12 @@ func (a *App) retryVoice(pcm []byte, cfg Config) {
 }
 
 // voiceCopyNotice 没地方贴：胶囊显示这句话和复制钮，6 秒后收起，鼠标停在上面时不收
-func (a *App) voiceCopyNotice(id uint64, text string) {
-	a.voiceDisplay(id, voiceViewState{text: text, copy: true}, true)
+func (a *App) voiceCopyNotice(id uint64, text string, hints ...string) {
+	state := voiceViewState{text: text, copy: true}
+	if len(hints) != 0 {
+		state.hint = hints[0]
+	}
+	a.voiceDisplay(id, state, true)
 	var check func()
 	check = func() {
 		a.voiceWin.Update(func() {
@@ -713,6 +736,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 	finish := func() { voiceActive.CompareAndSwap(id, 0) }
 	var text string
 	var polishMs int64
+	var fallback bool
 	if selected != "" {
 		st := time.Now()
 		out, err := rewriteSelection(ctx, cfg, selected, source)
@@ -729,9 +753,23 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 		text, polishMs = out, time.Since(st).Milliseconds()
 		log.Printf("voice: rewrote %d chars in %dms", utf8.RuneCountInString(selected), polishMs)
 	} else {
-		text, polishMs = polishVoice(ctx, cfg, source, learned...)
+		text, polishMs, fallback = polishVoiceResult(ctx, cfg, source, learned...)
 	}
 	translated := selected == "" && cfg.VoiceTranslate && polishMs > 0
+	hint := ""
+	if fallback {
+		hint = T("润色失败，保留原话")
+		if cfg.VoiceTranslate {
+			hint = T("翻译失败，保留原话")
+		}
+	}
+	finishNotice := func() {
+		if hint != "" {
+			a.voiceNotice(id, hint)
+		} else {
+			a.voiceDisplay(id, voiceViewState{}, false)
+		}
+	}
 	if !valid() {
 		finish()
 		return
@@ -766,7 +804,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 		case mode == voicePaste && selected != "":
 			a.voiceUndoNotice(id)
 		case mode == voicePaste:
-			a.voiceDisplay(id, voiceViewState{}, false)
+			finishNotice()
 			if !translated {
 				a.learnStart(fg, source, text, cfg)
 			}
@@ -774,7 +812,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 			a.voiceNotice(id, T("无法写入剪贴板"))
 		case mode == voicePasteKeep:
 			// 认不出是不是输入框（微信这类）：照样贴，但文字留在剪贴板里，贴空了还能手动 Ctrl+V
-			a.voiceDisplay(id, voiceViewState{}, false)
+			finishNotice()
 			sendPaste()
 			if selected != "" {
 				a.voiceUndoNotice(id)
@@ -785,7 +823,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 			}
 		default:
 			log.Printf("voice: no input box (switched=%v modifiers=%v), copied", switched, modsDown)
-			a.voiceCopyNotice(id, text)
+			a.voiceCopyNotice(id, text, hint)
 		}
 		finish()
 		if cfg.History {
@@ -829,22 +867,58 @@ func toneDark(tone string, themeDark bool) bool {
 	return true
 }
 
+func (a *App) voicePose(now time.Time) (opacity, size, dy float32) {
+	in := progress(now, a.voiceShowAt, voiceInDur)
+	opacity, size, dy = ui.EaseOut(in), 0.85+0.15*backOut(in), 6*(1-ui.EaseOut(in))
+	if !a.voiceResumeAt.IsZero() {
+		amount := ui.EaseOut(progress(now, a.voiceResumeAt, voiceOutDur))
+		opacity = a.voiceResumeOpacity + (1-a.voiceResumeOpacity)*amount
+		size = a.voiceResumeSize + (1-a.voiceResumeSize)*amount
+		dy = a.voiceResumeY * (1 - amount)
+	}
+	if a.voiceLeaving {
+		out := progress(now, a.voiceHideAt, voiceOutDur)
+		out *= out
+		opacity, size, dy = opacity*(1-out), size*(1-0.12*out), dy+6*out
+	}
+	return
+}
+
 func (a *App) voiceView(c *ui.Context) {
 	dark := toneDark(a.voiceTone, a.themed(c).Dark)
 	sk := skinFor(a.voiceStyle, dark)
 	state := a.voiceUI
 	now := time.Now()
+	if state.slow || state.retry || state.hint != "" {
+		label, fontSize := state.text, float32(12)
+		padding := float32(24 + voiceBtn + 8)
+		if state.hint != "" {
+			label = state.hint
+		}
+		if state.retry {
+			padding += voiceBtn + 8
+		}
+		if a.voiceStyle == "flow" && !state.slow {
+			padding += 28
+		}
+		if state.slow {
+			label, fontSize = T("响应较慢，可取消"), 11
+			padding = 24 + voiceBtn + 8
+			if a.voiceTranslate {
+				padding += voiceBtn + 8
+			}
+		}
+		width, _ := c.MeasureText(10000, ui.Span{Text: label, Size: fontSize})
+		target := min(float32(a.voiceWidth(state)), float32(math.Ceil(float64(width+padding+2))))
+		if target != a.voiceWTo {
+			a.voiceWFrom, a.voiceWTo, a.voiceWAt = a.voicePillW(now), target, now
+		}
+	}
 	dt := min(0.1, max(0, now.Sub(a.voiceFrameAt).Seconds()))
 	a.voiceFrameAt = now
-	in := progress(now, a.voiceShowAt, voiceInDur)
-	opacity, size, dy := ui.EaseOut(in), 0.85+0.15*backOut(in), 6*(1-ui.EaseOut(in))
-	moving := in < 1 || progress(now, a.voiceWAt, voiceWDur) < 1 || progress(now, a.voiceKindAt, voiceKindDur) < 1 || voiceKind(state) != 3
-	if a.voiceLeaving {
-		out := progress(now, a.voiceHideAt, voiceOutDur)
-		out *= out // 先慢后快地沉下去
-		opacity, size, dy = opacity*(1-out), size*(1-0.12*out), dy+6*out
-		moving = true
-	}
+	opacity, size, dy := a.voicePose(now)
+	moving := progress(now, a.voiceShowAt, voiceInDur) < 1 || progress(now, a.voiceResumeAt, voiceOutDur) < 1 ||
+		progress(now, a.voiceWAt, voiceWDur) < 1 || progress(now, a.voiceKindAt, voiceKindDur) < 1 || voiceKind(state) != 3 || a.voiceLeaving
 	kind := ui.EaseOut(progress(now, a.voiceKindAt, voiceKindDur))
 	// 柱高和球的大小每帧往目标靠一点（指数平滑），音量 20 次/秒的跳变就被抹顺了
 	follow := float32(1 - math.Exp(-dt/0.07))
@@ -942,8 +1016,17 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 	if sk.island() {
 		gap, dotsGap = 8, 8 // 钮和中间岛之间：让中间的盒子正好落在中间那块岛上
 	}
-	pill.Children(func() {
-		row := ui.Row(c).Fill().AlignItems(ui.Center).Opacity(kind).Scale(0.92+0.08*kind, 0.92+0.08*kind)
+	drawContent := func(state voiceViewState, alpha float32, outgoing, live bool) {
+		key := "current"
+		if outgoing {
+			key = "outgoing"
+		}
+		row := ui.Row(c).Key(key).Fill().AlignItems(ui.Center).Opacity(alpha)
+		if outgoing {
+			row.Absolute().Left(0).Top(0).Disabled(true).Translate(0, -3*(1-alpha))
+		} else {
+			row.Scale(0.98+0.02*alpha, 0.98+0.02*alpha).Translate(0, 3*(1-alpha))
+		}
 		switch voiceKind(state) {
 		case 1:
 			row.Padding(0, 5).Gap(gap).Children(func() {
@@ -968,11 +1051,19 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 				}
 			})
 		case 2:
-			row.Padding(0, 5).Gap(dotsGap).Children(func() { // ✕ 贴左，三个点在 ✕ 和胶囊右边缘之间居中
+			row.Padding(0, 5).Gap(dotsGap)
+			if state.slow {
+				row.Padding(0, 12).Gap(8)
+			}
+			row.Children(func() {
 				if pillButton(c, sk, false, T("取消")).Clicked() && live {
 					go voiceClick(voiceCancel)
 				}
-				ui.Box(c).Grow(1).Height(20).Draw(sk.dots)
+				if state.slow {
+					ui.Text(c, T("响应较慢，可取消")).FontSize(11).TextColor(sk.fg).Grow(1).Shrink(1).MaxLines(1).Tooltip(T("响应较慢，可取消"))
+				} else {
+					ui.Box(c).Grow(1).Height(20).Draw(sk.dots)
+				}
 				if a.voiceTranslate {
 					voiceTranslateBadge(c, sk, a.voiceTarget, false)
 				}
@@ -985,12 +1076,24 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 				break
 			}
 			done := live && !a.voiceCopiedAt.IsZero()
-			row.Padding(0, 5, 0, 14).Gap(6).Children(func() {
+			row.Padding(0, 5, 0, 14).Gap(6)
+			if state.retry || state.hint != "" {
+				row.Padding(0, 12).Gap(8)
+			}
+			row.Children(func() {
 				if style == "flow" {
 					ui.Box(c).Size(20, 20).Shrink(0).Draw(func(p *ui.Painter, r ui.Rect) { drawFlowOrb(p, r, 0, now, false, palette) })
 				}
-				ui.Text(c, state.text).FontSize(12).TextColor(sk.fg).MaxLines(1).Grow(1).Shrink(1).Tooltip(state.text)
+				label := state.text
+				if state.hint != "" {
+					label = state.hint
+				}
+				ui.Text(c, label).FontSize(12).TextColor(sk.fg).MaxLines(1).Grow(1).Shrink(1).Tooltip(state.text)
 				if state.retry {
+					if pillButton(c, sk, false, T("关闭")).Clicked() && live {
+						a.voiceRetry = nil
+						a.voiceLeave()
+					}
 					if pillRetryButton(c, sk, T("重试"), false).Clicked() && live && a.voiceRetry != nil {
 						a.voiceRetry()
 					}
@@ -1012,6 +1115,12 @@ func (a *App) voicePill(c *ui.Context, style string, dark bool, sk voiceSkin, st
 				}
 			})
 		}
+	}
+	pill.Children(func() {
+		if live && kind < 1 && !a.voiceOrb(a.voicePrevious) {
+			drawContent(a.voicePrevious, 1-kind, true, false)
+		}
+		drawContent(state, kind, false, live)
 	})
 	return pill
 }

@@ -154,7 +154,9 @@ func (a *App) settingsView(c *ui.Context) {
 			a.titleBar(c)
 			ui.Scroll(c).Grow(1).Children(func() {
 				// 每页、每个 tab 单独认控件：按位置认的话，上一页同位置的多行框（热词）会被沿用，Password 对它无效，Key 就明文了
-				ui.Column(c).Padding(0, 28, 16, 28).Key(fmt.Sprint(s.page, s.transTab, s.voiceTab, s.polishTab)).Children(func() {
+				ui.Column(c).Padding(0, 28, 16, 28).Key(fmt.Sprint(s.page, s.transTab, s.voiceTab, s.polishTab, s.histTab)).Transition(ui.ElementTransition{
+					Duration: 160 * time.Millisecond, Colors: true, Enter: &ui.Motion{Y: 6},
+				}).Children(func() {
 					switch s.page {
 					case pageVoice:
 						a.pageVoice(c, d)
@@ -220,7 +222,7 @@ func (a *App) brandMark(c *ui.Context) {
 
 // sideItem 侧边栏一项。选中的那项底盖成半透明的白再带一点影子：mygo 拿焦点时会拿 Accent 铺满，太重
 func (a *App) sideItem(c *ui.Context, id string, icon *ui.SVG, label string) {
-	e := ui.SidebarItem(c, id, icon, label)
+	e := ui.SidebarItem(c, id, icon, label).Transition(ui.ElementTransition{Duration: 120 * time.Millisecond, Colors: true})
 	if a.set.page == id {
 		e.Background(c.Theme().SurfacePressed).Shadow(0, 1, 3, 0, ui.RGBA(10, 20, 35, 0.07)).FontWeight(600)
 	}

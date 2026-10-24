@@ -2,6 +2,18 @@ package i18n
 
 // 语音页的新文案与现有各语言词典保持对应。
 func init() {
+	networkEntries := map[string][8]string{
+		"响应较慢，可取消":  {"Taking longer · cancel anytime", "応答待ち・キャンセル可", "回應較慢，可取消", "응답 대기 중 · 취소 가능", "Tarda más · puedes cancelar", "Réponse lente · annulation possible", "Dauert länger · Abbruch möglich", "Ответ задерживается · можно отменить"},
+		"识别未完成":     {"Transcription failed", "認識できませんでした", "辨識未完成", "인식 실패", "Transcripción fallida", "Échec de transcription", "Erkennung fehlgeschlagen", "Не удалось распознать"},
+		"润色失败，保留原话": {"Polish failed · original kept", "整文失敗・原文を保持", "潤飾失敗，保留原話", "다듬기 실패 · 원문 유지", "Pulido fallido · original conservado", "Retouche échouée · original conservé", "Glättung fehlgeschlagen · Original behalten", "Правка не удалась · исходный текст сохранён"},
+		"翻译失败，保留原话": {"Translation failed · original kept", "翻訳失敗・原文を保持", "翻譯失敗，保留原話", "번역 실패 · 원문 유지", "Traducción fallida · original conservado", "Traduction échouée · original conservé", "Übersetzung fehlgeschlagen · Original behalten", "Перевод не удался · исходный текст сохранён"},
+	}
+	for key, translations := range networkEntries {
+		Dict[key] = [2]string{translations[0], translations[1]}
+		for index, language := range []int{TW, KO, ES, FR, DE, RU} {
+			dicts[language][key] = translations[index+2]
+		}
+	}
 	entries := map[string][6]string{
 		"面板底色": {"面板底色", "도크 색상", "Color del panel", "Couleur du volet", "Dock-Farbe", "Цвет панели"},
 		"贴边小条": {"貼邊小條", "화면 가장자리 도크", "Panel lateral", "Volet de bord", "Rand-Dock", "Боковая панель"},

@@ -153,9 +153,14 @@ func cleanPolishOutput(text string) string {
 }
 
 func polishVoice(ctx context.Context, cfg Config, source string, learned ...learnedWord) (string, int64) {
+	text, elapsed, _ := polishVoiceResult(ctx, cfg, source, learned...)
+	return text, elapsed
+}
+
+func polishVoiceResult(ctx context.Context, cfg Config, source string, learned ...learnedWord) (string, int64, bool) {
 	cfg.normalize()
 	if !cfg.VoiceTranslate && (cfg.PolishStyle == "off" || cfg.PolishAPIKey == "" || utf8.RuneCountInString(strings.TrimSpace(source)) < polishMinRunes) {
-		return applyCorrections(source, learned), 0 // 不润色，词库里的纠错照样用
+		return applyCorrections(source, learned), 0, false // 不润色，词库里的纠错照样用
 	}
 	started := time.Now()
 	polishCtx, cancel := context.WithTimeout(ctx, polishDeadline(source))
@@ -195,16 +200,16 @@ func polishVoice(ctx context.Context, cfg Config, source string, learned ...lear
 				translated, fallbackErr = translator.Translate(fallbackCtx, input, cfg.VoiceTarget)
 			}
 			if fallbackErr == nil && fallbackCtx.Err() == nil && strings.TrimSpace(translated) != "" {
-				return translated, max(1, time.Since(started).Milliseconds())
+				return translated, max(1, time.Since(started).Milliseconds()), false
 			}
 			log.Printf("voice translate: fallback failed (%T)", fallbackErr)
-			return source, 0
+			return source, 0, true
 		}
-		return applyCorrections(source, learned), 0 // 没润色成：耗时记 0，历史和统计就不会把它当成润色过
+		return applyCorrections(source, learned), 0, true // 没润色成：耗时记 0，历史和统计就不会把它当成润色过
 	}
 	if cfg.VoiceTranslate {
-		return result, max(1, elapsed)
+		return result, max(1, elapsed), false
 	}
 	result = applyCorrections(guardPolish(source, result, learned), learned)
-	return result, elapsed
+	return result, elapsed, false
 }

@@ -27,6 +27,11 @@ type voiceDock struct {
 	dpi                                             uint32
 	rect                                            RECT
 	texture                                         *texture
+	motionAt                                        time.Time
+	page                                            string
+	pageAt                                          time.Time
+	motionFrom, motionTo                            RECT
+	reveal, revealFrom, revealTo                    float32
 }
 
 var dockQuit atomic.Bool
@@ -101,6 +106,7 @@ func (a *App) finishDockDrag(commit bool) {
 		position := d.position
 		d.win.Update(func() { a.changeDockConfig(func(cfg *Config) { cfg.VoiceDockPosition = position }) })
 	}
+	d.motionAt, d.motionTo = time.Time{}, d.rect
 	d.hoverAt, d.leaveAt = time.Now(), time.Time{}
 	d.win.Invalidate()
 }
@@ -186,12 +192,21 @@ func (a *App) createDock() {
 	a.dockHwnd.Store(d.hwnd)
 	a.hookDockMouse()
 	go func() {
-		ticker := time.NewTicker(40 * time.Millisecond)
+		interval := 40 * time.Millisecond
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for range ticker.C {
 			d.win.Update(func() {
 				if !a.quitting {
 					a.tickDock()
+					next := 40 * time.Millisecond
+					if !d.motionAt.IsZero() {
+						next = 8 * time.Millisecond
+					}
+					if next != interval {
+						interval = next
+						ticker.Reset(interval)
+					}
 				}
 			})
 			if dockQuit.Load() {
@@ -238,6 +253,8 @@ func (a *App) tickDock() {
 		}
 		d.expanded, d.more, d.langs, d.pressed, d.dragging, d.armed = false, false, false, false, false, false
 		d.hoverAt, d.leaveAt = time.Time{}, time.Time{}
+		d.motionAt = time.Time{}
+		d.reveal = 0
 		return
 	}
 	if d.armed {
@@ -263,14 +280,8 @@ func (a *App) tickDock() {
 				d.expanded = true
 			}
 		} else {
-			d.hoverAt = time.Time{}
-			if d.leaveAt.IsZero() {
-				d.leaveAt = now
-			}
-			if now.Sub(d.leaveAt) >= 600*time.Millisecond {
-				d.expanded = false
-				d.more, d.langs = false, false
-			}
+			d.hoverAt, d.leaveAt = time.Time{}, time.Time{}
+			d.expanded, d.more, d.langs = false, false, false
 		}
 		height := 248
 		if d.more || d.langs {
@@ -281,6 +292,33 @@ func (a *App) tickDock() {
 		native := RECT{Left: d.area.Left + scale(int32(rect.X), d.dpi), Top: d.area.Top + scale(int32(rect.Y), d.dpi)}
 		native.Right = native.Left + scale(int32(rect.W), d.dpi)
 		native.Bottom = native.Top + scale(int32(rect.H), d.dpi)
+		reveal := float32(0)
+		if d.expanded {
+			reveal = 1
+		}
+		if !d.shown {
+			d.motionAt = time.Time{}
+			d.motionTo, d.revealTo, d.reveal = native, reveal, reveal
+		} else if native != d.motionTo || reveal != d.revealTo {
+			d.motionFrom, d.motionTo = d.rect, native
+			d.revealFrom, d.revealTo = d.reveal, reveal
+			d.motionAt = now
+		}
+		if !d.motionAt.IsZero() {
+			progress := min(float64(now.Sub(d.motionAt))/(220*float64(time.Millisecond)), 1)
+			eased := 1 - math.Pow(1-progress, 3)
+			blend := func(from, to int32) int32 {
+				return int32(math.Round(float64(from) + float64(to-from)*eased))
+			}
+			native = RECT{
+				Left: blend(d.motionFrom.Left, d.motionTo.Left), Top: blend(d.motionFrom.Top, d.motionTo.Top),
+				Right: blend(d.motionFrom.Right, d.motionTo.Right), Bottom: blend(d.motionFrom.Bottom, d.motionTo.Bottom),
+			}
+			d.reveal = d.revealFrom + (d.revealTo-d.revealFrom)*float32(eased)
+			if progress == 1 {
+				d.motionAt = time.Time{}
+			}
+		}
 		if native != d.rect {
 			placeAt(d.hwnd, native.Left, native.Top, native.w(), native.h())
 			d.rect = native
@@ -320,10 +358,10 @@ func dockCycle(value string, values []string) string {
 
 func (a *App) dockView(c *ui.Context) {
 	cfg, _ := a.config()
-	a.dockContent(c, cfg, a.dock.expanded, a.dock.more, toneDark(cfg.VoiceDockTone, a.themed(c).Dark))
+	a.dockContent(c, cfg, a.dock.expanded || a.dock.reveal > 0, a.dock.more, toneDark(cfg.VoiceDockTone, a.themed(c).Dark), a.dock.reveal)
 }
 
-func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) {
+func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, reveal ...float32) {
 	t := ui.LightTheme()
 	if dark {
 		t = ui.DarkTheme()
@@ -336,11 +374,14 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 		a.dock.texture = &texture{pal: base.pal, grain: base.grain}
 	}
 	material := a.dock.texture
+	radius := float32(10)
+	if expanded {
+		radius = 16
+	}
+	if len(reveal) != 0 {
+		radius = 10 + 6*reveal[0]
+	}
 	background := func(p *ui.Painter, r ui.Rect) {
-		radius := float32(10)
-		if expanded {
-			radius = 16
-		}
 		material.draw(p, r, radius)
 	}
 	if !expanded {
@@ -382,8 +423,17 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 		})
 		return
 	}
-	panel := ui.Column(c).Fill().Padding(12).Gap(12).Radius(16).Clip().Draw(background).Border(1, border)
-	panel.Children(func() {
+	panel := ui.Column(c).Fill().Radius(radius).Clip().Draw(background).Border(1, border)
+	feedback := func(control ui.Element) {
+		control.Transition(ui.ElementTransition{Duration: 120 * time.Millisecond, Colors: true})
+		pressed := float32(1)
+		if control.Pressed() {
+			pressed = 0.97
+		}
+		size := control.Animate("dock-press", pressed, 100*time.Millisecond)
+		control.Scale(size, size)
+	}
+	content := func() {
 		ui.Box(c).FillWidth().Height(8).Shrink(0).Cursor(ui.CursorGrab).Draw(func(p *ui.Painter, r ui.Rect) {
 			p.Line(r.X+r.W/2-10, r.Y+r.H/2, r.X+r.W/2+10, r.Y+r.H/2, 2, border)
 		})
@@ -392,24 +442,31 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 			if control.Hovered() {
 				control.Background(active)
 			}
+			feedback(control)
 			control.Children(func() { ui.Text(c, label).FontSize(11).TextColor(fg).SingleLine() })
 			if control.Clicked() {
 				action()
 			}
 		}
 		toggle := func(label string, value bool, change func(*Config)) {
-			control := ui.ButtonBase(c).Label(label).FillWidth().Height(30).Padding(0, 6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+			control := ui.ButtonBase(c).Label(label).FillWidth().Height(30).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+			if control.Hovered() {
+				control.Background(active)
+			}
+			feedback(control)
 			control.Children(func() {
 				ui.Text(c, label).FontSize(11).TextColor(fg).Grow(1).SingleLine()
 				color := muted
 				if value {
 					color = accent
 				}
-				ui.Box(c).Size(22, 12).Radius(6).Background(color).Padding(2).Children(func() {
+				ui.Box(c).Size(22, 12).Radius(6).Background(color).Padding(2).Transition(ui.ElementTransition{Duration: 140 * time.Millisecond, Colors: true}).Children(func() {
 					dot := ui.Box(c).Size(8, 8).Radius(4).Background(ui.RGB(255, 255, 255))
+					offset := float32(0)
 					if value {
-						dot.Margin(0, 0, 0, 10)
+						offset = 10
 					}
+					dot.Translate(dot.Animate("dock-toggle", offset, 140*time.Millisecond), 0)
 				})
 			})
 			if control.Clicked() {
@@ -427,6 +484,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 						if item.Hovered() || picked {
 							item.Background(active)
 						}
+						feedback(item)
 						item.Children(func() {
 							ui.Text(c, langLabel(l.value, l.label)).FontSize(11).TextColor(fg).Grow(1).SingleLine()
 							if picked {
@@ -460,7 +518,11 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 			})
 			// 点一下换下一个，右边显示当前选的名字（和设置页同一套叫法）
 			cycle := func(label, value string, change func(*Config)) {
-				control := ui.ButtonBase(c).Label(label).FillWidth().Height(30).Padding(0, 6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+				control := ui.ButtonBase(c).Label(label).FillWidth().Height(30).Padding(0, 6).Radius(6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+				if control.Hovered() {
+					control.Background(active)
+				}
+				feedback(control)
 				control.Children(func() {
 					ui.Text(c, label).FontSize(11).TextColor(fg).Grow(1).SingleLine()
 					ui.Text(c, value+"  ›").FontSize(11).TextColor(muted).SingleLine()
@@ -482,6 +544,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 		if mic.Hovered() {
 			mic.Background(active)
 		}
+		feedback(mic)
 		mic.Children(func() {
 			ui.Box(c).Size(28, 28).Radius(14).Background(accent).AlignItems(ui.Center).Justify(ui.Center).Children(func() { ui.Box(c).Size(7, 7).Radius(4).Background(t.AccentText) })
 			label := T("开始说话")
@@ -504,6 +567,11 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 				}
 			}
 			target := ui.ButtonBase(c).Label(T("翻译成")).FillWidth().Height(30).Padding(0, 6).Gap(6).AlignItems(ui.Center).Cursor(ui.CursorPointer)
+			target.Radius(6)
+			if target.Hovered() {
+				target.Background(active)
+			}
+			feedback(target)
 			target.Children(func() {
 				ui.Text(c, T("翻译成")).FontSize(11).TextColor(fg).SingleLine()
 				ui.Text(c, targetName).FontSize(10).TextColor(muted).SingleLine().Grow(1).Shrink(1)
@@ -525,6 +593,7 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 				} else if segment.Hovered() {
 					segment.Background(active)
 				}
+				feedback(segment)
 				segment.Children(func() { ui.Text(c, labels[index]).FontSize(10).TextColor(text).SingleLine() })
 				if segment.Clicked() {
 					a.changeDockConfig(func(v *Config) { v.PolishStyle = style })
@@ -532,5 +601,42 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool) 
 			}
 		})
 		button(T("更多设置")+"  ›", func() { a.dock.more = true })
+	}
+	if len(reveal) == 0 {
+		panel.Padding(12).Gap(12).Children(content)
+		return
+	}
+	panel.Children(func() {
+		height := float32(248)
+		if more || a.dock.langs {
+			height = 416
+		}
+		width := min(float32(196), float32(a.dock.area.w())*96/float32(max(1, a.dock.dpi)))
+		height = min(height, float32(a.dock.area.h())*96/float32(max(1, a.dock.dpi)))
+		page := "main"
+		if a.dock.langs {
+			page = "languages"
+		} else if more {
+			page = "more"
+		}
+		direction := float32(8)
+		if page == "main" {
+			direction = -8
+		}
+		if a.dock.page != page {
+			if a.dock.page != "" && a.dock.expanded {
+				a.dock.pageAt = time.Now()
+			}
+			a.dock.page = page
+		}
+		progress := min(float64(time.Since(a.dock.pageAt))/(160*float64(time.Millisecond)), 1)
+		fade := float32(1 - math.Pow(1-progress, 3))
+		if progress < 1 {
+			c.AnimationFrame()
+		}
+		body := ui.Column(c).Key(page).Size(width, height).Shrink(0).Padding(12).Gap(12).
+			Opacity(reveal[0]*reveal[0]*fade).Translate(direction*(1-fade), 0)
+		body.Disabled(!a.dock.motionAt.IsZero())
+		body.Children(content)
 	})
 }

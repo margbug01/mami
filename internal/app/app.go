@@ -34,18 +34,23 @@ const (
 
 // popupState 只在主线程读写（view 里读，别处一律经 popWin.Update 改）
 type popupState struct {
-	status   int
-	toast    bool // 快捷键原地替换：只显示一张小的「翻译中…」
-	header   string
-	text     string
-	reqID    int64
-	replace  bool
-	fg       uintptr
-	anchor   POINT
-	copied   bool
-	terminal bool   // 来自终端：卡片只给「复制」
-	histID   string // 翻译记录里这一条的 id；没开记录时为空
-	acted    bool   // 复制/替换/关闭过，关掉卡片时不再记 dismiss
+	shownAt    time.Time
+	heightAt   time.Time
+	heightFrom float32
+	placedH    int
+	above      bool
+	status     int
+	toast      bool // 快捷键原地替换：只显示一张小的「翻译中…」
+	header     string
+	text       string
+	reqID      int64
+	replace    bool
+	fg         uintptr
+	anchor     POINT
+	copied     bool
+	terminal   bool   // 来自终端：卡片只给「复制」
+	histID     string // 翻译记录里这一条的 id；没开记录时为空
+	acted      bool   // 复制/替换/关闭过，关掉卡片时不再记 dismiss
 	// selectedAll 是 Mami 自己全选的（快捷键时没选中）：关掉卡片要把选区收回去，
 	// 不然整段字一直选着，下一个按键就全没了
 	selectedAll bool
@@ -62,41 +67,44 @@ type App struct {
 	cfg Config
 	tr  *Translator
 
-	dock                   voiceDock
-	dockHwnd               atomic.Uintptr
-	voiceWin               *mygo.Window
-	voiceUI                voiceViewState
-	voiceWA                RECT // 以下三个只在界面线程读写：胶囊所在显示器的工作区
-	voiceDPI               uint32
-	voiceShownW            int32
-	voiceLeaving           bool
-	voiceShowAt            time.Time // 弹出、退场、宽度变化、内容切换各自的起点
-	voiceHideAt            time.Time
-	voiceKindAt            time.Time
-	voiceWAt               time.Time
-	voiceWFrom, voiceWTo   float32
-	voiceStyle             string
-	voiceTranslate         bool
-	voiceTarget            string
-	voiceTone              string
-	voiceJoined            bool
-	voiceOrbSize           float32
-	voiceFlowPalette       string
-	voiceFrameAt           time.Time
-	voiceHover             bool               // 鼠标在胶囊上：带复制钮的提示先不收
-	voiceCopiedAt          time.Time          // 点了胶囊上的复制，钮变成 ✓
-	voiceRetry             func()             // 胶囊上的重试钮：拿上次失败的录音再识别一次（界面线程读写）
-	voiceUndo              func()             // 胶囊上的撤销钮：撤回刚才的改写
-	voiceBarH              [voiceBars]float32 // 平滑后的柱高 / 球大小（0~1）
-	voiceOrbLv             float32
-	voiceGapL, voiceGapR   float32 // 三岛样式：上次切换时两道缝的宽度，从这里过渡到新状态
-	voiceHideGen           int
-	btnWin, popWin, setWin *mygo.Window
-	anchorWin              *mygo.Window
-	btnHwnd, popHwnd       atomic.Uintptr
-	voiceHwnd              atomic.Uintptr
-	tray                   *mygo.Tray
-	quitting               bool
+	dock                                              voiceDock
+	dockHwnd                                          atomic.Uintptr
+	voiceWin                                          *mygo.Window
+	voiceUI                                           voiceViewState
+	voicePrevious                                     voiceViewState
+	voiceWA                                           RECT // 以下三个只在界面线程读写：胶囊所在显示器的工作区
+	voiceDPI                                          uint32
+	voiceShownW                                       int32
+	voiceLeaving                                      bool
+	voiceShowAt                                       time.Time // 弹出、退场、宽度变化、内容切换各自的起点
+	voiceHideAt                                       time.Time
+	voiceResumeAt                                     time.Time
+	voiceResumeOpacity, voiceResumeSize, voiceResumeY float32
+	voiceKindAt                                       time.Time
+	voiceWAt                                          time.Time
+	voiceWFrom, voiceWTo                              float32
+	voiceStyle                                        string
+	voiceTranslate                                    bool
+	voiceTarget                                       string
+	voiceTone                                         string
+	voiceJoined                                       bool
+	voiceOrbSize                                      float32
+	voiceFlowPalette                                  string
+	voiceFrameAt                                      time.Time
+	voiceHover                                        bool               // 鼠标在胶囊上：带复制钮的提示先不收
+	voiceCopiedAt                                     time.Time          // 点了胶囊上的复制，钮变成 ✓
+	voiceRetry                                        func()             // 胶囊上的重试钮：拿上次失败的录音再识别一次（界面线程读写）
+	voiceUndo                                         func()             // 胶囊上的撤销钮：撤回刚才的改写
+	voiceBarH                                         [voiceBars]float32 // 平滑后的柱高 / 球大小（0~1）
+	voiceOrbLv                                        float32
+	voiceGapL, voiceGapR                              float32 // 三岛样式：上次切换时两道缝的宽度，从这里过渡到新状态
+	voiceHideGen                                      int
+	btnWin, popWin, setWin                            *mygo.Window
+	anchorWin                                         *mygo.Window
+	btnHwnd, popHwnd                                  atomic.Uintptr
+	voiceHwnd                                         atomic.Uintptr
+	tray                                              *mygo.Tray
+	quitting                                          bool
 
 	pop        popupState // 主线程
 	popVisible atomic.Bool
@@ -618,12 +626,19 @@ func (a *App) showPopup(st popupState) {
 		st.w = toastW
 	}
 	st.h = estimateHeight(st)
-	a.popWin.Update(func() { a.pop = st })
-	a.popWin.SetContentSize(st.w, st.h)
-	a.placePopup(st.anchor)
-	a.popBusy.Store(st.status == statusLoading)
-	a.popVisible.Store(true)
-	a.popWin.ShowInactive()
+	a.popWin.Update(func() {
+		a.popWin.Hide()
+		st.shownAt = time.Now()
+		st.heightFrom, st.placedH = float32(st.h), st.h
+		area, dpi := workArea(st.anchor), dpiAt(st.anchor)
+		below, above := area.Bottom-st.anchor.Y, st.anchor.Y-scale(36, dpi)-area.Top
+		st.above = below < scale(bodyMaxH+12+22+8+12+8+32, dpi) && above > below
+		a.pop = st
+		a.resizePopup(st.w, st.h, st.anchor)
+		a.popBusy.Store(st.status == statusLoading)
+		a.popVisible.Store(true)
+		a.popWin.ShowInactive()
+	})
 }
 
 // estimateHeight 给第一帧一个差不多的高度，view 量出准确值后会再调
@@ -637,15 +652,6 @@ func estimateHeight(st popupState) int {
 		h += 8 + 32
 	}
 	return h
-}
-
-// placePopup 按锚点（物理像素）摆卡片，下方放不下就翻到上面
-func (a *App) placePopup(anchor POINT) {
-	h := a.popHwnd.Load()
-	r := windowRect(h)
-	dpi := dpiAt(anchor)
-	x, y := clampInto(anchor.X, anchor.Y, r.w(), r.h(), anchor.Y-scale(36, dpi), workArea(anchor))
-	moveTo(h, x, y)
 }
 
 func (a *App) hidePopup() {
@@ -718,8 +724,21 @@ func (a *App) hidePopupNow() {
 }
 
 func (a *App) resizePopup(w, h int, anchor POINT) {
-	a.popWin.SetContentSize(w, h)
-	a.placePopup(anchor)
+	dpi := dpiAt(anchor)
+	width, height := scale(int32(w), dpi), scale(int32(h), dpi)
+	area := workArea(anchor)
+	x, y := anchor.X, anchor.Y
+	if a.pop.above {
+		y -= scale(36, dpi) + height
+	}
+	x = max(area.Left, min(x, area.Right-width))
+	y = max(area.Top, min(y, area.Bottom-height))
+	placeAt(a.popHwnd.Load(), x, y, width, height)
+}
+
+func (p *popupState) animatedHeight(now time.Time) float32 {
+	amount := ui.EaseOut(progress(now, p.heightAt, 180*time.Millisecond))
+	return p.heightFrom + (float32(p.h)-p.heightFrom)*amount
 }
 
 func toCRLF(s string) string {
