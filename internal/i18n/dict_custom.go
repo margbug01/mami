@@ -9,7 +9,6 @@ func init() {
 		"导出": {"Export", "書き出す", "匯出", "내보내기", "Exportar", "Exporter", "Exportieren", "Экспорт"},
 		"已建好 %s，复制胶囊样式的 skill 给 AI 改它": {"Created %s. Copy the capsule style skill to an AI to change it", "%s を作りました。カプセルスタイルの skill を AI にコピーして直してもらいましょう", "已建好 %s，複製膠囊樣式的 skill 給 AI 改它", "%s 을(를) 만들었습니다. 캡슐 스타일 skill을 AI에 복사해 고치게 하세요", "Creado %s. Copia el skill de estilos de cápsula a una IA para cambiarlo", "%s créé. Copiez le skill des styles de capsule dans une IA pour le modifier", "%s erstellt. Kopiere den Kapsel-Stil-Skill in eine KI zum Anpassen", "Создан %s. Скопируйте skill стилей капсулы в ИИ, чтобы изменить его"},
 		"开发模式":          {"dev mode", "開発モード", "開發模式", "개발 모드", "modo desarrollo", "mode dév", "Entwicklermodus", "режим разработки"},
-		"打开":            {"Open", "開く", "打開", "열기", "Abrir", "Ouvrir", "Öffnen", "Открыть"},
 		"正在用":           {"In use", "使用中", "正在用", "사용 중", "En uso", "Utilisé", "Aktiv", "Используется"},
 		"记得点保存":         {"Click Save to apply", "保存を押すと反映されます", "記得點儲存", "저장을 눌러 적용하세요", "Pulsa Guardar para aplicar", "Cliquez sur Enregistrer pour appliquer", "Zum Übernehmen auf Speichern klicken", "Нажмите «Сохранить», чтобы применить"},
 		"新建样式":          {"New style", "新しいスタイル", "新建樣式", "새 스타일", "Nuevo estilo", "Nouveau style", "Neuer Stil", "Новый стиль"},

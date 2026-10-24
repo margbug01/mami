@@ -31,9 +31,11 @@
   if (ctl) { ctl.attach(emit, window); return; }
 
   var q = new URLSearchParams(location.search), tone = q.get("tone") || "dark", pin = q.get("state");
-  var bg = document.createElement("style");
-  bg.textContent = "html{background:radial-gradient(circle at 30% 20%,#3b4a7a,#141826 70%) fixed !important;min-height:100%}";
-  document.documentElement.appendChild(bg);
+  if (!q.has("bare")) { // ?bare：透明底，截 preview.png 用
+    var bg = document.createElement("style");
+    bg.textContent = "html{background:radial-gradient(circle at 30% 20%,#3b4a7a,#141826 70%) fixed !important;min-height:100%}";
+    document.documentElement.appendChild(bg);
+  }
   var sample = "帮我把这个接口改成用 Go 写，然后四点开会。";
   function fake(kind, t) {
     var raw = [];

@@ -15,7 +15,7 @@ Mami 按住热键说话时，屏幕上会出现一个“胶囊”。胶囊可以
   manifest.json   可选。尺寸、位置、开发模式
   mami-sim.js     建议。浏览器里预览用的模拟器（在 Mami 里自动失效）
   preview.html    建议。预览台：按真实尺寸放进“桌面”、手动切状态、看可点区域
-  preview.png     建议。设置「自定义」里卡片的缩略图，录音状态截一张就行（宽高比跟窗口一样）
+  preview.png     建议。设置「自定义」里展示的样子：录音状态、透明底、裁到只剩胶囊
   ...             你自己的 js/css/图片/字体，全部用相对路径引用
 ```
 
@@ -102,5 +102,5 @@ mami.version;            // 1
 - [ ] 长句子不撑破、不溢出窗口
 - [ ] `data-mami-hit` 只覆盖该点的地方（`?hits` 或预览台看红框）
 - [ ] 退场动画 ≤ 300ms；再次出现时出场动画会重播
-- [ ] 放了 `preview.png`：`msedge --headless=new --force-device-scale-factor=2 --window-size=<宽>,<高> --screenshot=preview.png "file:///…/index.html?state=recording"`（窗口太窄时 Edge 会撑宽，开宽一点再从中间裁）
+- [ ] 放了 `preview.png`：`msedge --headless=new --force-device-scale-factor=2 --default-background-color=00000000 --window-size=<宽>,<高> --screenshot=preview.png "file:///…/index.html?state=recording&bare"`，再按不透明像素裁边（窗口窄于 520 时 Edge 会撑宽，开 900 宽再裁）
 - [ ] 没有外链资源；`manifest.json` 的 `dev` 改回 false

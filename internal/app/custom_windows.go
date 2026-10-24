@@ -35,30 +35,14 @@ type styleThumb struct {
 	bmp *ui.Bitmap
 }
 
-const styleCardW, styleThumbH = 160, 76
+const styleShotH, styleShotMaxW = 44, 260
 
 // pageCustom 侧边栏「自定义」：上面是自己的网页胶囊样式（卡片墙），下面是给 AI 的 skill，一行一个、默认折叠
 func (a *App) pageCustom(c *ui.Context, d *Config) {
 	t := c.Theme()
 	pageTitle(c, T("自定义"))
 	settingGroup(c, T("胶囊样式"), func() {
-		ui.Row(c).Wrap().Gap(12).Padding(14, 0).Children(func() {
-			for _, e := range a.webStyles() {
-				a.styleCard(c, d, e)
-			}
-			add := ui.ButtonBase(c).Width(styleCardW).Height(styleThumbH+46).Radius(10).Border(1, t.Border).BorderStyle(ui.BorderDashed).
-				Center().Gap(4).Cursor(ui.CursorPointer).Label(T("新建样式"))
-			if add.Hovered() {
-				add.Background(t.SurfaceHover)
-			}
-			add.Children(func() {
-				ui.Text(c, "+").FontSize(22).TextColor(t.TextMuted)
-				ui.Text(c, T("新建样式")).FontSize(12).TextColor(t.TextMuted)
-			})
-			if add.Clicked() {
-				a.newWebStyle()
-			}
-		})
+		a.styleGallery(c, d)
 		ui.Row(c).Padding(0, 0, 12, 0).Children(func() {
 			if smallLink(c, T("打开样式文件夹")).Clicked() {
 				a.openWebStyles()
@@ -74,54 +58,78 @@ func (a *App) pageCustom(c *ui.Context, d *Config) {
 	})
 }
 
-// styleCard 一张样式卡：缩略图（文件夹里的 preview.png，没有就画个药丸），名字、尺寸；点一下选它，悬停露出「打开」
-func (a *App) styleCard(c *ui.Context, d *Config, e webStyleEntry) {
+// styleGallery 跟外观页的预览一样：一块假桌面上直接摆胶囊（preview.png，没有就画个药丸），名字写在下面。
+// 点一下选它；选中的名字加粗、前面一个小点
+func (a *App) styleGallery(c *ui.Context, d *Config) {
 	t := c.Theme()
-	value, dir := "web:"+e.folder, filepath.Join(a.webVoiceStylesDir(), e.folder)
-	picked := d.VoiceStyle == value
-	card := ui.Column(c).Key(e.folder).Width(styleCardW).Radius(10).Clip().Border(1, t.Border).Background(t.Surface)
-	if picked {
-		card.Border(2, t.Accent)
+	desk, label := ui.RGBA(221, 226, 234, 1), ui.RGBA(30, 32, 38, 0.55)
+	if t.Dark {
+		desk, label = ui.RGBA(22, 24, 29, 1), ui.RGBA(232, 234, 240, 0.55)
 	}
-	hover := card.Hovered()
-	card.Children(func() {
-		thumb := ui.ButtonBase(c).FillWidth().Height(styleThumbH).Cursor(ui.CursorPointer).Label(e.man.Name)
-		bmp := styleThumbFor(filepath.Join(dir, "preview.png"))
-		thumb.Draw(func(p *ui.Painter, r ui.Rect) {
-			desk := ui.RGBA(221, 226, 234, 1)
-			if t.Dark {
-				desk = ui.RGBA(22, 24, 29, 1)
-			}
-			p.Fill(r, desk, 0)
-			if bmp != nil {
-				p.Image(bmp, r, ui.Cover)
-				return
-			}
-			w, h := float32(84), float32(26)
-			p.Fill(ui.Rect{X: r.X + (r.W-w)/2, Y: r.Y + (r.H-h)/2, W: w, H: h}, ui.RGBA(30, 30, 36, 1), h/2)
-		})
-		if picked {
-			thumb.Children(func() {
-				ui.Text(c, T("正在用")).FontSize(11).TextColor(t.AccentText).Background(t.Accent).Radius(6).Padding(2, 8).Margin(8, 0, 0, 8)
+	ui.Row(c).FillWidth().Wrap().Padding(18, 16).Margin(12, 0, 8, 0).Gap(28).Justify(ui.Center).AlignItems(ui.End).Background(desk).Radius(t.Radius).Children(func() {
+		for _, e := range a.webStyles() {
+			value := "web:" + e.folder
+			picked := d.VoiceStyle == value
+			item := ui.ButtonBase(c).Key(e.folder).Shrink(0).Cursor(ui.CursorPointer).Label(e.man.Name)
+			hover := item.Hovered()
+			item.Children(func() {
+				ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
+					styleShot(c, styleThumbFor(filepath.Join(a.webVoiceStylesDir(), e.folder, "preview.png")))
+					ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+						if picked {
+							ui.Box(c).Size(5, 5).Radius(3).Background(t.Text)
+						}
+						name := ui.Text(c, e.man.Name).FontSize(11).SingleLine()
+						switch {
+						case picked:
+							name.TextColor(t.Text).FontWeight(600)
+						case hover:
+							name.TextColor(t.Text)
+						default:
+							name.TextColor(label)
+						}
+					})
+				})
 			})
+			if item.Clicked() && !picked {
+				d.VoiceStyle = value
+				a.set.status, a.set.statusErr = T("记得点保存"), false
+			}
 		}
-		if thumb.Clicked() && !picked {
-			d.VoiceStyle = value
-			a.set.status, a.set.statusErr = T("记得点保存"), false
-		}
-		ui.Row(c).FillWidth().Padding(8, 12).Gap(8).AlignItems(ui.Center).Children(func() {
-			ui.Column(c).Grow(1).Shrink(1).Gap(2).Children(func() {
-				ui.Text(c, e.man.Name).FontSize(13).FontWeight(600).SingleLine()
-				sub := fmt.Sprintf("%d×%d", e.man.Width, e.man.Height)
-				if e.man.Dev {
-					sub += " · " + T("开发模式")
+		add := ui.ButtonBase(c).Shrink(0).Cursor(ui.CursorPointer).Label(T("新建样式"))
+		addHover := add.Hovered()
+		add.Children(func() {
+			ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
+				ring := ui.Box(c).Size(styleShotH, styleShotH).Radius(styleShotH/2).Border(1, label).BorderStyle(ui.BorderDashed).Center()
+				ring.Children(func() { ui.Text(c, "+").FontSize(18).TextColor(label) })
+				color := label
+				if addHover {
+					color = t.Text
 				}
-				ui.Text(c, sub).FontSize(11).TextColor(t.TextMuted).SingleLine()
+				ui.Text(c, T("新建样式")).FontSize(11).TextColor(color).SingleLine()
 			})
-			if hover && smallLink(c, T("打开")).Clicked() {
-				mygo.Shell.OpenPath(dir)
-			}
 		})
+		if add.Clicked() {
+			a.newWebStyle()
+		}
+	})
+}
+
+// styleShot 一个样式的样子：按 preview.png 的比例画成 styleShotH 高（太宽就压到 styleShotMaxW）
+func styleShot(c *ui.Context, bmp *ui.Bitmap) {
+	h, w := float32(styleShotH), float32(84)
+	if bmp != nil {
+		if bw, bh := bmp.Size(); bh > 0 {
+			w = min(styleShotMaxW, h*float32(bw)/float32(bh))
+		}
+	}
+	ui.Box(c).Size(w, h).Draw(func(p *ui.Painter, r ui.Rect) {
+		if bmp != nil {
+			p.Image(bmp, r, ui.Contain)
+			return
+		}
+		ph := float32(30)
+		p.Fill(ui.Rect{X: r.X, Y: r.Y + (r.H-ph)/2, W: r.W, H: ph}, ui.RGBA(30, 30, 36, 1), ph/2)
 	})
 }
 
