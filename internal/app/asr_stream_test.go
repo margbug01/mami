@@ -74,7 +74,8 @@ func TestLiveText(t *testing.T) {
 // 服务端卡住时，流式识别要在时限内报错，而不是等满 asrTimeout
 func TestASRStreamStallTimesOut(t *testing.T) {
 	defer func(s, f time.Duration) { asrStartWait, asrFinishWait = s, f }(asrStartWait, asrFinishWait)
-	asrStartWait, asrFinishWait = 300*time.Millisecond, 300*time.Millisecond
+	// 两个时限错开：没回 task-started 时两个计时器都在跑，一样长就看谁先抢到，CI 上会翻
+	asrStartWait, asrFinishWait = 200*time.Millisecond, 800*time.Millisecond
 	for _, tc := range []struct {
 		name, started, want string
 	}{
