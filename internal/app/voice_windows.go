@@ -300,7 +300,8 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 			started := a.voiceKindAt
 			time.AfterFunc(8*time.Second, func() {
 				a.voiceWin.Update(func() {
-					if voiceEpoch.Load() != id || !a.voiceUI.recognizing || a.voiceLeaving || a.voiceKindAt != started {
+					// 已经收起（voiceShownW 归 0）时 voiceUI 还停在识别中，不看这个会把收好的胶囊重新弹出来、再也不收
+					if voiceEpoch.Load() != id || !a.voiceUI.recognizing || a.voiceLeaving || a.voiceShownW == 0 || a.voiceKindAt != started {
 						return
 					}
 					waiting := a.voiceUI
