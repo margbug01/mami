@@ -266,6 +266,15 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 			return
 		}
 		if a.showCapsule(state) { // 自定义样式（capsule_windows.go）
+			if a.voiceShownW != 0 { // 内置胶囊还在（刚换了样式）：直接收掉，别两颗同时在屏上
+				a.voiceWin.Hide()
+				a.voiceShownW, a.voiceLeaving = 0, false
+				a.voiceHideGen++
+			}
+			if state.recognizing && !a.voiceUI.recognizing {
+				w, started := &a.capWin, a.capWin.kindAt
+				a.slowHint(id, func() bool { return w.shown && w.leaveAt.IsZero() && w.kindAt == started })
+			}
 			if state.recording || state.recognizing || !state.retry {
 				a.voiceRetry = nil
 			}
@@ -305,17 +314,8 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 		}
 		if state.recognizing && !a.voiceUI.recognizing {
 			started := a.voiceKindAt
-			time.AfterFunc(8*time.Second, func() {
-				a.voiceWin.Update(func() {
-					// 已经收起（voiceShownW 归 0）时 voiceUI 还停在识别中，不看这个会把收好的胶囊重新弹出来、再也不收
-					if voiceEpoch.Load() != id || !a.voiceUI.recognizing || a.voiceLeaving || a.voiceShownW == 0 || a.voiceKindAt != started {
-						return
-					}
-					waiting := a.voiceUI
-					waiting.slow = true
-					a.voiceDisplay(id, waiting, true)
-				})
-			})
+			// 已经收起（voiceShownW 归 0）时 voiceUI 还停在识别中，不看这个会把收好的胶囊重新弹出来、再也不收
+			a.slowHint(id, func() bool { return !a.voiceLeaving && a.voiceShownW != 0 && a.voiceKindAt == started })
 		}
 		if state.recording || state.recognizing || !state.retry {
 			a.voiceRetry = nil
@@ -325,11 +325,24 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 	})
 }
 
-// voiceLeave 先让药丸沉下去淡出，动画走完再真正藏窗口；中途又要显示就作罢（界面线程调用）
+// slowHint 识别 8 秒还没结果：胶囊换成「响应较慢，可取消」。showing 报告当初那颗胶囊是否还在、还停在这次识别上（界面线程）
+func (a *App) slowHint(id uint64, showing func() bool) {
+	time.AfterFunc(8*time.Second, func() {
+		a.voiceWin.Update(func() {
+			if voiceEpoch.Load() != id || !a.voiceUI.recognizing || !showing() {
+				return
+			}
+			waiting := a.voiceUI
+			waiting.slow = true
+			a.voiceDisplay(id, waiting, true)
+		})
+	})
+}
+
+// voiceLeave 先让药丸沉下去淡出，动画走完再真正藏窗口；中途又要显示就作罢（界面线程调用）。
+// 自定义浮层和内置药丸各收各的，不提前返回：哪颗留在屏上都收得掉
 func (a *App) voiceLeave() {
-	if a.hideCapsule() {
-		return
-	}
+	a.hideCapsule()
 	if a.voiceShownW == 0 || a.voiceLeaving {
 		return
 	}
@@ -674,8 +687,8 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 			seg, segPeak = nil, 0
 		}
 		levels = append(levels, level)
-		if len(levels) > voiceBars {
-			levels = levels[len(levels)-voiceBars:]
+		if len(levels) > capsuleLevels { // 内置样式只取最后 voiceBars 个，多留的给自定义样式
+			levels = levels[len(levels)-capsuleLevels:]
 		}
 		if valid() && time.Since(last) >= 50*time.Millisecond {
 			last = time.Now()
@@ -699,7 +712,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		job := &asrJob{done: make(chan struct{})}
 		jobs = append(jobs, job)
 		go func() {
-			job.text, job.err = stream.finish(asrFinishWait)
+			job.text, job.err = stream.finish(asrFinishWait + stream.backlog())
 			if job.err != nil && valid() {
 				// 这条连接卡了或断了：整段录音换新连接再识别一次，还不行才给重试钮
 				log.Printf("voice: stream failed, resending %dms of audio on a new connection: %v", len(pcm)/32, job.err)
@@ -863,7 +876,7 @@ func (a *App) deliverVoice(ctx context.Context, id uint64, fg uintptr, cfg Confi
 
 const voiceBars = 9
 
-// 渐变波柱的底：深色是黑药丸，浅色是浅灰药丸（由「浮窗底色」决定，不跟主题）
+// 渐变波柱的底：深色是黑药丸，浅色是浅灰药丸（由「浮窗外观」决定，不跟主题）
 var (
 	pillBg          = ui.RGBA(0, 0, 0, 1)
 	pillBorder      = ui.RGBA(255, 255, 255, 0.12)
@@ -1413,7 +1426,7 @@ func (a *App) runVoiceDemo(only string) {
 				level = 0.002 // 中间停一下，看安静时的样子
 			}
 			levels = append(levels, level)
-			levels = levels[max(0, len(levels)-voiceBars):]
+			levels = levels[max(0, len(levels)-capsuleLevels):]
 			st := voiceViewState{recording: true, levels: append([]float64(nil), levels...)}
 			if n := int((x - 0.8) * 10); cfg.VoiceLiveText && n > 0 { // 边说边出字：先空一会儿，再一个个字冒出来
 				st.live = string(say[:min(n, len(say))])

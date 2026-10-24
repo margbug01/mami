@@ -83,6 +83,11 @@ func (s *asrStream) feed(data []byte) {
 	}
 }
 
+// backlog 还没发出去的音频（上行慢时会积压）每块多给 100ms：发它的时间不算服务端慢
+func (s *asrStream) backlog() time.Duration {
+	return min(time.Duration(len(s.audio))*100*time.Millisecond, asrTimeout)
+}
+
 // finish 告诉服务端说完了，最多等 wait 拿识别结果
 func (s *asrStream) finish(wait time.Duration) (string, error) {
 	close(s.audio)

@@ -1,6 +1,6 @@
 package i18n
 
-// 设置页「自定义」：网页胶囊样式和做样式的说明（en, ja, tw, ko, es, fr, de, ru）
+// 设置页「自定义」：胶囊样式和给 AI 的 skill（en, ja, tw, ko, es, fr, de, ru）
 func init() {
 	entries := map[string][8]string{
 		"脚本出错：": {"Script error: ", "スクリプトのエラー：", "腳本出錯：", "스크립트 오류: ", "Error del script: ", "Erreur du script : ", "Skriptfehler: ", "Ошибка скрипта: "},

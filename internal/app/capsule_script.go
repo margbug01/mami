@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image/png"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -25,6 +26,15 @@ const capsulePrefix = "custom:"
 // capsuleBudget 一帧脚本最多跑这么久，超了就打断、这个样式算出错（退回内置样式），死循环也卡不住界面
 const capsuleBudget = 60 * time.Millisecond
 
+// capsuleSlowFrame 连着 capsuleSlowFrames 帧都超过它，也按超时算：每帧都吃掉一整帧时间，Mami 所有窗口都会跟着卡
+const (
+	capsuleSlowFrame  = 16 * time.Millisecond
+	capsuleSlowFrames = 30
+)
+
+// capsuleLevels 给脚本的音量个数（录音 100ms 一个，约 4.8 秒）
+const capsuleLevels = 48
+
 // capsuleManifest 样式文件夹里的 manifest.json，全可省
 type capsuleManifest struct {
 	Name     string `json:"name"`     // 设置里显示的名字，默认文件夹名
@@ -35,14 +45,13 @@ type capsuleManifest struct {
 	OffsetY  int    `json:"offsetY"`  //
 }
 
+// loadCapsuleManifest 出错时也把默认值填好（设置页照样能按大小画出错的样子）
 func loadCapsuleManifest(dir string) (capsuleManifest, error) {
-	m := capsuleManifest{Name: filepath.Base(dir)}
-	if _, err := os.Stat(filepath.Join(dir, "style.js")); err != nil {
-		return m, err
-	}
-	if b, err := os.ReadFile(filepath.Join(dir, "manifest.json")); err == nil {
-		if err := json.Unmarshal(b, &m); err != nil {
-			return m, fmt.Errorf("manifest.json: %w", err)
+	var m capsuleManifest
+	_, err := os.Stat(filepath.Join(dir, "style.js"))
+	if b, rerr := os.ReadFile(filepath.Join(dir, "manifest.json")); err == nil && rerr == nil {
+		if jerr := json.Unmarshal(b, &m); jerr != nil {
+			err = fmt.Errorf("manifest.json: %w", jerr)
 		}
 	}
 	if strings.TrimSpace(m.Name) == "" {
@@ -60,7 +69,7 @@ func loadCapsuleManifest(dir string) (capsuleManifest, error) {
 	default:
 		m.Position = "bottom"
 	}
-	return m, nil
+	return m, err
 }
 
 // capsuleScene 一帧给脚本的状态 s（字段改了要同步 SKILL.md）
@@ -71,6 +80,7 @@ type capsuleScene struct {
 	live, text, hint string
 	copy, retry      bool
 	undo, dark       bool
+	slow             bool    // 识别 8 秒还没结果；这时 hint 是「响应较慢，可取消」
 	t                float64 // 秒，一直往前走，做动画用
 	since            float64 // 进入当前 kind 多少秒
 	leave            float64 // kind=hidden 时退场进度 0~1，到 1 窗口就藏起来
@@ -108,9 +118,13 @@ type capFrame struct {
 type capsuleStyle struct {
 	folder, dir string
 	man         capsuleManifest
-	mod         time.Time // style.js / manifest.json 里较新的修改时间
+	mod         time.Time // capsuleModTime
 	checked     time.Time
 	err         error // 加载或运行出错：这个样式先不用，文件改了再试
+	timedOut    bool  // err 是一帧跑超时（多半是那一帧的数据或机器一时忙），浮窗下次说话会重新加载再试
+	slowRun     int   // 连着多少帧超过 capsuleSlowFrame
+	logs        int   // console.log 打了几行
+	probed      bool  // 设置页已经把预览不画的那些状态跑过一遍
 	vm          *goja.Runtime
 	draw        goja.Callable
 	g           goja.Value
@@ -121,14 +135,55 @@ type capsuleStyle struct {
 	measure func(text string, size float32) (float32, float32)
 }
 
+// capsuleModTime style.js、manifest.json 和 png 里最新的修改时间：换张图也算改了
 func capsuleModTime(dir string) time.Time {
 	var t time.Time
-	for _, f := range []string{"style.js", "manifest.json"} {
-		if info, err := os.Stat(filepath.Join(dir, f)); err == nil && info.ModTime().After(t) {
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		name := strings.ToLower(e.Name())
+		if name != "style.js" && name != "manifest.json" && !strings.HasSuffix(name, ".png") {
+			continue
+		}
+		if info, err := e.Info(); err == nil && info.ModTime().After(t) {
 			t = info.ModTime()
 		}
 	}
 	return t
+}
+
+// runBudget 跑 fn，超过 d 就打断。Interrupt 可能在 fn 刚跑完时才落下，等它落定再 ClearInterrupt，
+// 不然下一帧一开头就被打断（goja 要调用方自己同步）。打断只发生在两条 JS 指令之间，原生调用里打不断
+func (s *capsuleStyle) runBudget(d time.Duration, why string, fn func() error) error {
+	fired := make(chan struct{})
+	timer := time.AfterFunc(d, func() {
+		s.vm.Interrupt(why)
+		close(fired)
+	})
+	err := fn()
+	if !timer.Stop() {
+		<-fired
+	}
+	s.vm.ClearInterrupt()
+	return err
+}
+
+// console 脚本里的 console.log / warn / error 写进 Mami 的日志；每次加载最多 100 行，每帧都打也刷不了屏
+func (s *capsuleStyle) console() map[string]any {
+	say := func(call goja.FunctionCall) goja.Value {
+		s.logs++
+		switch {
+		case s.logs <= 100:
+			parts := make([]string, len(call.Arguments))
+			for i, v := range call.Arguments {
+				parts[i] = v.String()
+			}
+			log.Printf("capsule: %s: %s", s.folder, strings.Join(parts, " "))
+		case s.logs == 101:
+			log.Printf("capsule: %s: more console output dropped", s.folder)
+		}
+		return goja.Undefined()
+	}
+	return map[string]any{"log": say, "info": say, "warn": say, "error": say}
 }
 
 // loadCapsuleStyle 读 manifest、跑一遍 style.js、拿到 draw。出错时返回的样式带着 err
@@ -145,10 +200,11 @@ func loadCapsuleStyle(dir string) *capsuleStyle {
 	}
 	s.vm = goja.New()
 	s.g = s.vm.ToValue(s.api())
-	timer := time.AfterFunc(capsuleBudget*5, func() { s.vm.Interrupt("style.js took too long to load") })
-	_, err = s.vm.RunScript("style.js", string(src))
-	timer.Stop()
-	s.vm.ClearInterrupt()
+	s.vm.Set("console", s.console())
+	err = s.runBudget(capsuleBudget*5, "style.js took too long to load", func() error {
+		_, err := s.vm.RunScript("style.js", string(src))
+		return err
+	})
 	if err != nil {
 		s.err = err
 		return s
@@ -175,14 +231,27 @@ func (s *capsuleStyle) frame(sc capsuleScene, measure func(string, float32) (flo
 	}
 	st := map[string]any{
 		"kind": sc.kind, "level": sc.level, "levels": levels, "live": sc.live, "text": sc.text, "hint": sc.hint,
-		"copy": sc.copy, "retry": sc.retry, "undo": sc.undo, "dark": sc.dark,
+		"copy": sc.copy, "retry": sc.retry, "undo": sc.undo, "dark": sc.dark, "slow": sc.slow,
 		"w": s.man.Width, "h": s.man.Height, "t": sc.t, "since": sc.since, "leave": sc.leave, "hover": sc.hover,
 	}
-	timer := time.AfterFunc(capsuleBudget, func() { s.vm.Interrupt("draw took longer than " + capsuleBudget.String()) })
-	_, err := s.draw(goja.Undefined(), s.g, s.vm.ToValue(st))
-	timer.Stop()
-	s.vm.ClearInterrupt()
+	start := time.Now()
+	err := s.runBudget(capsuleBudget, "draw took longer than "+capsuleBudget.String(), func() error {
+		_, err := s.draw(goja.Undefined(), s.g, s.vm.ToValue(st))
+		return err
+	})
 	s.cur = nil
+	var interrupted *goja.InterruptedError
+	s.timedOut = errors.As(err, &interrupted)
+	if err == nil {
+		if time.Since(start) > capsuleSlowFrame {
+			s.slowRun++
+		} else {
+			s.slowRun = 0
+		}
+		if s.slowRun >= capsuleSlowFrames {
+			err, s.timedOut = fmt.Errorf("draw kept taking over %v a frame", capsuleSlowFrame), true
+		}
+	}
 	if err != nil {
 		s.err = err
 		return nil, err
@@ -233,12 +302,13 @@ func (s *capsuleStyle) api() map[string]any {
 			add(capOp{kind: 'h', x: f32(x), y: f32(y), w: f32(w), h: f32(h), r: f32(r), blur: f32(blur), color: c, dx: f32(dx), dy: f32(dy), spread: f32(spread)})
 		},
 		"measure": func(text string, size float64) float64 {
-			w, _ := s.measureText(text, f32(size))
+			w, _ := s.measureText(oneLine.Replace(text), f32(orDefault(size, 13)))
 			return float64(w)
 		},
-		// text 画一行字：y 是这行的竖直中线；align left|center|right 对齐到 x；给了 maxWidth 就截断加 …，返回画出来的宽
+		// text 画一行字（换行当空格）：y 是这行的竖直中线；align left|center|right 对齐到 x；给了 maxWidth 就截断加 …，返回画出来的宽
 		"text": func(text string, x, y, size float64, color goja.Value, align string, maxWidth float64) float64 {
 			c, _ := fill(color)
+			text = oneLine.Replace(text)
 			sz := f32(orDefault(size, 13))
 			if maxWidth > 0 {
 				text = s.ellipsize(text, sz, f32(maxWidth))
@@ -291,27 +361,38 @@ func (s *capsuleStyle) measureText(text string, size float32) (float32, float32)
 	return s.measure(text, size)
 }
 
+// oneLine g.text 只画一行：润色成几段的话也排成一行
+var oneLine = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ")
+
+// ellipsize 截到 maxW 以内加 …。量字在原生代码里跑、打断不了，所以别一个字一个字地试：
+// 一个字至少 size/4 宽，放不下的先整段截掉，剩下的二分，几千字的句子也只量十来次
 func (s *capsuleStyle) ellipsize(text string, size, maxW float32) string {
 	if w, _ := s.measureText(text, size); w <= maxW {
 		return text
 	}
 	r := []rune(text)
-	for len(r) > 0 {
-		r = r[:len(r)-1]
-		if w, _ := s.measureText(string(r)+"…", size); w <= maxW {
-			break
+	if n := maxW/size*4 + 1; size > 0 && n < float32(len(r)) {
+		r = r[:int(n)]
+	}
+	lo, hi := 0, len(r) // r[:lo]+"…" 放得下，r[:hi+1]+"…" 放不下
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if w, _ := s.measureText(string(r[:mid])+"…", size); w <= maxW {
+			lo = mid
+		} else {
+			hi = mid - 1
 		}
 	}
-	return string(r) + "…"
+	return string(r[:lo]) + "…"
 }
 
-// image 样式文件夹里的 png，按文件名缓存；只认文件夹里的文件
+// image 样式文件夹里的 png，按文件名缓存；只认文件夹里的文件（不带路径，也不能是 COM1.png 这种设备名）
 func (s *capsuleStyle) image(file string) *ui.Bitmap {
 	if b, ok := s.images[file]; ok {
 		return b
 	}
 	var b *ui.Bitmap
-	if filepath.Base(file) == file && strings.HasSuffix(strings.ToLower(file), ".png") {
+	if filepath.Base(file) == file && filepath.IsLocal(file) && strings.HasSuffix(strings.ToLower(file), ".png") {
 		if f, err := os.Open(filepath.Join(s.dir, file)); err == nil {
 			if img, err := png.Decode(f); err == nil {
 				b = ui.NewBitmap(img)
@@ -319,7 +400,9 @@ func (s *capsuleStyle) image(file string) *ui.Bitmap {
 			f.Close()
 		}
 	}
-	s.images[file] = b
+	if b != nil || len(s.images) < 64 { // 找不到的也记下免得每帧去开，但脚本每帧换个名字也只记这么多
+		s.images[file] = b
+	}
 	return b
 }
 
@@ -532,8 +615,8 @@ func fakeCapsuleScene(kind string, now time.Time, dark bool) capsuleScene {
 	t := float64(now.UnixMilli()%600000) / 1000
 	sc := capsuleScene{kind: kind, dark: dark, t: t, since: math.Mod(t, 30) + 1}
 	if kind == "recording" {
-		for i := 0; i < 48; i++ {
-			x := t - float64(47-i)*0.05
+		for i := 0; i < capsuleLevels; i++ { // 和真录音一样 100ms 一个
+			x := t - float64(capsuleLevels-1-i)*0.1
 			sc.levels = append(sc.levels, math.Min(1, math.Max(0, 0.45+0.35*math.Sin(x*3.1)+0.15*math.Sin(x*7.3))))
 		}
 		sc.level = sc.levels[len(sc.levels)-1]

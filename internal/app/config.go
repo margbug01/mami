@@ -30,7 +30,7 @@ type Config struct {
 	VoiceStyle        string       `json:"voice_style"` // 胶囊样式：bars 渐变波柱 / orb 果冻球 / glass 磨砂玻璃 / pixel 复古像素 / mercury 水银 / islands 三岛连桥 / leds 分段电平
 	VoiceFlowPalette  string       `json:"voice_flow_palette"`
 	VoiceOrbSize      float64      `json:"voice_orb_size"`  // 果冻球直径（DIP），40~96
-	VoiceTone         string       `json:"voice_tone"`      // 浮窗底色：dark / light / auto（跟 Mami 主题），跟主题分开选
+	VoiceTone         string       `json:"voice_tone"`      // 浮窗外观：dark / light / auto（跟 Mami 主题），跟主题分开选
 	VoiceSound        bool         `json:"voice_sound"`     // 开始、结束、取消的提示音
 	VoiceLiveText     bool         `json:"voice_live_text"` // 说话时胶囊里实时出字（只有流式识别模型有中间结果）
 	VoiceLearn        bool         `json:"voice_learn"`     // 贴入后用户手改的词自动记成热词和纠错表

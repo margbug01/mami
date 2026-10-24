@@ -71,6 +71,9 @@ func (a *App) styleGallery(c *ui.Context, d *Config) {
 			item.Children(func() {
 				ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
 					err := a.capsulePreview(c, e.folder, fakeCapsuleScene("recording", now, dark), 260, 64)
+					if err == nil {
+						err = a.capsuleCheck(c, e.folder, dark)
+					}
 					ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
 						if picked {
 							ui.Box(c).Size(5, 5).Radius(3).Background(t.Text)
@@ -131,6 +134,9 @@ func (a *App) capsuleLookPreview(c *ui.Context, d *Config, folder string) {
 			})
 		}
 	})
+	if failed == nil {
+		failed = a.capsuleCheck(c, folder, dark)
+	}
 	ui.Row(c).Gap(12).Padding(0, 0, 8, 0).AlignItems(ui.Center).Children(func() {
 		if failed != nil {
 			ui.Text(c, T("脚本出错：")+failed.Error()).FontSize(12).TextColor(t.Danger).Grow(1).Shrink(1).MaxLines(2)

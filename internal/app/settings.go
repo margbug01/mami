@@ -904,7 +904,7 @@ func (a *App) voiceLook(c *ui.Context, d *Config) {
 	settingGroup(c, "", func() {
 		ui.Text(c, T("录音浮窗")).FontSize(15).Padding(14, 0, 2, 0)
 		settingRow(c, T("浮窗样式"), "", func() {
-			optionSelect(c, &d.VoiceStyle, append([]option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}}, a.capsuleOptions()...))
+			optionSelect(c, &d.VoiceStyle, a.capsuleOptions([]option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}}, d.VoiceStyle))
 		})
 		if folder, ok := strings.CutPrefix(d.VoiceStyle, capsulePrefix); ok { // 自定义样式：预览由它的脚本画
 			a.capsuleLookPreview(c, d, folder)
@@ -958,7 +958,7 @@ func (a *App) voicePreview(c *ui.Context, d *Config) {
 		bars[i] = float32(min(1, max(0, v)))
 	}
 	themeDark := dark
-	dark = toneDark(d.VoiceTone, themeDark) // 假桌面跟主题，浮窗按「浮窗底色」
+	dark = toneDark(d.VoiceTone, themeDark) // 假桌面跟主题，浮窗按「浮窗外观」
 	style, sk := d.VoiceStyle, skinFor(d.VoiceStyle, dark)
 	states := []voiceViewState{{recording: true}, {recognizing: true}, {text: T("明天三点开会"), copy: true}}
 	captions := []string{T("录音中"), T("识别中…"), T("结果待复制")}

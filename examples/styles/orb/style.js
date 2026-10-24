@@ -15,7 +15,7 @@ function draw(g, s) {
   var ring = s.t - shownAt
   if (shownAt >= 0 && ring < 0.5) g.ring(cx, cy, 14 + ring * 70, 6 * (1 - ring * 2) + 0.5, g.rgba(143, 216, 255, 1 - ring * 2))
 
-  var H = 40, B = 28, text = s.kind === "text"
+  var H = 40, B = 28, text = s.kind === "text" || (s.kind === "recognizing" && s.slow) // 识别太慢：换成一行「响应较慢，可取消」
   var msg = s.hint ? (s.text ? s.text + " · " + s.hint : s.hint) : s.text
   var W = text ? Math.min(g.measure(msg, 13) + 24 + 2 * (B + 10), s.w - 8) : 132
   var x0 = cx - W / 2, y0 = cy - H / 2 + s.leave * 12
@@ -29,7 +29,7 @@ function draw(g, s) {
     g.icon(icon, bx + B / 2, by + B / 2, 13, fg)
     g.button(bx, by, B, B, action)
   }
-  btn(x0 + 6, text ? "close" : "cancel", "x")
+  btn(x0 + 6, s.kind === "text" ? "close" : "cancel", "x")
   var right = s.kind === "recording" ? ["stop", "check"] : s.copy ? ["copy", "copy"] : s.retry ? ["retry", "retry"] : s.undo ? ["undo", "undo"] : null
   if (right && s.kind !== "recognizing") btn(x0 + W - 6 - B, right[0], right[1])
 

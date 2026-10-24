@@ -427,7 +427,7 @@ func (a *App) guideListen(ctx context.Context, stop <-chan struct{}, id uint64) 
 			heard = min(heard+step, total)
 		}
 		levels = append(levels, level)
-		levels = levels[max(0, len(levels)-voiceBars):]
+		levels = levels[max(0, len(levels)-capsuleLevels):]
 		if !valid() {
 			return
 		}

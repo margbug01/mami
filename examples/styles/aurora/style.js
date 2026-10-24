@@ -35,7 +35,8 @@ function draw(g, s) {
 
   // 中间的胶囊
   var H = 40, B = 28
-  var msg = s.kind === "text" ? (s.hint ? s.text + " · " + s.hint : s.text) : s.kind === "recognizing" ? "识别中…" : s.live || ""
+  var said = s.hint ? (s.text ? s.text + " · " + s.hint : s.hint) : s.text
+  var msg = s.kind === "text" ? said : s.kind === "recognizing" ? (s.slow ? s.hint : "识别中…") : s.live || ""
   var inner = msg ? Math.min(g.measure(msg, 13) + 20, 300) : 90
   var right = s.kind === "recording" ? ["stop", "check"] : s.copy ? ["copy", "copy"] : s.retry ? ["retry", "retry"] : s.undo ? ["undo", "undo"] : null
   var W = 6 + B + inner + (right ? B + 6 : 6)

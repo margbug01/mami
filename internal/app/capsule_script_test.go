@@ -56,14 +56,18 @@ function draw(g, s) {
 }
 
 func TestCapsuleScriptGuards(t *testing.T) {
-	for name, js := range map[string]string{
-		"loop":    "function draw(g, s) { for (;;) {} }",
-		"syntax":  "function draw(g, s) {",
-		"no draw": "var x = 1",
-		"throw":   "function draw(g, s) { throw new Error('boom') }",
+	for name, tc := range map[string]struct {
+		js       string
+		timedOut bool // 超时：浮窗下次说话会重新加载再试；其余要改了文件
+	}{
+		"loop":    {"function draw(g, s) { for (;;) {} }", true},
+		"syntax":  {"function draw(g, s) {", false},
+		"no draw": {"var x = 1", false},
+		"throw":   {"function draw(g, s) { throw new Error('boom') }", false},
+		"console": {"function draw(g, s) { console.log('hi', s.kind); nope() }", false},
 	} {
 		t.Run(name, func(t *testing.T) {
-			s := loadCapsuleStyle(writeStyle(t, js, ""))
+			s := loadCapsuleStyle(writeStyle(t, tc.js, ""))
 			start := time.Now()
 			_, err := s.frame(capsuleScene{kind: "recording"}, nil)
 			if err == nil {
@@ -72,6 +76,12 @@ func TestCapsuleScriptGuards(t *testing.T) {
 			if d := time.Since(start); d > time.Second {
 				t.Fatalf("took %v", d)
 			}
+			if s.timedOut != tc.timedOut {
+				t.Fatalf("timedOut = %v (%v)", s.timedOut, err)
+			}
+			if name == "console" && !strings.Contains(err.Error(), "nope") {
+				t.Fatalf("console.log should work, the error should be the later call: %v", err)
+			}
 			if _, err2 := s.frame(capsuleScene{}, nil); err2 == nil {
 				t.Fatal("a failed style should stay failed until the file changes")
 			}
@@ -79,6 +89,52 @@ func TestCapsuleScriptGuards(t *testing.T) {
 	}
 	if s := loadCapsuleStyle(filepath.Join(t.TempDir(), "missing")); s.err == nil {
 		t.Fatal("missing folder should fail")
+	}
+	// manifest.json 坏了：报错，但大小照样有默认值，设置页能画出错的样子
+	s := loadCapsuleStyle(writeStyle(t, "function draw(g, s) {}", `{"name": "x", "width": "wide"}`))
+	if s.err == nil || !strings.Contains(s.err.Error(), "manifest.json") || s.man.Width != 260 || s.man.Height != 110 {
+		t.Fatalf("bad manifest: err %v, man %+v", s.err, s.man)
+	}
+}
+
+// 每帧都吃掉一整帧时间的脚本：连着 capsuleSlowFrames 帧以后按超时算
+func TestCapsuleScriptSlowFrames(t *testing.T) {
+	s := loadCapsuleStyle(writeStyle(t, "function draw(g, s) { var t = Date.now(); while (Date.now() - t < 18) {} }", ""))
+	for i := 1; i <= capsuleSlowFrames; i++ {
+		_, err := s.frame(capsuleScene{kind: "recording"}, nil)
+		if (err != nil) != (i == capsuleSlowFrames) {
+			t.Fatalf("frame %d: %v", i, err)
+		}
+	}
+	if !s.timedOut {
+		t.Fatal("a slow style should count as timed out")
+	}
+}
+
+// 几千字的句子也只量十来次（量字打断不了），截出来的是放得下的最长前缀
+func TestCapsuleEllipsizeLongText(t *testing.T) {
+	calls := 0
+	width := func(text string, size float32) (float32, float32) {
+		return float32(len([]rune(text))) * size * 0.6, size
+	}
+	s := &capsuleStyle{measure: func(text string, size float32) (float32, float32) { calls++; return width(text, size) }}
+	long := []rune(strings.Repeat("长", 3000))
+	got := s.ellipsize(string(long), 13, 300)
+	if calls > 20 {
+		t.Fatalf("%d measurements", calls)
+	}
+	n := len([]rune(got)) - 1
+	if !strings.HasSuffix(got, "…") || string([]rune(got)[:n]) != string(long[:n]) {
+		t.Fatalf("got %q", got)
+	}
+	if w, _ := width(got, 13); w > 300 {
+		t.Fatalf("%q is %v wide", got, w)
+	}
+	if w, _ := width(string(long[:n+1])+"…", 13); w <= 300 {
+		t.Fatalf("%q is not the longest that fits", got)
+	}
+	if got := s.ellipsize("短", 13, 300); got != "短" {
+		t.Fatalf("short text changed: %q", got)
 	}
 }
 
@@ -112,6 +168,12 @@ func TestCapsuleShippedStyles(t *testing.T) {
 				sc.level, sc.copy, sc.retry, sc.hint = float64(i%10)/9, i%3 == 0, i%3 == 1, map[bool]string{true: "润色失败"}[i%4 == 0]
 				if kind == "hidden" {
 					sc.leave = float64(i) / 39
+				}
+				if kind == "recognizing" && i%2 == 1 {
+					sc.slow, sc.hint = true, "响应较慢，可取消"
+				}
+				if kind == "recording" && i == 0 {
+					sc.levels, sc.level = nil, 0 // 刚开麦，还没有音量
 				}
 				f, err := s.frame(sc, nil)
 				if err != nil {

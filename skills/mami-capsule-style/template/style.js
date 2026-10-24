@@ -22,8 +22,10 @@ function draw(g, s) {
   var left = s.kind === "text" ? ["close", "x"] : ["cancel", "x"]
 
   var message = s.hint ? (s.text ? s.text + " · " + s.hint : s.hint) : s.text
+  // 有话要说：结果，或者识别太慢时的「响应较慢，可取消」（s.slow 时在 s.hint 里）
+  var talking = s.kind === "text" || (s.kind === "recognizing" && s.slow)
   var middle = 80
-  if (s.kind === "text") middle = Math.min(g.measure(message, 13) + 16, s.w - 40 - (1 + right.length) * (B + 6))
+  if (talking) middle = Math.min(g.measure(message, 13) + 16, s.w - 40 - (1 + right.length) * (B + 6))
   var W = 12 + B + middle + right.length * (B + 6) + 6
   var x = (s.w - W) / 2
 
@@ -47,12 +49,12 @@ function draw(g, s) {
       var bh = 4 + v * 20
       g.rect(mx + j * step, cy - bh / 2, 3, bh, accent, 1.5)
     }
+  } else if (talking) {
+    g.text(message, mx, cy, 13, fg, "left", middle - 8)
   } else if (s.kind === "recognizing") {
     for (var k = 0; k < 3; k++) {
       var a = 0.3 + 0.7 * Math.max(0, Math.sin(s.t * 6 - k * 0.8))
       g.circle(mx + middle / 2 - 20 + k * 12, cy, 3, g.mix(bg, fg, a))
     }
-  } else if (s.kind === "text") {
-    g.text(message, mx, cy, 13, fg, "left", middle - 8)
   }
 }
