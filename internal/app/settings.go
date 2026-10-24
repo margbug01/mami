@@ -904,17 +904,11 @@ func (a *App) voiceLook(c *ui.Context, d *Config) {
 	settingGroup(c, "", func() {
 		ui.Text(c, T("录音浮窗")).FontSize(15).Padding(14, 0, 2, 0)
 		settingRow(c, T("浮窗样式"), "", func() {
-			optionSelect(c, &d.VoiceStyle, append([]option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}}, a.webStyleOptions()...))
+			optionSelect(c, &d.VoiceStyle, append([]option{{"bars", T("渐变波柱")}, {"orb", T("果冻球")}, {"flow", T("流光")}, {"glass", T("磨砂玻璃")}, {"pixel", T("复古像素")}, {"mercury", T("水银")}, {"islands", T("三岛连桥")}, {"leds", T("分段电平")}}, a.capsuleOptions()...))
 		})
-		if strings.HasPrefix(d.VoiceStyle, "web:") { // 网页样式自己画，这里不预览
-			t := c.Theme()
-			ui.Row(c).Gap(12).Padding(4, 0, 12, 0).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, T("自定义的网页样式，效果在说话时看；在「自定义」里管理和新建。")).FontSize(12).TextColor(t.TextMuted).Grow(1).Shrink(1)
-				if smallLink(c, T("去自定义")).Clicked() {
-					a.set.page = pageCustom
-				}
-			})
-			settingRow(c, T("浮窗外观"), T("传给网页，样式自己决定怎么用"), func() { voiceToneSelector(c, &d.VoiceTone) })
+		if folder, ok := strings.CutPrefix(d.VoiceStyle, capsulePrefix); ok { // 自定义样式：预览由它的脚本画
+			a.capsuleLookPreview(c, d, folder)
+			settingRow(c, T("浮窗外观"), T("传给样式，样式自己决定怎么用"), func() { voiceToneSelector(c, &d.VoiceTone) })
 			return
 		}
 		a.voicePreview(c, d)

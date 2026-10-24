@@ -265,7 +265,7 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 			a.voiceLeave()
 			return
 		}
-		if a.showWebVoice(state) { // 网页胶囊（voice_web_windows.go）
+		if a.showCapsule(state) { // 自定义样式（capsule_windows.go）
 			if state.recording || state.recognizing || !state.retry {
 				a.voiceRetry = nil
 			}
@@ -327,7 +327,7 @@ func (a *App) voiceDisplay(id uint64, state voiceViewState, show bool) {
 
 // voiceLeave 先让药丸沉下去淡出，动画走完再真正藏窗口；中途又要显示就作罢（界面线程调用）
 func (a *App) voiceLeave() {
-	if a.hideWebVoice() {
+	if a.hideCapsule() {
 		return
 	}
 	if a.voiceShownW == 0 || a.voiceLeaving {

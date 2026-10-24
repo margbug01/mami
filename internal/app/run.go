@@ -105,7 +105,6 @@ func Run() {
 	a.dblTime = uint32(d)
 	a.avatar = loadAvatar()
 
-	mygo.Bind(&VoiceWeb{a})
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.quitting = true })
 	mygo.App.OnWindowAllClosed(func() {}) // 只剩托盘时也接着跑
 	mygo.App.OnSecondInstance(func(args []string, _ string) {
@@ -125,7 +124,6 @@ func Run() {
 		sysLocale = mygo.App.Locale()
 		i18n.Set(i18n.Resolve(cfg.Language, sysLocale))
 		a.createWindows()
-		a.warmWebVoice(cfg.VoiceStyle)
 		log.Printf("start: model=%s base=%s hotkey=%s config=%s", cfg.Model, cfg.BaseURL, cfg.Hotkey, a.cfgPath)
 		if *demo {
 			a.runDemo()

@@ -160,7 +160,7 @@ func (c *Config) normalize() {
 	switch {
 	case c.VoiceStyle == "bars", c.VoiceStyle == "orb", c.VoiceStyle == "flow", c.VoiceStyle == "glass", c.VoiceStyle == "pixel",
 		c.VoiceStyle == "mercury", c.VoiceStyle == "islands", c.VoiceStyle == "leds":
-	case strings.HasPrefix(c.VoiceStyle, "web:") && len(c.VoiceStyle) > 4: // 网页胶囊（试验，voice_web_windows.go）
+	case strings.HasPrefix(c.VoiceStyle, capsulePrefix) && len(c.VoiceStyle) > len(capsulePrefix): // 自定义样式（capsule_script.go）
 	default:
 		c.VoiceStyle = "bars"
 	}

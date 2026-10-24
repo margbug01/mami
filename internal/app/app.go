@@ -70,8 +70,8 @@ type App struct {
 	dock                                              voiceDock
 	dockHwnd                                          atomic.Uintptr
 	voiceWin                                          *mygo.Window
-	voiceWeb                                          webVoice // 网页胶囊（voice_web_windows.go），只在界面线程用
-	voiceWebHwnd                                      atomic.Uintptr
+	capWin                                            capsuleWin // 自定义胶囊样式的浮层（capsule_windows.go），只在界面线程用
+	capHwnd                                           atomic.Uintptr
 	voiceUI                                           voiceViewState
 	voicePrevious                                     voiceViewState
 	voiceWA                                           RECT // 以下三个只在界面线程读写：胶囊所在显示器的工作区
@@ -162,9 +162,6 @@ func (a *App) setConfig(cfg Config) error {
 	if cfg.VoiceEnabled && !cfg.DisableHotkeys {
 		voiceTrigger.Store(voiceKey(cfg.VoiceHotkey))
 	}
-	if a.voiceWin != nil {
-		a.warmWebVoice(cfg.VoiceStyle)
-	}
 	return nil
 }
 
@@ -206,13 +203,14 @@ func (a *App) createWindows() {
 	a.popHwnd.Store(h)
 	a.voiceWin, h = a.floatingWindow("mami-voice", voiceRecW, voiceWinH, voiceDotsW, voiceWinH, a.voiceView)
 	a.voiceHwnd.Store(h)
+	a.createCapsuleWindow()
 	a.createDock()
 }
 
 func (a *App) isOurs(p POINT) bool {
 	h, _, _ := pWindowFromPoint.Call(packPt(p))
 	root, _, _ := pGetAncestor.Call(h, GA_ROOT)
-	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load() || root == a.voiceWebHwnd.Load())
+	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load() || root == a.capHwnd.Load())
 }
 
 // ---------- 鼠标手势 ----------
