@@ -66,7 +66,7 @@ func startASRStream(ctx context.Context, cfg Config, onText func(string)) *asrSt
 		if s.err != nil && ctx.Err() != nil {
 			s.err = context.Cause(ctx) // 超时、发送失败：报真正的原因，而不是笼统的 context canceled
 		}
-		if s.err != nil && cfg.ASRAPIKey != "" {
+		if s.err != nil && cfg.ASRAPIKey != "" && strings.Contains(s.err.Error(), cfg.ASRAPIKey) { // 只在真带着 Key 时重写，别把「取消」也变成一个普通错误
 			s.err = errors.New(strings.ReplaceAll(s.err.Error(), cfg.ASRAPIKey, "[redacted]"))
 		}
 		if s.err != nil && !errors.Is(s.err, context.Canceled) {
