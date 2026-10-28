@@ -842,6 +842,9 @@ func (a *App) quit() {
 	dockQuit.Store(true)
 	a.quitting = true
 	if a.tray != nil {
+		// 先清菜单再删：退出是在右键菜单里点的，删掉后右键回调里那句 SetMenu(nil) 就够不着原生托盘了，
+		// MyGo 回到 trayMessage 看见菜单还在会再弹一个，退出被那个看不见的菜单吞掉，进程一直留着
+		a.tray.SetMenu(nil)
 		a.tray.Destroy()
 	}
 	mygo.App.Quit()
