@@ -79,7 +79,20 @@ func aqInput(user, aq, buf, start uintptr, n uint32, descs uintptr) uintptr {
 	return 0
 }
 
+// hasMic 有没有能录音的输入设备。Mac mini、Mac Studio 自己没有麦克风：什么都没接时 AudioQueue 照样建得起来、
+// 开得起来，只是一块数据都不来，按了触发键就像没反应。测试里换成假的
+var hasMic = func() bool {
+	ok := false
+	withPool(func() {
+		ok = send(class("AVCaptureDevice"), "defaultDeviceWithMediaType:", dlvar(libAVF, "AVMediaTypeAudio")) != 0
+	})
+	return ok
+}
+
 func recordVoice(ctx context.Context, stop <-chan struct{}, started func(), chunk func(data []byte, level float64)) (pcm []byte, err error) {
+	if !hasMic() {
+		return nil, errors.New(T("没找到麦克风：接上耳机、AirPods 或 USB 麦克风再试"))
+	}
 	switch micPermission() {
 	case micDenied:
 		return nil, errors.New(T("没有麦克风权限：系统设置 → 隐私与安全性 → 麦克风，打开 Mami"))

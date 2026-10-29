@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -114,5 +115,20 @@ func TestKeyDownTellsModifierSidesApart(t *testing.T) {
 	hidKey = func(code uint16) bool { return code == 0x04 } // H
 	if !keyDown('H') || keyDown('J') {
 		t.Error("letters should come from the key state")
+	}
+}
+
+// 没接麦克风（Mac mini 自己没有）：直接说没找到麦克风，不去开 AudioQueue
+func TestRecordWithoutMicSaysSo(t *testing.T) {
+	defer func(f func() bool, n func(*audioFormat, uintptr, uintptr, uintptr, uintptr, uint32, *uintptr) int32) {
+		hasMic, aqNewInput = f, n
+	}(hasMic, aqNewInput)
+	hasMic = func() bool { return false }
+	aqNewInput = func(*audioFormat, uintptr, uintptr, uintptr, uintptr, uint32, *uintptr) int32 {
+		panic("opened an audio queue without a microphone")
+	}
+	pcm, err := recordVoice(context.Background(), make(chan struct{}), func() { t.Error("started without a microphone") }, nil)
+	if err == nil || !strings.Contains(err.Error(), "没找到麦克风") || pcm != nil {
+		t.Fatalf("recordVoice = %d bytes, %v; want the no-microphone error", len(pcm), err)
 	}
 }

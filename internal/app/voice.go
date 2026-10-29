@@ -595,6 +595,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 	fail := func(err error) {
 		finish()
 		if valid() {
+			log.Printf("voice: %v", err) // 胶囊里的提示一会儿就没了，日志里留一份
 			a.voiceNotice(id, err.Error())
 		}
 	}
