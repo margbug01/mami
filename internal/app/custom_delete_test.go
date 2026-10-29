@@ -37,7 +37,7 @@ func TestDeleteCapsuleStyleFromTheCard(t *testing.T) {
 
 	tt := ui.NewTester(a.settingsView, settingsW, settingsH)
 	tt.Frame()
-	for _, name := range []string{"My Style", "My Style 2", "右键样式可以删除"} {
+	for _, name := range []string{"My Style", "My Style 2", "鼠标移到样式上，点右上角就能删除"} {
 		if _, ok := tt.Find(name); !ok {
 			t.Fatalf("%q not on the Custom page", name)
 		}
@@ -114,5 +114,73 @@ func TestNewCapsuleStylesGetNumberedNames(t *testing.T) {
 		if err != nil || m.Name != want {
 			t.Errorf("#%d %s: name %q (%v), want %q", i+1, folder, m.Name, err, want)
 		}
+	}
+}
+
+// 卡片右上角的删除按钮：不悬停时看不见；悬停哪张只出哪张的；点了先弹「移到废纸篓」（不直接删），
+// 鼠标挪到菜单上（离开卡片）再选，照样删得掉——按钮要是只在悬停时才建，这一下就被吞了
+func TestDeleteCapsuleStyleFromItsButton(t *testing.T) {
+	dir := t.TempDir()
+	trash := filepath.Join(t.TempDir(), "trash")
+	os.MkdirAll(trash, 0o755)
+	defer func(f func(string) error) { trashItem = f }(trashItem)
+	trashItem = func(p string) error { return os.Rename(p, filepath.Join(trash, filepath.Base(p))) }
+
+	a := &App{avatar: loadAvatar(), cfgPath: filepath.Join(dir, "config.json")}
+	styles := a.capsuleStylesDir()
+	for range 2 {
+		if _, err := createCapsuleStyle(styles); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := defaultConfig()
+	if err := a.setConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+	a.set = settingsState{draft: cfg, page: pageCustom}
+	tt := ui.NewTester(a.settingsView, settingsW, settingsH)
+	frames := func() {
+		for range 5 {
+			tt.Frame()
+		}
+	}
+	frames()
+	del, del2 := "删除「My Style」", "删除「My Style 2」"
+	if _, ok := tt.Find(del); ok {
+		t.Fatal("the delete button shows without hovering")
+	}
+	card, ok := tt.Find("My Style")
+	if !ok {
+		t.Fatal("no My Style card")
+	}
+	tt.Move(card.X+card.W/2, card.Y+card.H/2)
+	frames()
+	if _, ok := tt.Find(del); !ok {
+		t.Fatalf("hovering the card shows no %q; texts %q", del, tt.Texts())
+	}
+	if _, ok := tt.Find(del2); ok {
+		t.Error("hovering one card shows the other's delete button too")
+	}
+	if err := tt.Click(del); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if _, err := os.Stat(filepath.Join(styles, "my-style", "manifest.json")); err != nil {
+		t.Fatalf("clicking the button deleted right away, before asking: %v", err)
+	}
+	if got := tt.Menu(); len(got) != 1 || got[0] != trashLabel() {
+		t.Fatalf("menu %q, want [%q]", got, trashLabel())
+	}
+	tt.Move(2, 2) // 去点菜单：鼠标离开卡片
+	frames()
+	if err := tt.ChooseMenuItem(trashLabel()); err != nil {
+		t.Fatal(err)
+	}
+	frames()
+	if _, err := os.Stat(filepath.Join(trash, "my-style", "manifest.json")); err != nil {
+		t.Errorf("my-style not in the trash: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(styles, "my-style-2", "manifest.json")); err != nil {
+		t.Errorf("the other style went too: %v", err)
 	}
 }

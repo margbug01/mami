@@ -21,6 +21,9 @@ const pageCustom = "custom"
 
 var iconCustom = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r="1" fill="currentColor"/><circle cx="17.5" cy="10.5" r="1" fill="currentColor"/><circle cx="6.5" cy="12.5" r="1" fill="currentColor"/><circle cx="8.5" cy="7.5" r="1" fill="currentColor"/></svg>`))
 
+// iconTrash 样式卡片右上角的删除
+var iconTrash = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`))
+
 var iconChevronRight = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`))
 
 // customOpenSkill 「给 AI 的 skill」里展开的那一个（界面线程）
@@ -45,7 +48,7 @@ func (a *App) pageCustom(c *ui.Context, d *Config) {
 				a.openCapsuleStyles()
 			}
 			if len(a.capsuleStyles()) > 0 {
-				ui.Text(c, T("右键样式可以删除")).FontSize(12).TextColor(t.TextMuted).SingleLine()
+				ui.Text(c, T("鼠标移到样式上，点右上角就能删除")).FontSize(12).TextColor(t.TextMuted).SingleLine()
 			}
 		})
 	})
@@ -59,7 +62,8 @@ func (a *App) pageCustom(c *ui.Context, d *Config) {
 }
 
 // styleGallery 跟外观页的预览一样：一块假桌面上直接画每个样式录音时的样子（脚本实时跑），名字写在下面。
-// 点一下选它；选中的名字加粗、前面一个小点；脚本出错的名字标红，悬停看原因
+// 点一下选它；选中的名字加粗、前面一个小点；脚本出错的名字标红，悬停看原因。
+// 删除：悬停时右上角出一个删除按钮，或者右键，都是弹出「移到废纸篓」再点一下
 func (a *App) styleGallery(c *ui.Context, d *Config) {
 	t := c.Theme()
 	desk, label := deskColors(t.Dark)
@@ -69,41 +73,58 @@ func (a *App) styleGallery(c *ui.Context, d *Config) {
 		for _, e := range a.capsuleStyles() {
 			value := capsulePrefix + e.folder
 			picked := d.VoiceStyle == value
-			item := ui.ButtonBase(c).Key(e.folder).Shrink(0).Cursor(ui.CursorPointer).Label(e.man.Name)
-			item.ContextMenu(func(m *ui.Menu) {
+			trash := func(m *ui.Menu) {
 				if m.Item(trashLabel()).Chosen() {
 					a.deleteCapsuleStyle(d, e.folder, e.man.Name)
 				}
-			})
-			hover := item.Hovered()
-			item.Children(func() {
-				ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					err := a.capsulePreview(c, e.folder, fakeCapsuleScene("recording", now, dark), 260, 64)
-					if err == nil {
-						err = a.capsuleCheck(c, e.folder, dark)
-					}
-					ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
-						if picked {
-							ui.Box(c).Size(5, 5).Radius(3).Background(t.Text)
+			}
+			ui.Box(c).Key(e.folder).Shrink(0).Children(func() {
+				item := ui.ButtonBase(c).Shrink(0).Cursor(ui.CursorPointer).Label(e.man.Name)
+				item.ContextMenu(trash)
+				hover := item.Hovered()
+				item.Children(func() {
+					ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
+						err := a.capsulePreview(c, e.folder, fakeCapsuleScene("recording", now, dark), 260, 64)
+						if err == nil {
+							err = a.capsuleCheck(c, e.folder, dark)
 						}
-						name := ui.Text(c, e.man.Name).FontSize(11).SingleLine()
-						switch {
-						case err != nil:
-							name.TextColor(t.Danger).Tooltip(T("脚本出错：") + err.Error())
-						case picked:
-							name.TextColor(t.Text).FontWeight(600)
-						case hover:
-							name.TextColor(t.Text)
-						default:
-							name.TextColor(label)
-						}
+						ui.Row(c).Gap(5).AlignItems(ui.Center).Children(func() {
+							if picked {
+								ui.Box(c).Size(5, 5).Radius(3).Background(t.Text)
+							}
+							name := ui.Text(c, e.man.Name).FontSize(11).SingleLine()
+							switch {
+							case err != nil:
+								name.TextColor(t.Danger).Tooltip(T("脚本出错：") + err.Error())
+							case picked:
+								name.TextColor(t.Text).FontWeight(600)
+							case hover:
+								name.TextColor(t.Text)
+							default:
+								name.TextColor(label)
+							}
+						})
 					})
 				})
+				if item.Clicked() && !picked {
+					d.VoiceStyle = value
+					a.set.status, a.set.statusErr = T("记得点保存"), false
+				}
+				// 每张卡都建着，只是不悬停时藏起来：MyGo 在选中后的下一帧才把选的项交给菜单，那时鼠标在菜单上、
+				// 离开了卡片，按钮要是没建，选的项就没人接。菜单开着时按钮有焦点，照样显示
+				del := ui.ButtonBase(c).Key("trash").Absolute().Top(0).Right(0).Size(24, 24).Radius(12).Center().
+					Cursor(ui.CursorPointer).FocusRing(false).Label(fmt.Sprintf(T("删除「%s」"), e.man.Name)).Tooltip(trashLabel()).Menu(trash)
+				icon := label
+				if del.Hovered() || del.Focused() {
+					icon = t.Danger
+				}
+				del.Background(t.Surface).Border(1, t.Border).Children(func() {
+					ui.Icon(c, iconTrash).FontSize(13).TextColor(icon)
+				})
+				if !hover && !del.Hovered() && !del.Focused() {
+					del.Invisible()
+				}
 			})
-			if item.Clicked() && !picked {
-				d.VoiceStyle = value
-				a.set.status, a.set.statusErr = T("记得点保存"), false
-			}
 		}
 		add := ui.ButtonBase(c).Shrink(0).Cursor(ui.CursorPointer).Label(T("新建样式"))
 		addHover := add.Hovered()
