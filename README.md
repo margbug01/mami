@@ -78,7 +78,7 @@ On a Mac:
 - The default trigger is Right <kbd>⌥</kbd>, translation is <kbd>⌥</kbd>+<kbd>T</kbd> / <kbd>⌥</kbd>+<kbd>⇧</kbd>+<kbd>T</kbd>, and copy and paste use <kbd>⌘</kbd>.
 - The tour asks you to turn on two permissions in System Settings: **Accessibility** (to hear the trigger, read the selection and paste) and **Microphone**.
 - Mami lives in the menu bar. Click its face for the panel the edge dock opens into (start talking, translate after speaking, target language, polish style); right-click for the menu. A red dot sits on the face while it records. It shows up in the Dock only while Settings is open. The edge dock is off by default and can be turned on in Settings.
-- While you talk, whatever is playing pauses and picks up again when you're done (Dictation › General › Pause playback while recording). Mami sends an explicit pause and play, so nothing that wasn't playing gets started, and if something still makes sound 4 s after the pause (a call, a game), it leaves it alone.
+- While you talk, whatever is playing pauses and picks up again when you're done (Dictation › General › Pause playback while recording). Mami sends an explicit pause and play, so nothing that wasn't playing gets started. It plays again once the paused player has gone quiet, even if other apps keep making sound (remote desktop, a call); if nothing went quiet within 4 s of the pause, the pause didn't work and it leaves everything alone.
 - A Mac mini or Mac Studio has no microphone of its own: plug in headphones, AirPods or a USB microphone, or the trigger says no microphone was found.
 
 On first launch a short hands-on tour lets you try both: press the voice key and read a sentence aloud (the pill follows your voice and the words light up as you speak, then the fillers drop out), and select a sentence to get the 文A button, the card and Replace. The microphone is only used for the volume; the results are scripted, so nothing is sent anywhere. Skip it at any point, or reopen it later from **Tutorial…** in the tray menu. The tour needs no keys; when it ends Mami goes to the tray, and the first time you press the voice key it takes you to the place to add a speech key.
@@ -123,7 +123,7 @@ Recordings are never written to disk and go only to the recognition endpoint you
 - Places without `Ctrl+C` / `Ctrl+V` (games, remote desktop) can't be read or pasted into. For apps running as administrator, Mami must run as administrator too.
 - The Windows build is only tested on Windows 11 at 125% scaling with one monitor. Translations of the UI beyond Chinese and English haven't been reviewed by native speakers yet; corrections welcome.
 - The macOS build is only tested on one Apple silicon Mac mini (macOS 27, Stage Manager on, with a USB microphone).
-- Pausing playback while recording needs macOS 14.2 or later (older systems can't tell what's making sound, so nothing is paused) and isn't on Windows yet.
+- Pausing playback while recording needs macOS 14.2 or later (older systems can't tell what's making sound, so nothing is paused) and isn't on Windows yet. If you start talking within about a second of pressing play, the player may not be making sound yet; it gets paused but Mami can't tell, so it won't resume it.
 - On macOS, if Finder is in front with no Finder window open when you open Settings, closing Settings leaves Mami in front; click anywhere to move on.
 
 ## Build
