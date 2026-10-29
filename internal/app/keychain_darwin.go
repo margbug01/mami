@@ -7,96 +7,91 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
-
-	"github.com/ebitengine/purego"
-	"github.com/ebitengine/purego/objc"
 )
 
-// API Key 用 AES-GCM 加密后写进 config.json，密钥（32 字节随机数）放在钥匙串里：
-// 只有这台 Mac 的这个用户、而且是同一个签名的 Mami 才拿得到，配置文件被拷走也读不出 key。
-// 从 Windows 拷来的配置解不开，当没填，和换了电脑的 Windows 一样。
+// API Key 用 AES-GCM 加密后写进 config.json，密钥（32 字节随机数）放在登录钥匙串里：
+// 配置文件被拷走、进了备份也读不出 key。从 Windows 拷来的配置解不开，当没填，和换了电脑的 Windows 一样。
+//
+// 钥匙串由系统的 security 工具来存取（和 MySpotify、Shoes 一样）：那一项认的是 security 这个苹果自己的工具，
+// 不是这一次编译出来的 Mami，所以重新编译、应用内更新以后不会再弹「输入登录钥匙串的密码」。
+// 早先 Mami 直接调钥匙串接口存在「config-key」里，钥匙串按每次编译的指纹认人，每换一次程序就问一次密码；
+// 那一项不再读，配置里用它加密的 Key 解不开、当没填
+
+const (
+	keychainService = "dev.margbug.mami"
+	keychainAccount = "master-key"
+)
 
 var (
-	secItemCopyMatching func(query uintptr, out *uintptr) int32
-	secItemAdd          func(attrs uintptr, out *uintptr) int32
-
 	masterMu  sync.Mutex
 	masterKey []byte
 )
 
-func init() {
-	purego.RegisterLibFunc(&secItemCopyMatching, libSecurity, "SecItemCopyMatching")
-	purego.RegisterLibFunc(&secItemAdd, libSecurity, "SecItemAdd")
+// security 跑一次 /usr/bin/security，给它 stdin；返回输出和退出码（没跑起来是 -1）。测试里换成假的
+var security = func(stdin string, args ...string) ([]byte, int, error) {
+	cmd := exec.Command("/usr/bin/security", args...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	out, err := cmd.Output()
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		return out, 0, nil
+	case errors.As(err, &exit):
+		return out, exit.ExitCode(), err
+	}
+	return out, -1, err
 }
 
-const (
-	errSecItemNotFound = -25300
-	errSecDuplicate    = -25299
-)
-
-// keychainQuery 钥匙串里那一项的查找条件（自动释放的字典，要在 withPool 里用）
-func keychainQuery() objc.ID {
-	q := send(class("NSMutableDictionary"), "dictionary")
-	set := func(k string, v uintptr) { send(q, "setObject:forKey:", v, dlvar(libSecurity, k)) }
-	set("kSecClass", dlvar(libSecurity, "kSecClassGenericPassword"))
-	set("kSecAttrService", uintptr(nsString("dev.margbug.mami")))
-	set("kSecAttrAccount", uintptr(nsString("config-key")))
-	return q
-}
-
-// loadMasterKey 读钥匙串里的密钥，没有就生成一把存进去
+// loadMasterKey 读钥匙串里的密钥，第一次没有就生成一把存进去
 func loadMasterKey() ([]byte, error) {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 	if masterKey != nil {
 		return masterKey, nil
 	}
-	var key []byte
-	var err error
-	withPool(func() {
-		for attempt := 0; attempt < 2 && key == nil && err == nil; attempt++ {
-			q := keychainQuery()
-			send(q, "setObject:forKey:", kCFBooleanTrue, dlvar(libSecurity, "kSecReturnData"))
-			send(q, "setObject:forKey:", dlvar(libSecurity, "kSecMatchLimitOne"), dlvar(libSecurity, "kSecMatchLimit"))
-			var out uintptr
-			switch st := secItemCopyMatching(uintptr(q), &out); st {
-			case 0:
-				if b := goBytes(objc.ID(out)); len(b) == 32 {
-					key = b
-				} else {
-					err = errors.New("keychain: bad key length")
-				}
-				cfRelease(out)
-				continue
-			case errSecItemNotFound:
-			default:
-				err = fmt.Errorf("keychain: SecItemCopyMatching %d", st)
-				continue
-			}
-			fresh := make([]byte, 32)
-			if _, err = rand.Read(fresh); err != nil {
-				continue
-			}
-			add := keychainQuery()
-			send(add, "setObject:forKey:", uintptr(nsData(fresh)), dlvar(libSecurity, "kSecValueData"))
-			send(add, "setObject:forKey:", dlvar(libSecurity, "kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly"), dlvar(libSecurity, "kSecAttrAccessible"))
-			switch st := secItemAdd(uintptr(add), nil); st {
-			case 0:
-				key = fresh
-			case errSecDuplicate: // 别的线程刚存了一把：下一轮读它
-			default:
-				err = fmt.Errorf("keychain: SecItemAdd %d", st)
-			}
-		}
-	})
-	if err == nil && key == nil {
-		err = errors.New("keychain: no key")
-	}
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
+	}
+	chain := filepath.Join(home, "Library", "Keychains", "login.keychain-db")
+	find := []string{"find-generic-password", "-s", keychainService, "-a", keychainAccount, "-w", chain}
+	out, code, err := security("", find...)
+	switch code {
+	case 0:
+		key, err := hex.DecodeString(strings.TrimSpace(string(out)))
+		if err != nil || len(key) != 32 {
+			return nil, errors.New("keychain: the stored key is not 32 bytes")
+		}
+		masterKey = key
+		return key, nil
+	case 44: // 没有这一项：第一次
+	default:
+		return nil, fmt.Errorf("keychain: %v", err)
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	// 从 security 自己的提示符里存：密钥不出现在任何命令行上（ps 看得到命令行）
+	add := fmt.Sprintf("add-generic-password -s %s -a %s -w %s %s\n",
+		strconv.Quote(keychainService), keychainAccount, hex.EncodeToString(key), strconv.Quote(chain))
+	if _, code, err := security(add, "-i"); code != 0 {
+		return nil, fmt.Errorf("keychain: keeping the key: %v", err)
+	}
+	// 提示符里的命令失败了也不一定报：读回来对一下
+	if out, code, _ := security("", find...); code != 0 || strings.TrimSpace(string(out)) != hex.EncodeToString(key) {
+		return nil, errors.New("keychain: the key kept does not read back")
 	}
 	masterKey = key
 	return key, nil

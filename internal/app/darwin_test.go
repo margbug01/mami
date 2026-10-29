@@ -4,6 +4,8 @@ package app
 
 import (
 	"context"
+	"encoding/hex"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -57,12 +59,11 @@ func TestMacKeyLabels(t *testing.T) {
 
 // TestMain 测试不碰真的钥匙串：共用的测试（translate_test 这类）存配置时会加密 Key，原来会在登录钥匙串里
 // 建出 dev.margbug.mami 那一项（Mami 真正用的密钥就成了测试生成的），每个测试程序还被加进它的允许列表。
-// 换成假密钥，钥匙串函数换成一调用就让测试挂掉的。不能写在 init 里：本文件排在 keychain_darwin.go 前面，
+// 换成假密钥，security 工具换成一调用就让测试挂掉的。不能写在 init 里：本文件排在 keychain_darwin.go 前面，
 // 它的 init 会把真函数注册回来
 func TestMain(m *testing.M) {
 	masterKey = []byte(strings.Repeat("t", 32))
-	secItemCopyMatching = func(uintptr, *uintptr) int32 { panic("test touched the real keychain") }
-	secItemAdd = func(uintptr, *uintptr) int32 { panic("test touched the real keychain") }
+	security = func(string, ...string) ([]byte, int, error) { panic("test touched the real keychain") }
 	os.Exit(m.Run())
 }
 
@@ -130,5 +131,66 @@ func TestRecordWithoutMicSaysSo(t *testing.T) {
 	pcm, err := recordVoice(context.Background(), make(chan struct{}), func() { t.Error("started without a microphone") }, nil)
 	if err == nil || !strings.Contains(err.Error(), "没找到麦克风") || pcm != nil {
 		t.Fatalf("recordVoice = %d bytes, %v; want the no-microphone error", len(pcm), err)
+	}
+}
+
+// 密钥由 security 工具存取：第一次没有（退出码 44）就生成一把从它的提示符里存进去（不上命令行），读回来对上才用；
+// 之后直接读出同一把
+func TestMasterKeyThroughTheSecurityTool(t *testing.T) {
+	defer func(f func(string, ...string) ([]byte, int, error), k []byte) { security, masterKey = f, k }(security, masterKey)
+	store := map[string]string{}
+	var lines []string
+	keep := true // 假的 security 存不存得进去
+	security = func(stdin string, args ...string) ([]byte, int, error) {
+		lines = append(lines, strings.Join(args, " "))
+		if len(args) == 1 && args[0] == "-i" {
+			f := strings.Fields(stdin)
+			if len(f) < 8 || f[0] != "add-generic-password" || f[2] != `"dev.margbug.mami"` || f[4] != "master-key" {
+				return nil, 1, errors.New("bad add: " + stdin)
+			}
+			if keep {
+				store[f[4]] = f[6]
+			}
+			return nil, 0, nil
+		}
+		if args[0] == "find-generic-password" && args[2] == "dev.margbug.mami" && args[3] == "-a" {
+			if v, ok := store[args[4]]; ok {
+				return []byte(v + "\n"), 0, nil
+			}
+			return nil, 44, errors.New("exit status 44")
+		}
+		return nil, 1, errors.New("unexpected " + strings.Join(args, " "))
+	}
+	masterKey = nil
+	key, err := loadMasterKey()
+	if err != nil || len(key) != 32 {
+		t.Fatalf("first key = %d bytes, %v", len(key), err)
+	}
+	for _, l := range lines {
+		if strings.Contains(l, hex.EncodeToString(key)) {
+			t.Fatalf("key on a command line: %s", l)
+		}
+	}
+	masterKey = nil
+	again, err := loadMasterKey()
+	if err != nil || hex.EncodeToString(again) != hex.EncodeToString(key) {
+		t.Fatalf("second read = %x, %v; want the same key", again, err)
+	}
+	masterKey, store, keep = nil, map[string]string{}, false
+	if _, err := loadMasterKey(); err == nil || masterKey != nil {
+		t.Fatal("a key that didn't stick was used")
+	}
+	// 读的时候钥匙串报别的错（比如锁着）：不能当成「没有」去存一把新的，那样原来的 Key 就都解不开了
+	added := false
+	security = func(_ string, args ...string) ([]byte, int, error) {
+		if args[0] == "-i" {
+			added = true
+			return nil, 0, nil
+		}
+		return nil, 51, errors.New("exit status 51")
+	}
+	masterKey = nil
+	if _, err := loadMasterKey(); err == nil || added {
+		t.Fatalf("keychain error: err %v, made a new key %v", err, added)
 	}
 }
