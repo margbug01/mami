@@ -43,11 +43,8 @@ const onMac = true
 
 const excludeExample = "Steam.app, Terminal.app" // 设置里「不弹的程序」框的示例
 
-//go:embed assets/tray_mac.png
-var trayTemplatePNG []byte
-
-// trayIcon 菜单栏用黑白模板图，系统按菜单栏深浅自己上色
-func trayIcon() (png []byte, template bool) { return trayTemplatePNG, true }
+// trayIcon 菜单栏和 Windows 托盘一样放 Mami 的头像（彩色，不当模板图；MyGo 缩到 18pt 高，64px 在 Retina 上也清楚）
+func trayIcon() (png []byte, template bool) { return avatarPNG, false }
 
 func init() {
 	// macOS 上单按左右 ⌘ 或 fn 也能当语音触发键（Windows 上单按 Win 会弹开始菜单，不给用）
