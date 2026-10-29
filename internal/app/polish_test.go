@@ -253,3 +253,20 @@ func TestWarmConnectionReuse(t *testing.T) {
 		t.Fatalf("warm=%d connections=%d, want 1 and 1", warm.Load(), conns.Load())
 	}
 }
+
+// 说话时数了第一第二第三：「提示词」「标准」两档排编号列表；轻润色说好了一个字都不动，不能带这条
+func TestPolishListRule(t *testing.T) {
+	for _, style := range []string{"prompt", "standard"} {
+		if !strings.Contains(polishStyles[style], polishListRule) {
+			t.Errorf("%s has no list rule", style)
+		}
+	}
+	if strings.Contains(polishStyles["light"], polishListRule) {
+		t.Error("light polish would make lists")
+	}
+	for _, want := range []string{"第一点、第二个问题", "1. ", "中途接着说", "「第一次」"} {
+		if !strings.Contains(polishListRule, want) {
+			t.Errorf("list rule lost %q", want)
+		}
+	}
+}
