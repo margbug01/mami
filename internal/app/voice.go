@@ -199,8 +199,10 @@ func (a *App) voiceLoop() {
 					continue
 				}
 				cfg, _ := a.config()
-				if voiceEpoch.Load() != id || !cfg.VoiceEnabled || (cfg.DisableHotkeys && !event.manual) || event.fg == 0 || a.excluded(event.fg, cfg) {
+				why := a.voiceRefused(cfg, event.fg, event.manual)
+				if voiceEpoch.Load() != id || why != "" {
 					if voiceEpoch.Load() == id {
+						log.Printf("voice: not started (%s)", why) // 按了没反应时，日志里得看得出为什么
 						voiceEpoch.Add(1)
 					}
 					voiceActive.CompareAndSwap(id, 0)
@@ -588,6 +590,23 @@ func (a *App) voiceCopyNotice(id uint64, text string, hints ...string) {
 	time.AfterFunc(6*time.Second, check)
 }
 
+// voiceRefused 按了触发键不开始录的原因，""=照常开始。
+// 不看焦点在不在输入框：没输入框也录，说完复制、弹卡片（见 voiceOutput）。
+// 前台是 Mami 自己（设置窗口、关了设置还占着前台）也录：能往设置里的框说话，录快捷键时按键早被 captureKey 吞了
+func (a *App) voiceRefused(cfg Config, fg uintptr, manual bool) string {
+	switch {
+	case !cfg.VoiceEnabled:
+		return "voice input is off"
+	case cfg.DisableHotkeys && !manual:
+		return "shortcuts are paused"
+	case fg == 0:
+		return "no app in front"
+	case windowPID(fg) != a.pid && a.excluded(fg, cfg):
+		return "excluded app " + filepath.Base(processName(windowPID(fg)))
+	}
+	return ""
+}
+
 func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg uintptr, cfg Config) {
 	// 所有 UI 更新和最终 worker 任务都核对同一代号，过期结果绝不贴入。
 	valid := func() bool { return ctx.Err() == nil && voiceEpoch.Load() == id }
@@ -599,6 +618,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 			a.voiceNotice(id, err.Error())
 		}
 	}
+	log.Printf("voice: start in %s", filepath.Base(processName(windowPID(fg))))
 	pt := cursorPos()
 	dpi, wa := dpiAt(pt), workArea(pt)
 	a.voiceWin.Update(func() {

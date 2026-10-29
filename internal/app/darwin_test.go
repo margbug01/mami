@@ -8,6 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -222,5 +225,45 @@ func TestFrontCandidates(t *testing.T) {
 	}
 	if got := frontCandidates(self, wins, self); fmt.Sprint(got) != "[600 400 500]" {
 		t.Fatalf("last front is Mami itself: %v, want [600 400 500]", got)
+	}
+}
+
+// 按了触发键什么时候不录：语音关了、快捷键停用、没有前台程序、前台在排除名单里。
+// 前台是 Mami 自己也照样录（关了设置 Mami 还占着前台时，按了没反应像是坏了）
+func TestVoiceRefused(t *testing.T) {
+	self := uint32(os.Getpid())
+	a := &App{pid: self}
+	me := pidHandle | uintptr(self)
+	out, err := exec.Command("/usr/bin/pgrep", "-x", "Finder").Output() // 别的程序：访达一直开着，名字读得到
+	finder, _ := strconv.Atoi(strings.TrimSpace(strings.Split(string(out), "\n")[0]))
+	if err != nil || finder == 0 || processName(uint32(finder)) == "" {
+		t.Skip("no Finder to stand in for another app")
+	}
+	other := pidHandle | uintptr(finder)
+	cfg := defaultConfig()
+	cfg.VoiceEnabled = true
+	for _, c := range []struct {
+		name   string
+		cfg    func(*Config)
+		fg     uintptr
+		manual bool
+		want   bool
+	}{
+		{"another app", nil, other, false, true},
+		{"Mami itself in front", nil, me, false, true},
+		{"Mami itself, even if Finder is excluded", func(c *Config) { c.ExcludeProcesses = []string{filepath.Base(processName(uint32(finder)))} }, me, false, true},
+		{"excluded app", func(c *Config) { c.ExcludeProcesses = []string{filepath.Base(processName(uint32(finder)))} }, other, false, false},
+		{"no front app", nil, 0, false, false},
+		{"voice off", func(c *Config) { c.VoiceEnabled = false }, other, false, false},
+		{"shortcuts paused", func(c *Config) { c.DisableHotkeys = true }, other, false, false},
+		{"shortcuts paused, panel button", func(c *Config) { c.DisableHotkeys = true }, other, true, true},
+	} {
+		c2 := cfg
+		if c.cfg != nil {
+			c.cfg(&c2)
+		}
+		if why := a.voiceRefused(c2, c.fg, c.manual); (why == "") != c.want {
+			t.Errorf("%s: refused %q, want start=%v", c.name, why, c.want)
+		}
 	}
 }
