@@ -114,7 +114,10 @@ func Run() {
 		}
 		a.openSettings()
 	})
-	// 点程序坞里的图标、在访达里再双击 Mami（macOS 的「重新打开」）：打开设置。
+	// macOS 上平时只待菜单栏：不进程序坞、不占 ⌘Tab（Info.plist 写了 LSUIElement，可 MyGo 启动时默认按普通程序设，
+	// 会把它盖掉）。设置窗口开着时才进程序坞，见 settingsInDock
+	settingsInDock(false)
+	// 在访达里再双击 Mami、或 open 它（macOS 的「重新打开」）：打开设置。
 	// 不看 hasVisibleWindows——锚点窗口一直「看得见」（1×1 透明），系统总说有窗口开着
 	mygo.App.OnActivate(func(bool) { a.reopened() })
 
@@ -127,6 +130,7 @@ func Run() {
 		}
 		i18n.Set(i18n.Resolve(cfg.Language, sysLocale))
 		a.createWindows()
+		watchFront()
 		log.Printf("start: model=%s base=%s hotkey=%s config=%s", cfg.Model, cfg.BaseURL, cfg.Hotkey, a.cfgPath)
 		if *demo {
 			a.runDemo()
@@ -176,7 +180,7 @@ func Run() {
 	log.Println("exit")
 }
 
-// reopened 点了程序坞图标（只有 macOS 会来）：打开设置；已经开着就拿到前面
+// reopened 又被打开了一次（只有 macOS 会来）：打开设置；已经开着就拿到前面
 func (a *App) reopened() {
 	if onMac && !a.quitting {
 		a.openSettings()

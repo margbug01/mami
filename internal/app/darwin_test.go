@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -192,5 +193,34 @@ func TestMasterKeyThroughTheSecurityTool(t *testing.T) {
 	masterKey = nil
 	if _, err := loadMasterKey(); err == nil || added {
 		t.Fatalf("keychain error: err %v, made a new key %v", err, added)
+	}
+}
+
+// 关了设置把前台交给谁：先给打开设置前在用的程序，再按窗口找，跳过 Mami 自己的窗口、菜单栏/浮层那些非第 0 层的、一两个像素的隐形窗口，按前后顺序、不重复
+func TestFrontCandidates(t *testing.T) {
+	const self = 100
+	wins := []cgWindow{
+		{pid: self, layer: 0, bounds: RECT{0, 0, 900, 700}},   // 正在关的设置窗口
+		{pid: 200, layer: 25, bounds: RECT{0, 0, 400, 24}},    // 别人的菜单栏项
+		{pid: 300, layer: 0, bounds: RECT{0, 0, 1, 1}},        // 隐形窗口
+		{pid: 0, layer: 0, bounds: RECT{0, 0, 800, 600}},      // 没有进程号
+		{pid: 600, layer: 0, bounds: RECT{0, 200, 120, 300}},  // 台前调度的缩略图（leaveFront 按 activationPolicy 跳过）
+		{pid: 400, layer: 0, bounds: RECT{10, 10, 1200, 900}}, // 你刚才在用的程序
+		{pid: 600, layer: 0, bounds: RECT{0, 320, 120, 420}},
+		{pid: 500, layer: 0, bounds: RECT{0, 0, 800, 600}},
+	}
+	got := frontCandidates(0, wins, self)
+	if want := []int32{600, 400, 500}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("frontCandidates = %v, want %v", got, want)
+	}
+	if got := frontCandidates(0, wins[:4], self); len(got) != 0 {
+		t.Fatalf("nothing usable: %v", got)
+	}
+	// 打开设置前在用的程序排第一（台前调度会把它的窗口收到侧边，窗口顺序里不一定在前面）
+	if got := frontCandidates(500, wins, self); fmt.Sprint(got) != "[500 600 400]" {
+		t.Fatalf("with the last front app: %v, want [500 600 400]", got)
+	}
+	if got := frontCandidates(self, wins, self); fmt.Sprint(got) != "[600 400 500]" {
+		t.Fatalf("last front is Mami itself: %v, want [600 400 500]", got)
 	}
 }

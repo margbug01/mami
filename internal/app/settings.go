@@ -112,13 +112,29 @@ func (a *App) openSettings() {
 				a.setGone = true
 				a.setHwnd.Store(0)
 				a.settingsClosed(saved)
+				settingsInDock(false)
+				leaveFront()
 			}
 		})
 	} else if !a.setWin.IsVisible() {
 		a.setWin.Update(reset) // 重新打开时丢掉上次没保存的改动
 	}
+	settingsInDock(true)
 	a.setWin.Show()
 	a.setWin.Focus()
+}
+
+// settingsInDock macOS 上 Mami 平时只待菜单栏；设置窗口开着时进程序坞——不在程序坞的程序，从菜单栏面板点开设置时
+// 要不到前台（窗口开在别的程序后面，实测），也没有顶上的菜单栏（MyGo 的拷贝粘贴挂在编辑菜单上）；关掉设置就退回菜单栏
+func settingsInDock(open bool) {
+	if !onMac {
+		return
+	}
+	policy := mygo.ActivationPolicyAccessory
+	if open {
+		policy = mygo.ActivationPolicyRegular // MyGo 切到 regular 时顺手把程序激活到前台
+	}
+	mygo.App.SetActivationPolicy(policy)
 }
 
 // closeSettings 关设置窗口。关掉会销毁窗口，按钮是在这个窗口自己画的那一帧里点的，所以排到这一帧画完再关

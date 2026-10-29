@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	"github.com/ebitengine/purego"
 	"github.com/ebitengine/purego/objc"
@@ -42,6 +43,79 @@ func init() {
 const onMac = true
 
 const excludeExample = "Steam.app, Terminal.app" // 设置里「不弹的程序」框的示例
+
+// lastFront 最近一个到过前台的别的普通程序（进程号），关设置时把前台还给它
+var lastFront atomic.Int32
+
+// watchFront 一直记着最近一个到过前台的别的普通程序：系统每次换前台都发 NSWorkspaceDidActivateApplicationNotification
+func watchFront() {
+	mygo.RunOnMain(func() {
+		withPool(func() {
+			ws := send(class("NSWorkspace"), "sharedWorkspace")
+			noteFront(send(ws, "frontmostApplication"))
+			blk := objc.NewBlock(func(_ objc.Block, n uintptr) {
+				noteFront(send(send(objc.ID(n), "userInfo"), "objectForKey:", dlvar(libAppKit, "NSWorkspaceApplicationKey")))
+			})
+			// 通知在主线程上发；观察一直挂着，block 不释放
+			send(send(ws, "notificationCenter"), "addObserverForName:object:queue:usingBlock:",
+				dlvar(libAppKit, "NSWorkspaceDidActivateApplicationNotification"), 0, 0, uintptr(blk))
+		})
+	})
+}
+
+func noteFront(app objc.ID) {
+	if app == 0 {
+		return
+	}
+	if pid := int32(send(app, "processIdentifier")); pid > 0 && pid != int32(os.Getpid()) && send(app, "activationPolicy") == 0 {
+		lastFront.Store(pid)
+	}
+}
+
+// leaveFront 设置关了：Mami 退回菜单栏，前台还给打开设置前在用的程序（lastFront），它没了就给 Mami 后面最上层的普通程序。
+// 不然 Mami 还占着前台却什么窗口都没有，打字没地方去，得先点一下别处。NSApp deactivate 在新系统上不管用（实测）；
+// Mami 这时还在前台，由它去激活别的程序是允许的。台前调度（WindowManager）那排缩略图也是第 0 层的窗口，
+// 所以只交给程序坞里有图标的程序（activationPolicy regular）
+func leaveFront() {
+	mygo.RunOnMain(func() {
+		withPool(func() {
+			for _, pid := range frontCandidates(lastFront.Load(), listWindows(cgListOnScreen|cgListExcludeDesktop, 0), int32(os.Getpid())) {
+				app := send(class("NSRunningApplication"), "runningApplicationWithProcessIdentifier:", uintptr(pid))
+				if app == 0 || send(app, "activationPolicy") != 0 { // 只要 NSApplicationActivationPolicyRegular
+					continue
+				}
+				// macOS 14 起前台是「交接」的：先让出去，再让它接；老系统直接激活它
+				me := send(class("NSApplication"), "sharedApplication")
+				if sendBool(me, "respondsToSelector:", uintptr(sel("yieldActivationToApplication:"))) &&
+					sendBool(app, "respondsToSelector:", uintptr(sel("activateFromApplication:options:"))) {
+					send(me, "yieldActivationToApplication:", uintptr(app))
+					send(app, "activateFromApplication:options:", uintptr(send(class("NSRunningApplication"), "currentApplication")), 0)
+				} else {
+					send(app, "activateWithOptions:", 0)
+				}
+				return
+			}
+		})
+	})
+}
+
+// frontCandidates 把前台还给谁，按先后：last（打开设置前在用的），然后窗口从前往后排，
+// Mami 自己的之外、第 0 层、不是一两个像素的隐形窗口的进程（不重复）
+func frontCandidates(last int32, wins []cgWindow, self int32) []int32 {
+	var out []int32
+	seen := map[int32]bool{self: true}
+	if last > 0 && !seen[last] {
+		seen[last] = true
+		out = append(out, last)
+	}
+	for _, w := range wins {
+		if w.layer == 0 && w.pid > 0 && w.bounds.w() >= 40 && w.bounds.h() >= 40 && !seen[w.pid] {
+			seen[w.pid] = true
+			out = append(out, w.pid)
+		}
+	}
+	return out
+}
 
 // trayIcon 菜单栏和 Windows 托盘一样放 Mami 的头像（彩色，不当模板图；MyGo 缩到 18pt 高，64px 在 Retina 上也清楚）
 func trayIcon() (png []byte, template bool) { return avatarPNG, false }

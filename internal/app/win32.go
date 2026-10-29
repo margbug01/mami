@@ -219,6 +219,10 @@ func windowRect(h uintptr) RECT {
 
 // makeFloating 把 MyGo 的无边框窗口改成浮窗：点它不会激活它，
 // 原来窗口里的选区和光标都还在；也不进 Alt+Tab。
+// leaveFront / watchFront Windows 上关了窗口系统自己会把前台交出去
+func leaveFront() {}
+func watchFront() {}
+
 func makeFloating(h uintptr) {
 	defer roundCorners(h)
 	// MyGo 的无边框窗口仍带 WS_CAPTION，系统据此强制最小尺寸（150% 下约 50×47），小按钮缩不下去
