@@ -5,11 +5,11 @@
 # Mami
 
 **Dictate and translate right where you type.**<br>
-Tap Right <kbd>Alt</kbd> and talk: what you said lands in the input box, cleaned up. Select text and click the small button to translate it in place.
+Tap Right <kbd>Alt</kbd> (Right <kbd>⌥</kbd> on a Mac) and talk: what you said lands in the input box, cleaned up. Select text and click the small button to translate it in place.
 
 [![Release](https://img.shields.io/github/v/release/margbug01/mami?style=flat-square&color=2f6fed)](https://github.com/margbug01/mami/releases/latest)
 [![License](https://img.shields.io/github/license/margbug01/mami?style=flat-square)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-444?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%7C%20macOS%2012%2B-444?style=flat-square)
 ![Go](https://img.shields.io/badge/Go-1.27-00ADD8?style=flat-square&logo=go&logoColor=white)
 
 [Website](https://margbug01.github.io/mami/) · [Download](https://github.com/margbug01/mami/releases/latest) · [中文](README_zh.md)
@@ -21,7 +21,7 @@ Tap Right <kbd>Alt</kbd> and talk: what you said lands in the input box, cleaned
 
 </div>
 
-Mami is a Windows tray app written in Go with [MyGo](https://github.com/egoist/mygo). It does two things: **voice input** and **selection translation**. Speech recognition, polishing and translation all use endpoints and keys you choose, and your audio and text go only to those providers.
+Mami is a small always-on app (in the tray on Windows, in the menu bar on macOS) written in Go with [MyGo](https://github.com/egoist/mygo). It does two things: **voice input** and **selection translation**. Speech recognition, polishing and translation all use endpoints and keys you choose, and your audio and text go only to those providers.
 
 ## Why
 
@@ -68,7 +68,17 @@ I write a lot every day in Alma, ChatGPT and WeChat, mostly long prompts for AI.
 
 ## Install
 
-Download `Mami Setup x.y.z amd64.exe` (installer) or `Mami.exe` (portable) from [Releases](https://github.com/margbug01/mami/releases/latest). Windows 10/11, x64.
+Download from [Releases](https://github.com/margbug01/mami/releases/latest):
+
+- **Windows 10/11 (x64)**: `Mami Setup x.y.z amd64.exe` (installer) or `Mami.exe` (portable).
+- **macOS 12 or later (Apple silicon)**: `mami-mac.zip`. Unzip it and drag Mami.app into Applications (anywhere else, it can't update itself). The Mac build isn't notarized by Apple, so macOS blocks the first launch: open System Settings › Privacy & Security, scroll down and click Open Anyway, or run `xattr -dr com.apple.quarantine /Applications/Mami.app` in Terminal.
+
+On a Mac:
+
+- The default trigger is Right <kbd>⌥</kbd>, translation is <kbd>⌥</kbd>+<kbd>T</kbd> / <kbd>⌥</kbd>+<kbd>⇧</kbd>+<kbd>T</kbd>, and copy and paste use <kbd>⌘</kbd>.
+- The tour asks you to turn on two permissions in System Settings: **Accessibility** (to hear the trigger, read the selection and paste) and **Microphone**.
+- Mami lives in the menu bar. Click its face for the panel the edge dock opens into (start talking, translate after speaking, target language, polish style); right-click for the menu. A red dot sits on the face while it records. It shows up in the Dock only while Settings is open. The edge dock is off by default and can be turned on in Settings.
+- A Mac mini or Mac Studio has no microphone of its own: plug in headphones, AirPods or a USB microphone, or the trigger says no microphone was found.
 
 On first launch a short hands-on tour lets you try both: press the voice key and read a sentence aloud (the pill follows your voice and the words light up as you speak, then the fillers drop out), and select a sentence to get the 文A button, the card and Replace. The microphone is only used for the volume; the results are scripted, so nothing is sent anywhere. Skip it at any point, or reopen it later from **Tutorial…** in the tray menu. The tour needs no keys; when it ends Mami goes to the tray, and the first time you press the voice key it takes you to the place to add a speech key.
 
@@ -99,14 +109,20 @@ Glossary: 划词 → text selection, 提示词 → prompt
 
 ## Where your data lives
 
-Everything is in `%AppData%\Mami\`: `config.json` (settings; every API key is encrypted with Windows DPAPI, so only your account on this PC can read it), `learned.json` (vocabulary), `samples.jsonl` (long-form edit samples, clearable in settings), `history\` (daily JSONL) and `logs\mami.log`. Recordings are never written to disk and go only to the recognition endpoint you chose.
+On Windows everything is in `%AppData%\Mami\`: `config.json` (settings; every API key is encrypted with Windows DPAPI, so only your account on this PC can read it), `learned.json` (vocabulary), `samples.jsonl` (long-form edit samples, clearable in settings), `history\` (daily JSONL) and `logs\mami.log`.
+
+On macOS the same files are in `~/Library/Application Support/Mami/`, and the log is `~/Library/Logs/Mami/mami.log`. API keys are encrypted with AES-GCM under a key kept in your login keychain ("dev.margbug.mami"), so the settings file alone doesn't give them away.
+
+Recordings are never written to disk and go only to the recognition endpoint you chose.
 
 ## Known limitations
 
 - **WeChat 4.x** (Qt, self-drawn) exposes nothing about its input box. Selection translation can't tell the input box from the chat history there, and voice still pastes but can't learn from your edits.
 - Auto-learning reads the input box through UI Automation, so apps that don't expose their text can't be learned from.
 - Places without `Ctrl+C` / `Ctrl+V` (games, remote desktop) can't be read or pasted into. For apps running as administrator, Mami must run as administrator too.
-- Only tested on Windows 11 at 125% scaling with one monitor. Translations of the UI beyond Chinese and English haven't been reviewed by native speakers yet; corrections welcome.
+- The Windows build is only tested on Windows 11 at 125% scaling with one monitor. Translations of the UI beyond Chinese and English haven't been reviewed by native speakers yet; corrections welcome.
+- The macOS build is only tested on one Apple silicon Mac mini (macOS 27, Stage Manager on). It has no microphone, so speaking and getting the text pasted hasn't been tried end to end on real hardware; the trigger, the recognition, polish and translation endpoints, and in-place translation with ⌥T each were.
+- On macOS, if Finder is in front with no Finder window open when you open Settings, closing Settings leaves Mami in front; click anywhere to move on.
 
 ## Build
 
@@ -114,10 +130,13 @@ Requires Go 1.27.3+ (`GOTOOLCHAIN=auto` downloads it).
 
 ```bash
 go test ./...
-go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS installer
+go tool mygo build      # Windows: build/windows-amd64/Mami.exe + NSIS installer
+go tool mygo build -sign "<signing identity>" -skip-dmg   # macOS: build/darwin-arm64/Mami.app
 ```
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds, and uploads the installer and portable exe to the release. The tag must match `version` in `mygo.json`.
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds, and uploads the Windows installer and portable exe to the release. The tag must match `version` in `mygo.json`.
+
+The CI doesn't build the Mac app: build it on a Mac and upload it to the same release as `mami-mac.zip`, the only name the in-app updater looks for: `ditto -c -k --keepParent build/darwin-arm64/Mami.app mami-mac.zip`. Always sign with the same identity (a self-made code signing certificate will do): the Accessibility permission follows the signature, so with another signature or an ad-hoc one, every update has to be allowed again.
 
 - `Mami.exe -demo` draws the selection button and a sample card.
 - `Mami.exe -demo-voice [-demo-style mercury]` plays the dictation pill's states with fake levels, without opening the microphone.
@@ -132,19 +151,23 @@ Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds, an
 |---|---|
 | `app.go` / `run.go` | Startup, tray, shortcuts, single instance and the `-voice` command, selection button and card |
 | `views.go` / `settings.go` | MyGo UI: button, card, settings pages |
-| `hook.go` / `keycapture.go` | Low-level mouse and keyboard hooks on their own OS thread, shortcut recording |
-| `uia.go` | UI Automation over raw COM: is the focus editable, where is the selection, text around the caret |
-| `worker.go` / `clipboard.go` | Message-window thread: clipboard, simulated `Ctrl+C` / `Ctrl+V` |
-| `translate.go` / `config.go` / `dpapi.go` | Translation requests, settings, key encryption |
-| `voice_windows.go` / `voice_keys.go` / `voice_record_windows.go` | Dictation flow, trigger-key state machine, waveIn recording, the pill window |
-| `voice_islands_windows.go` / `voice_sound_windows.go` | Island styles, sounds synthesized in memory |
+| `hook.go` / `hook_darwin.go` / `keycapture.go` | Global mouse and keyboard listening on their own OS thread (low-level hooks on Windows, a CGEventTap on macOS), shortcut recording |
+| `uia.go` / `ax_darwin.go` | Is the focus editable, where is the selection, text around the caret: UI Automation over raw COM on Windows, Accessibility (AX) on macOS |
+| `worker.go` / `clipboard.go` / `clipboard_darwin.go` | Clipboard and simulated copy and paste (on Windows, on a message-window thread) |
+| `translate.go` / `config.go` / `dpapi.go` / `keychain_darwin.go` | Translation requests, settings, key encryption (DPAPI / a key in the keychain) |
+| `voice.go` / `voice_keys.go` / `voice_record_*.go` | Dictation flow, trigger-key state machine, recording (waveIn / AudioQueue), the pill window |
+| `voice_islands.go` / `voice_sound_*.go` | Island styles, sounds synthesized in memory |
+| `capsule.go` / `capsule_script.go` / `custom.go` | Custom pill styles drawn from a script, and the Custom page |
+| `dock.go` / `traypanel.go` | The edge dock and its panel; on macOS the same panel under the menu bar icon |
+| `win32.go` / `darwin.go` / `platform_darwin.go` / `permissions_darwin.go` | The two platform layers: windows, coordinates, the front app, permissions |
+| `updater*.go` | In-app updates: the installer on Windows, Mami.app on macOS |
 | `asr.go` / `asr_stream.go` | Recognition: StepFun SSE, OpenAI-compatible chat, Qwen 3.1 WebSocket streaming; splitting at pauses |
 | `polish.go` | Polish, and the guard that only lets sound-alike swaps through when a learned fix backs them |
-| `learn.go` / `learn_windows.go` / `samples.go` | Vocabulary, auto-learning (checked with pinyin), long-form edit samples |
+| `learn.go` / `learn_watch.go` / `samples.go` | Vocabulary, auto-learning (checked with pinyin), long-form edit samples |
 | `history*.go` | History, stats, heatmap and the History page |
 | `guide.go` | First-launch tutorial pages inside the settings window and their demos |
 
-Windows, tray, global shortcuts, single instance and autostart come from MyGo. The hooks, recording, cross-process selection reading and non-activating windows are plain Win32 via `syscall`, no cgo.
+Windows, tray, global shortcuts, single instance and autostart come from MyGo. The hooks, recording, cross-process selection reading and non-activating windows are plain Win32 via `syscall` on Windows, and CoreGraphics, Accessibility, AudioQueue and AppKit through [purego](https://github.com/ebitengine/purego) on macOS; no cgo on either.
 
 ## License
 

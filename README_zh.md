@@ -5,11 +5,11 @@
 # Mami
 
 **在哪打字，就在哪说、在哪翻译。**<br>
-按一下右 <kbd>Alt</kbd> 开口说，说完自动整理好贴进输入框；选中文字点一下，原地翻译。
+按一下右 <kbd>Alt</kbd>（Mac 上是右 <kbd>⌥</kbd>）开口说，说完自动整理好贴进输入框；选中文字点一下，原地翻译。
 
 [![Release](https://img.shields.io/github/v/release/margbug01/mami?style=flat-square&color=2f6fed)](https://github.com/margbug01/mami/releases/latest)
 [![License](https://img.shields.io/github/license/margbug01/mami?style=flat-square)](LICENSE)
-![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-444?style=flat-square)
+![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%7C%20macOS%2012%2B-444?style=flat-square)
 ![Go](https://img.shields.io/badge/Go-1.27-00ADD8?style=flat-square&logo=go&logoColor=white)
 
 [主页](https://margbug01.github.io/mami/) · [下载](https://github.com/margbug01/mami/releases/latest) · [English](README.md)
@@ -21,7 +21,7 @@
 
 </div>
 
-用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的 Windows 托盘小工具，两件事：**语音输入**和**划词翻译**。识别、润色、翻译都接你自己的接口和 Key，录音和文字只发给你填的那几家。
+用 Go 和 [MyGo](https://github.com/egoist/mygo) 写的常驻小工具（Windows 待在托盘，macOS 待在菜单栏），两件事：**语音输入**和**划词翻译**。识别、润色、翻译都接你自己的接口和 Key，录音和文字只发给你填的那几家。
 
 ## 为什么做
 
@@ -68,7 +68,17 @@
 
 ## 安装
 
-到 [Releases](https://github.com/margbug01/mami/releases/latest) 下载 `Mami Setup x.y.z amd64.exe`（安装包）或 `Mami.exe`（绿色版）。Windows 10/11，x64。
+到 [Releases](https://github.com/margbug01/mami/releases/latest) 下载：
+
+- **Windows 10/11（x64）**：`Mami Setup x.y.z amd64.exe`（安装包）或 `Mami.exe`（绿色版）。
+- **macOS 12 起（Apple 芯片）**：`mami-mac.zip`，解压后把 Mami.app 拖进「应用程序」（放在别处不能自动更新）。Mac 版没有经过 Apple 公证，第一次打开会被拦下：去「系统设置 › 隐私与安全性」往下翻，点「仍要打开」；或者在终端里跑 `xattr -dr com.apple.quarantine /Applications/Mami.app`。
+
+Mac 上的不同：
+
+- 默认触发键是右 <kbd>⌥</kbd>，划词快捷键是 <kbd>⌥</kbd>+<kbd>T</kbd> / <kbd>⌥</kbd>+<kbd>⇧</kbd>+<kbd>T</kbd>，复制粘贴用 <kbd>⌘</kbd>。
+- 引导会请你在系统设置里打开两个权限：**辅助功能**（听触发键、读选中的字、帮你粘贴）和**麦克风**。
+- Mami 平时只待在菜单栏：左键点头像，弹出小条那块面板（开始说话、说完直接翻译、翻译成、润色档位）；右键是菜单。录音时头像右下角有个红点。打开设置时它才出现在程序坞里，关掉就回菜单栏。贴边小条默认关着，设置里能打开。
+- Mac mini、Mac Studio 本身没有麦克风，要接耳机、AirPods 或 USB 麦克风；没接的话按触发键会提示「没找到麦克风」。
 
 第一次启动会先来一段上手引导，两样都自己试一遍：按语音触发键念一句话（胶囊跟着你的声音动，字跟着念亮起来，最后口头禅被划掉），再选中一句话，冒出「文A」、弹卡片、替换。麦克风只用来看音量，结果是写好的，什么都不会发出去。随时可以跳过，之后从托盘菜单的 **新手引导…** 再看。引导不用填 Key，看完 Mami 就待在托盘里；第一次按语音触发键时，才会带你去填语音识别的 Key。
 
@@ -99,14 +109,20 @@
 
 ## 数据放在哪
 
-都在 `%AppData%\Mami\`：`config.json`（配置，所有 API Key 用 Windows DPAPI 加密，只有这台电脑上你的账户解得开）、`learned.json`（词库）、`samples.jsonl`（长文改写样本，设置里可清空）、`history\`（记录，按天 JSONL）、`logs\mami.log`。录音不落盘，只发给你选的识别接口。
+Windows 上都在 `%AppData%\Mami\`：`config.json`（配置，所有 API Key 用 Windows DPAPI 加密，只有这台电脑上你的账户解得开）、`learned.json`（词库）、`samples.jsonl`（长文改写样本，设置里可清空）、`history\`（记录，按天 JSONL）、`logs\mami.log`。
+
+macOS 上同样这几样在 `~/Library/Application Support/Mami/`，日志在 `~/Library/Logs/Mami/mami.log`。API Key 用 AES-GCM 加密，密钥放在登录钥匙串里（「dev.margbug.mami」），配置文件拷走了也读不出 Key。
+
+录音不落盘，只发给你选的识别接口。
 
 ## 已知限制
 
 - **微信 4.x**（Qt 自绘）不暴露输入框信息：划词时分不清输入框和聊天记录；语音照样贴，但学不到你在里面改的词。
 - 自动学习靠 UI Automation 读输入框，读不到文字的程序学不了。
 - 不支持 `Ctrl+C` / `Ctrl+V` 的地方（游戏、远程桌面）取不到字也贴不进去；管理员权限运行的程序，Mami 也得用管理员权限运行。
-- 只在 Windows 11、125% 缩放、单显示器上测过。中英文以外的界面翻译还没有母语者审过，欢迎指正。
+- Windows 版只在 Windows 11、125% 缩放、单显示器上测过。中英文以外的界面翻译还没有母语者审过，欢迎指正。
+- macOS 版只在一台 Apple 芯片的 Mac mini（macOS 27，开着台前调度）上测过。那台没有麦克风，所以从开口说话到贴进输入框这一整条还没在真机上走过；触发键、识别/润色/翻译接口、⌥T 原地替换都分别在真机上试过。
+- macOS 上先切到访达（又没开访达窗口），再打开设置，关掉设置后前台会留在 Mami 身上，点一下别处就好。
 
 ## 构建
 
@@ -114,10 +130,13 @@
 
 ```bash
 go test ./...
-go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS 安装包
+go tool mygo build      # Windows：build/windows-amd64/Mami.exe + NSIS 安装包
+go tool mygo build -sign "<签名身份>" -skip-dmg   # macOS：build/darwin-arm64/Mami.app
 ```
 
-推一个 `v*` 标签会跑 `.github/workflows/release.yml`：测试、构建，把安装包和绿色版传到 Release。标签必须和 `mygo.json` 里的 `version` 一致。
+推一个 `v*` 标签会跑 `.github/workflows/release.yml`：测试、构建，把 Windows 安装包和绿色版传到 Release。标签必须和 `mygo.json` 里的 `version` 一致。
+
+Mac 包 CI 不打，在 Mac 上打好后传到同一个 Release，附件名必须是 `mami-mac.zip`（应用内更新只认这个名字）：`ditto -c -k --keepParent build/darwin-arm64/Mami.app mami-mac.zip`。每次都用同一个签名身份（自己建的代码签名证书也行）：辅助功能权限认的是签名，换了签名或用 ad-hoc 签名，更新后就得重新授权。
 
 - `Mami.exe -demo`：画出划词按钮和一张示例卡片。
 - `Mami.exe -demo-voice [-demo-style mercury]`：用假音量把语音胶囊的几种状态放一遍，不开麦克风。
@@ -132,19 +151,23 @@ go tool mygo build      # → build/windows-amd64/Mami.exe + NSIS 安装包
 |---|---|
 | `app.go` / `run.go` | 启动、托盘、快捷键、单实例和 `-voice` 命令、划词按钮和卡片 |
 | `views.go` / `settings.go` | MyGo 界面：按钮、卡片、设置各页 |
-| `hook.go` / `keycapture.go` | 低级鼠标 + 键盘钩子（独立 OS 线程），快捷键录制 |
-| `uia.go` | 原生 COM 调 UI Automation：焦点是不是输入框、选区、光标附近的文字 |
-| `worker.go` / `clipboard.go` | 消息窗口线程：剪贴板、模拟 `Ctrl+C` / `Ctrl+V` |
-| `translate.go` / `config.go` / `dpapi.go` | 翻译请求、配置读写、Key 加密 |
-| `voice_windows.go` / `voice_keys.go` / `voice_record_windows.go` | 语音流程、触发键状态机、waveIn 录音、胶囊浮窗 |
-| `voice_islands_windows.go` / `voice_sound_windows.go` | 三岛样式、内存合成的提示音 |
+| `hook.go` / `hook_darwin.go` / `keycapture.go` | 全局鼠标 + 键盘监听（Windows 低级钩子、macOS CGEventTap，都在独立 OS 线程），快捷键录制 |
+| `uia.go` / `ax_darwin.go` | 焦点是不是输入框、选区、光标附近的文字：Windows 用原生 COM 调 UI Automation，macOS 用辅助功能（AX） |
+| `worker.go` / `clipboard.go` / `clipboard_darwin.go` | 剪贴板、模拟复制粘贴（Windows 在消息窗口线程上） |
+| `translate.go` / `config.go` / `dpapi.go` / `keychain_darwin.go` | 翻译请求、配置读写、Key 加密（DPAPI / 钥匙串里的密钥） |
+| `voice.go` / `voice_keys.go` / `voice_record_*.go` | 语音流程、触发键状态机、录音（waveIn / AudioQueue）、胶囊浮窗 |
+| `voice_islands.go` / `voice_sound_*.go` | 三岛样式、内存合成的提示音 |
+| `capsule.go` / `capsule_script.go` / `custom.go` | 自定义胶囊样式（脚本画）和「自定义」页 |
+| `dock.go` / `traypanel.go` | 贴边小条和它展开的面板；macOS 上同一块面板挂在菜单栏头像下面 |
+| `win32.go` / `darwin.go` / `platform_darwin.go` / `permissions_darwin.go` | 两边的平台层：窗口、坐标、前台程序、权限 |
+| `updater*.go` | 应用内更新：Windows 换安装包，macOS 换 Mami.app |
 | `asr.go` / `asr_stream.go` | 识别：阶跃 SSE、OpenAI 兼容 chat、千问 3.1 WebSocket 流式；按停顿分段 |
 | `polish.go` | 润色和防误改（只放行有纠错记录撑腰的同音替换） |
-| `learn.go` / `learn_windows.go` / `samples.go` | 词库、自动学习（拼音校验）、长文改写样本 |
+| `learn.go` / `learn_watch.go` / `samples.go` | 词库、自动学习（拼音校验）、长文改写样本 |
 | `history*.go` | 记录、统计、热力图和「记录」页 |
 | `guide.go` | 第一次启动的新手引导（占用设置窗口）和它的演示 |
 
-窗口、托盘、全局快捷键、单实例、开机自启交给 MyGo；钩子、录音、跨进程读选区、不抢焦点的浮窗是纯 Win32（`syscall`），不用 cgo。
+窗口、托盘、全局快捷键、单实例、开机自启交给 MyGo；钩子、录音、跨进程读选区、不抢焦点的浮窗在 Windows 上是纯 Win32（`syscall`），在 macOS 上用 [purego](https://github.com/ebitengine/purego) 调 CoreGraphics、辅助功能、AudioQueue 和 AppKit，两边都不用 cgo。
 
 ## 许可
 
