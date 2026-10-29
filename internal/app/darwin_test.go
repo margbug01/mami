@@ -3,6 +3,7 @@
 package app
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -51,6 +52,17 @@ func TestMacKeyLabels(t *testing.T) {
 	if voiceKey("RWin") != VK_RWIN || voiceKey("Fn") != vkFn || !voiceKeyIsModifier(vkFn) {
 		t.Error("right ⌘ / fn should be modifier voice keys on macOS")
 	}
+}
+
+// TestMain 测试不碰真的钥匙串：共用的测试（translate_test 这类）存配置时会加密 Key，原来会在登录钥匙串里
+// 建出 dev.margbug.mami 那一项（Mami 真正用的密钥就成了测试生成的），每个测试程序还被加进它的允许列表。
+// 换成假密钥，钥匙串函数换成一调用就让测试挂掉的。不能写在 init 里：本文件排在 keychain_darwin.go 前面，
+// 它的 init 会把真函数注册回来
+func TestMain(m *testing.M) {
+	masterKey = []byte(strings.Repeat("t", 32))
+	secItemCopyMatching = func(uintptr, *uintptr) int32 { panic("test touched the real keychain") }
+	secItemAdd = func(uintptr, *uintptr) int32 { panic("test touched the real keychain") }
+	os.Exit(m.Run())
 }
 
 // API Key 加解密（密钥直接给，不碰真的钥匙串）
