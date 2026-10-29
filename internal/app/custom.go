@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -200,7 +198,7 @@ func (a *App) skillRow(c *ui.Context, sk embeddedSkill) {
 		}
 		if textButton(c, T("复制")).Clicked() {
 			text := sk.text
-			theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
+			theWorker.do(func(owner uintptr) { setClipboardText(owner, text, false) })
 			a.set.status, a.set.statusErr = T("已复制，粘贴给 AI 就行"), false
 		}
 		if smallLink(c, T("导出")).Clicked() {

@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -331,7 +329,7 @@ func (a *App) capsuleAction(action string) {
 					return
 				}
 				text, id := a.voiceUI.text, voiceEpoch.Load()
-				theWorker.do(func(owner uintptr) { setClipboardText(owner, toCRLF(text), false) })
+				theWorker.do(func(owner uintptr) { setClipboardText(owner, text, false) })
 				time.AfterFunc(700*time.Millisecond, func() { a.voiceDisplay(id, voiceViewState{}, false) })
 			}
 		})
