@@ -1,8 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -38,9 +40,12 @@ func (a *App) pageCustom(c *ui.Context, d *Config) {
 	pageTitle(c, T("自定义"))
 	settingGroup(c, T("胶囊样式"), func() {
 		a.styleGallery(c, d)
-		ui.Row(c).Padding(0, 0, 12, 0).Children(func() {
+		ui.Row(c).Padding(0, 0, 12, 0).Gap(12).AlignItems(ui.Center).Children(func() {
 			if smallLink(c, T("打开样式文件夹")).Clicked() {
 				a.openCapsuleStyles()
+			}
+			if len(a.capsuleStyles()) > 0 {
+				ui.Text(c, T("右键样式可以删除")).FontSize(12).TextColor(t.TextMuted).SingleLine()
 			}
 		})
 	})
@@ -65,6 +70,11 @@ func (a *App) styleGallery(c *ui.Context, d *Config) {
 			value := capsulePrefix + e.folder
 			picked := d.VoiceStyle == value
 			item := ui.ButtonBase(c).Key(e.folder).Shrink(0).Cursor(ui.CursorPointer).Label(e.man.Name)
+			item.ContextMenu(func(m *ui.Menu) {
+				if m.Item(trashLabel()).Chosen() {
+					a.deleteCapsuleStyle(d, e.folder, e.man.Name)
+				}
+			})
 			hover := item.Hovered()
 			item.Children(func() {
 				ui.Column(c).Gap(6).AlignItems(ui.Center).Children(func() {
@@ -237,22 +247,84 @@ func copySkillDir(skill, sub, dst string) error {
 
 // newCapsuleStyle 从胶囊样式 skill 的模板新建一个样式文件夹（改了文件预览和胶囊自己刷新），打开它
 func (a *App) newCapsuleStyle() {
-	dir := a.capsuleStylesDir()
-	name := "my-style"
-	for i := 2; ; i++ {
-		if _, err := os.Stat(filepath.Join(dir, name)); os.IsNotExist(err) {
-			break
-		}
-		name = fmt.Sprintf("my-style-%d", i)
-	}
-	target := filepath.Join(dir, name)
-	if err := copySkillDir(skills.CapsuleStyle, "template", target); err != nil {
+	name, err := createCapsuleStyle(a.capsuleStylesDir())
+	if err != nil {
 		a.set.status, a.set.statusErr = T("新建失败：")+err.Error(), true
 		return
 	}
 	a.capWin.listAt = time.Time{}
 	a.set.status, a.set.statusErr = fmt.Sprintf(T("已建好 %s，复制胶囊样式的 skill 给 AI 改它"), name), false
-	mygo.Shell.OpenPath(target)
+	mygo.Shell.OpenPath(filepath.Join(a.capsuleStylesDir(), name))
+}
+
+// createCapsuleStyle 照模板在 dir 里建一个新样式，返回文件夹名：my-style、my-style-2…；
+// 模板里叫 My Style，第二个起名字也带上编号，不然卡片墙上几张同名分不清
+func createCapsuleStyle(dir string) (string, error) {
+	name, title := "my-style", "My Style"
+	for i := 2; ; i++ {
+		if _, err := os.Stat(filepath.Join(dir, name)); os.IsNotExist(err) {
+			break
+		}
+		name, title = fmt.Sprintf("my-style-%d", i), fmt.Sprintf("My Style %d", i)
+	}
+	target := filepath.Join(dir, name)
+	if err := copySkillDir(skills.CapsuleStyle, "template", target); err != nil {
+		return "", err
+	}
+	if title != "My Style" {
+		manifest := filepath.Join(target, "manifest.json")
+		if b, err := os.ReadFile(manifest); err == nil {
+			os.WriteFile(manifest, bytes.Replace(b, []byte(`"name": "My Style"`), []byte(`"name": "`+title+`"`), 1), 0o644)
+		}
+	}
+	return name, nil
+}
+
+// trashItem 移到废纸篓（Windows 是回收站）；测试里换成挪进临时目录
+var trashItem = mygo.Shell.TrashItem
+
+func trashLabel() string {
+	if onMac {
+		return T("移到废纸篓")
+	}
+	return T("删除")
+}
+
+// deleteCapsuleStyle 卡片右键删掉一个样式：整个文件夹进废纸篓 / 回收站，删错了还能拿回来。
+// 正在用的就换回默认样式：已经保存的立刻改掉（不然下次说话还去找它），设置里还没保存的选择也跟着换
+func (a *App) deleteCapsuleStyle(d *Config, folder, name string) {
+	if folder == "" || strings.ContainsAny(folder, `/\:.`) {
+		return
+	}
+	if err := trashItem(filepath.Join(a.capsuleStylesDir(), folder)); err != nil {
+		a.set.status, a.set.statusErr = T("删除失败：")+err.Error(), true
+		return
+	}
+	value := capsulePrefix + folder
+	if d.VoiceStyle == value {
+		d.VoiceStyle = defaultConfig().VoiceStyle
+	}
+	if cfg, _ := a.config(); cfg.VoiceStyle == value {
+		cfg.VoiceStyle = defaultConfig().VoiceStyle
+		if err := a.setConfig(cfg); err != nil {
+			log.Println("capsule: reset style:", err)
+		} else if err := saveConfig(a.cfgPath, cfg); err != nil {
+			log.Println("save config:", err)
+		}
+	}
+	w := &a.capWin
+	w.listAt = time.Time{}
+	for key := range w.styles {
+		if strings.HasPrefix(key, folder+"/") {
+			delete(w.styles, key)
+		}
+	}
+	delete(w.logged, folder)
+	done := T("已把「%s」移到回收站")
+	if onMac {
+		done = T("已把「%s」移到废纸篓")
+	}
+	a.set.status, a.set.statusErr = fmt.Sprintf(done, name), false
 }
 
 // exportSkill 把一个 skill 文件夹导出到配置目录旁边，打开给用户拖进 AI 工具

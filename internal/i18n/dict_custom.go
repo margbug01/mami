@@ -17,6 +17,11 @@ func init() {
 		"新建失败：":         {"Couldn't create: ", "作成できませんでした：", "新建失敗：", "만들지 못했습니다: ", "No se pudo crear: ", "Création impossible : ", "Erstellen fehlgeschlagen: ", "Не удалось создать: "},
 		"导出失败：":         {"Export failed: ", "書き出せませんでした：", "匯出失敗：", "내보내기 실패: ", "Error al exportar: ", "Échec de l'export : ", "Export fehlgeschlagen: ", "Ошибка экспорта: "},
 		"已导出到 %s":       {"Exported to %s", "%s に書き出しました", "已匯出到 %s", "%s 에 내보냈습니다", "Exportado a %s", "Exporté vers %s", "Exportiert nach %s", "Экспортировано в %s"},
+		"右键样式可以删除":      {"Right-click a style to delete it", "スタイルを右クリックすると削除できます", "在樣式上按右鍵可以刪除", "스타일을 오른쪽 클릭하면 삭제할 수 있어요", "Haz clic derecho en un estilo para eliminarlo", "Clic droit sur un style pour le supprimer", "Rechtsklick auf einen Stil, um ihn zu löschen", "Щёлкните стиль правой кнопкой, чтобы удалить"},
+		"移到废纸篓":         {"Move to Trash", "ゴミ箱に入れる", "丟到垃圾桶", "휴지통으로 이동", "Mover a la papelera", "Placer dans la corbeille", "In den Papierkorb legen", "Переместить в корзину"},
+		"删除失败：":         {"Couldn't delete: ", "削除できませんでした：", "刪除失敗：", "삭제하지 못했습니다: ", "No se pudo eliminar: ", "Suppression impossible : ", "Löschen fehlgeschlagen: ", "Не удалось удалить: "},
+		"已把「%s」移到废纸篓":   {"Moved “%s” to the Trash", "「%s」をゴミ箱に入れました", "已把「%s」丟到垃圾桶", "「%s」을(를) 휴지통으로 옮겼어요", "«%s» se movió a la papelera", "« %s » a été placé dans la corbeille", "„%s“ in den Papierkorb gelegt", "«%s» перемещён в корзину"},
+		"已把「%s」移到回收站":   {"Moved “%s” to the Recycle Bin", "「%s」をごみ箱に移動しました", "已把「%s」移到資源回收筒", "「%s」을(를) 휴지통으로 옮겼어요", "«%s» se movió a la papelera de reciclaje", "« %s » a été placé dans la corbeille", "„%s“ in den Papierkorb verschoben", "«%s» перемещён в корзину"},
 		"去自定义":          {"Open Custom", "カスタムへ", "去自訂", "사용자 지정으로", "Ir a Personalizado", "Aller à Personnalisé", "Zu Benutzerdefiniert", "Перейти в «Своё»"},
 	}
 	for key, translations := range entries {
