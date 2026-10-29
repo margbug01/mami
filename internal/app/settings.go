@@ -561,6 +561,9 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 		}
 		settingRowW(c, T("触发键"), keyDesc, selectW, func() { a.hotkeyBox(c, "voice", &d.VoiceHotkey, true) })
 		switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
+		if onMac {
+			switchRow(c, T("录音时暂停播放"), T("在放歌或视频时先暂停，说完接着放"), &d.VoicePauseMedia)
+		}
 		switchRow(c, T("边说边出字"), T("说话时胶囊里实时显示识别的字，说完照常润色后贴入；需要千问 3.1 这类流式模型"), &d.VoiceLiveText)
 	})
 }

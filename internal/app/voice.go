@@ -699,6 +699,9 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 			return
 		}
 		started = time.Now()
+		if cfg.VoicePauseMedia {
+			media.hold() // 麦克风真开了才停：没麦克风、没 Key 的不会白停一下
+		}
 		a.trayRecording(true)
 		a.voiceBeep(soundStart) // 麦克风真开了才响：听到「嘚嘚」就可以说了
 		a.voiceDisplay(id, voiceViewState{recording: true}, true)
@@ -725,6 +728,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 		}
 	})
 	a.trayRecording(false)
+	media.release() // 停了才接着放；这次没停过就什么都不做
 	voiceRecording.CompareAndSwap(id, 0)
 	if !valid() {
 		finish()

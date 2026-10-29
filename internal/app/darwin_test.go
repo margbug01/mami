@@ -68,6 +68,9 @@ func TestMacKeyLabels(t *testing.T) {
 func TestMain(m *testing.M) {
 	masterKey = []byte(strings.Repeat("t", 32))
 	security = func(string, ...string) ([]byte, int, error) { panic("test touched the real keychain") }
+	// 「录音时暂停播放」Mac 上默认开：测试里走到录音也不能真去停用户在放的歌
+	mediaPlaying = func() []int32 { return nil }
+	mediaSend = func(int) bool { panic("test touched real playback") }
 	os.Exit(m.Run())
 }
 
