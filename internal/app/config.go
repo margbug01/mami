@@ -72,7 +72,7 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{
-		VoiceDock:         true,
+		VoiceDock:         !onMac, // macOS 上用菜单栏面板，小条默认关
 		VoiceDockTone:     "auto",
 		VoiceDockPosition: dockPosition{Edge: "right", Fraction: 0.5},
 		VoiceTarget:       "English",

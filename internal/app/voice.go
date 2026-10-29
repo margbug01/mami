@@ -679,6 +679,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 			return
 		}
 		started = time.Now()
+		a.trayRecording(true)
 		a.voiceBeep(soundStart) // 麦克风真开了才响：听到「嘚嘚」就可以说了
 		a.voiceDisplay(id, voiceViewState{recording: true}, true)
 	}, func(data []byte, level float64) {
@@ -703,6 +704,7 @@ func (a *App) runVoice(ctx context.Context, stop <-chan struct{}, id uint64, fg 
 			a.voiceDisplay(id, st, true)
 		}
 	})
+	a.trayRecording(false)
 	voiceRecording.CompareAndSwap(id, 0)
 	if !valid() {
 		finish()

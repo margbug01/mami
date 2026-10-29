@@ -70,6 +70,9 @@ type App struct {
 	voiceWin                                          *mygo.Window
 	capWin                                            capsuleWin // 自定义胶囊样式的浮层（capsule_windows.go），只在界面线程用
 	capHwnd                                           atomic.Uintptr
+	panelHwnd                                         atomic.Uintptr // 菜单栏面板（macOS）
+	panel                                             trayPanel
+	trayRec                                           atomic.Bool // 菜单栏头像正显示录音的红点
 	voiceUI                                           voiceViewState
 	voicePrevious                                     voiceViewState
 	voiceWA                                           RECT // 以下三个只在界面线程读写：胶囊所在显示器的工作区
@@ -204,11 +207,14 @@ func (a *App) createWindows() {
 	a.voiceHwnd.Store(h)
 	a.createCapsuleWindow()
 	a.createDock()
+	if onMac {
+		a.createTrayPanel()
+	}
 }
 
 func (a *App) isOurs(p POINT) bool {
 	root := rootWindowAt(p)
-	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load() || root == a.capHwnd.Load())
+	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load() || root == a.capHwnd.Load() || root == a.panelHwnd.Load())
 }
 
 // ---------- 鼠标手势 ----------
@@ -230,6 +236,7 @@ func (a *App) onMouse(ev mouseEvent) {
 		if ev.ours {
 			return
 		}
+		a.trayPanelClick(ev.pt)
 		a.btnGen.Add(1) // 取消还没弹出来的按钮
 		if a.btnBusy.Load() {
 			a.busyMoved.Store(true)
@@ -286,6 +293,7 @@ func (a *App) onMouse(ev mouseEvent) {
 		})
 	case mouseOther:
 		if !ev.ours {
+			a.trayPanelClick(ev.pt)
 			a.hideButton()
 			if !a.popBusy.Load() {
 				a.hidePopup()
@@ -785,7 +793,7 @@ func (a *App) createTray() {
 	}
 	a.updateTrayTip()
 	if onMac {
-		a.tray.OnClick(a.popTrayMenu) // 菜单栏图标的习惯：点一下就出菜单，「设置…」在里面
+		a.tray.OnClick(a.toggleTrayPanel) // 点头像弹出小条那块面板；菜单（「设置…」、退出）在右键
 	} else {
 		a.tray.OnClick(a.openSettings)
 	}
@@ -794,6 +802,7 @@ func (a *App) createTray() {
 
 // popTrayMenu 托盘（菜单栏）菜单，每次弹出时按当前配置现建
 func (a *App) popTrayMenu() {
+	a.hideTrayPanel()
 	cfg, _ := a.config()
 	var items []*mygo.MenuItem
 	if _, _, latest, _, busy, _ := a.upd.snapshot(); latest != nil {

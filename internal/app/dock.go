@@ -32,6 +32,12 @@ type voiceDock struct {
 
 var dockQuit atomic.Bool
 
+// dockVoiceToggle 面板上的「开始说话 / 结束」；测试里换成假的
+var dockVoiceToggle = func() { go voiceToggleSource(true) }
+
+// dockIdleTick 小条关着（Mac 默认）或全屏时隐藏着：没东西要动，隔久一点才看一次要不要出来
+const dockIdleTick = 300 * time.Millisecond
+
 func (d *voiceDock) dragHit(point POINT) bool {
 	return dockContains(d.rect, point) && (!d.expanded || point.Y < d.rect.Top+scale(32, d.dpi))
 }
@@ -88,6 +94,8 @@ func (a *App) createDock() {
 					next := 40 * time.Millisecond
 					if !d.motionAt.IsZero() {
 						next = 8 * time.Millisecond
+					} else if !d.shown {
+						next = dockIdleTick
 					}
 					if next != interval {
 						interval = next
@@ -254,6 +262,23 @@ func (a *App) dockContent(c *ui.Context, cfg Config, expanded, more, dark bool, 
 }
 
 func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark, interactive bool, reveal ...float32) {
+	a.drawDock(c, cfg, expanded, more, dark, interactive, dockPanel{more: &a.dock.more, langs: &a.dock.langs}, reveal...)
+}
+
+// dockPanel 展开面板画在哪儿：贴边小条（能拖，翻到哪页记在 a.dock）或菜单栏面板（挂在图标下面不拖，翻页记在 a.panel）。
+// 两个各记各的：小条的 tickDock 鼠标一离开就把它那份翻回首页
+type dockPanel struct {
+	more, langs *bool
+	menubar     bool
+	done        func() // 点了「开始说话」「完整设置…」之后：菜单栏面板借它收起来
+}
+
+func (a *App) drawDock(c *ui.Context, cfg Config, expanded, more, dark, interactive bool, at dockPanel, reveal ...float32) {
+	done := func() {
+		if at.done != nil {
+			at.done()
+		}
+	}
 	pointer, grab := ui.CursorDefault, ui.CursorDefault
 	if interactive {
 		pointer, grab = ui.CursorPointer, ui.CursorGrab
@@ -333,11 +358,13 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 		control.Scale(size, size)
 	}
 	content := func() {
-		grip := ui.Box(c).FillWidth().Height(8).Shrink(0).Cursor(grab).Draw(func(p *ui.Painter, r ui.Rect) {
-			p.Line(r.X+r.W/2-10, r.Y+r.H/2, r.X+r.W/2+10, r.Y+r.H/2, 2, border)
-		})
-		if dockNativeDrag && interactive {
-			grip.DragWindow()
+		if !at.menubar { // 菜单栏面板不能拖，不画把手
+			grip := ui.Box(c).FillWidth().Height(8).Shrink(0).Cursor(grab).Draw(func(p *ui.Painter, r ui.Rect) {
+				p.Line(r.X+r.W/2-10, r.Y+r.H/2, r.X+r.W/2+10, r.Y+r.H/2, 2, border)
+			})
+			if dockNativeDrag && interactive {
+				grip.DragWindow()
+			}
 		}
 		button := func(label string, action func()) {
 			control := ui.ButtonBase(c).Label(label).Height(30).FillWidth().Padding(0, 6).Radius(6).AlignItems(ui.Center).Justify(ui.Start).Cursor(pointer)
@@ -375,9 +402,9 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 				a.changeDockConfig(change)
 			}
 		}
-		if a.dock.langs {
+		if *at.langs {
 			// 语言列表：点一下就选上并回到主面板，不用一个个轮过去
-			button("‹  "+T("翻译成"), func() { a.dock.langs = false })
+			button("‹  "+T("翻译成"), func() { *at.langs = false })
 			ui.Scroll(c).FillWidth().Grow(1).Children(func() {
 				ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
 					for _, l := range targetLangs {
@@ -395,7 +422,7 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 						})
 						if interactive && item.Clicked() {
 							a.changeDockConfig(func(v *Config) { v.VoiceTarget = value })
-							a.dock.langs = false
+							*at.langs = false
 						}
 					}
 				})
@@ -403,7 +430,7 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 			return
 		}
 		if more {
-			button("‹  "+T("更多设置"), func() { a.dock.more = false })
+			button("‹  "+T("更多设置"), func() { *at.more = false })
 			ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
 				toggle(T("按程序自动换档"), cfg.PolishAuto, func(v *Config) { v.PolishAuto = !v.PolishAuto })
 				toggle(T("实时文字"), cfg.VoiceLiveText, func(v *Config) { v.VoiceLiveText = !v.VoiceLiveText })
@@ -439,7 +466,7 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 				})
 				cycle(T("面板底色"), voiceToneName(cfg.VoiceDockTone), func(v *Config) { v.VoiceDockTone = dockCycle(v.VoiceDockTone, []string{"auto", "light", "dark"}) })
 			})
-			button(T("完整设置…"), a.openSettings)
+			button(T("完整设置…"), func() { a.openSettings(); done() })
 			return
 		}
 		mic := ui.ButtonBase(c).FillWidth().Height(40).Padding(6).Gap(6).Radius(20).Background(card).Border(1, paneBorder(t)).AlignItems(ui.Center).Cursor(pointer)
@@ -457,7 +484,8 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 			ui.Text(c, keysLabel(cfg.VoiceHotkey)).FontSize(9).TextColor(muted).SingleLine()
 		})
 		if interactive && mic.Clicked() {
-			go voiceToggleSource(true)
+			dockVoiceToggle()
+			done()
 		}
 		ui.Column(c).FillWidth().Background(card).Border(1, paneBorder(t)).Radius(12).Padding(4).Children(func() {
 			toggle(T("说完直接翻译"), cfg.VoiceTranslate, func(v *Config) { v.VoiceTranslate = !v.VoiceTranslate })
@@ -480,7 +508,7 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 				ui.Text(c, "›").FontSize(12).TextColor(muted)
 			})
 			if interactive && target.Clicked() {
-				a.dock.langs = true
+				*at.langs = true
 			}
 		})
 		ui.Row(c).FillWidth().Height(28).Padding(3).Gap(2).Background(card).Radius(10).Children(func() {
@@ -502,7 +530,7 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 				}
 			}
 		})
-		button(T("更多设置")+"  ›", func() { a.dock.more = true })
+		button(T("更多设置")+"  ›", func() { *at.more = true })
 	}
 	if len(reveal) == 0 {
 		panel.Padding(12).Gap(12).Children(content)
@@ -510,13 +538,13 @@ func (a *App) renderDockContent(c *ui.Context, cfg Config, expanded, more, dark,
 	}
 	panel.Children(func() {
 		height := float32(248)
-		if more || a.dock.langs {
+		if more || *at.langs {
 			height = 416
 		}
 		width := min(float32(196), float32(a.dock.area.w())*96/float32(max(1, a.dock.dpi)))
 		height = min(height, float32(a.dock.area.h())*96/float32(max(1, a.dock.dpi)))
 		page := "main"
-		if a.dock.langs {
+		if *at.langs {
 			page = "languages"
 		} else if more {
 			page = "more"

@@ -27,7 +27,7 @@ func TestDockConfigCompatibility(t *testing.T) {
 	for _, test := range []struct {
 		data    string
 		enabled bool
-	}{{`{}`, true}, {`{"voice_dock":false}`, false}} {
+	}{{`{}`, !onMac}, {`{"voice_dock":false}`, false}, {`{"voice_dock":true}`, true}} { // macOS 默认关（用菜单栏面板），自己打开的照样开
 		cfg := defaultConfig()
 		if err := json.Unmarshal([]byte(test.data), &cfg); err != nil {
 			t.Fatal(err)
