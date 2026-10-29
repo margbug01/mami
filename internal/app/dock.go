@@ -22,6 +22,7 @@ type voiceDock struct {
 	area                                            RECT
 	dpi                                             uint32
 	rect                                            RECT
+	seen                                            RECT // 上次摆完窗口读回来的位置；和它对不上就是别人挪过
 	texture                                         *texture
 	motionAt                                        time.Time
 	page                                            string
@@ -34,6 +35,9 @@ var dockQuit atomic.Bool
 
 // dockVoiceToggle 面板上的「开始说话 / 结束」；测试里换成假的
 var dockVoiceToggle = func() { go voiceToggleSource(true) }
+
+// dockPlace 摆小条窗口；测试里数调了几次
+var dockPlace = placeAt
 
 // dockIdleTick 小条关着（Mac 默认）或全屏时隐藏着：没东西要动，隔久一点才看一次要不要出来
 const dockIdleTick = 300 * time.Millisecond
@@ -138,6 +142,14 @@ func (a *App) tickDock() {
 	if d.armed || a.nativeDockDrag() {
 		return
 	}
+	// 窗口被别人挪过（换分辨率、改缩放时系统会挪，MyGo 收到 WM_DPICHANGED 也会按系统建议的位置挪）：
+	// 记下它真实的位置，下面就会把它放回该在的边上。不然 d.rect 还记着旧位置、算出来「没变」就不摆，
+	// 小条停在屏幕中间，悬停、拖动又都按旧位置判断，怎么点都没反应
+	if d.seen != (RECT{}) {
+		if actual := windowRect(d.hwnd); actual != d.seen {
+			d.rect, d.seen = actual, actual
+		}
+	}
 	point, now := cursorPos(), time.Now()
 	inside := dockContains(d.rect, point)
 	pressed := keyDown(VK_LBUTTON)
@@ -196,8 +208,9 @@ func (a *App) tickDock() {
 			}
 		}
 		if native != d.rect {
-			placeAt(d.hwnd, native.Left, native.Top, native.w(), native.h())
-			d.rect = native
+			dockPlace(d.hwnd, native.Left, native.Top, native.w(), native.h())
+			// 读回来的可能和要的差一点（系统限制最小尺寸、换算取整），记读回来的，免得每一下都当成被挪过再摆一遍
+			d.rect, d.seen = native, windowRect(d.hwnd)
 		}
 	}
 	if !d.shown {

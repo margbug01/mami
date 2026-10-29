@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"syscall"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/egoist/mygo/ui"
@@ -294,5 +295,117 @@ func TestDockCycle(t *testing.T) {
 	cfg := defaultConfig()
 	if !cfg.VoiceDock || cfg.VoiceDockPosition.Edge != "right" {
 		t.Fatal("dock default")
+	}
+}
+
+// dockSettle 跑 tickDock 直到小条的移动动画走完（约 220ms）
+func dockSettle(t *testing.T, a *App) {
+	t.Helper()
+	for i := 0; i < 100; i++ {
+		a.tickDock()
+		if a.dock.motionAt.IsZero() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("dock motion never finished")
+}
+
+func dockTestWindow(t *testing.T, style uintptr) uintptr {
+	t.Helper()
+	class, _ := syscall.UTF16PtrFromString("STATIC")
+	hwnd, _, err := user32.NewProc("CreateWindowExW").Call(0, uintptr(unsafe.Pointer(class)), 0, style, 0, 0, 10, 10, 0, 0, 0, 0)
+	if hwnd == 0 {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { user32.NewProc("DestroyWindow").Call(hwnd) })
+	return hwnd
+}
+
+// dockTestConfig 小条要显示：语音默认是关的，关着时 tickDock 会去 d.win.Hide()，测试里没有 MyGo 窗口
+func dockTestConfig() Config {
+	cfg := defaultConfig()
+	cfg.VoiceEnabled, cfg.VoiceDock = true, true
+	return cfg
+}
+
+// countDockPlace 数 tickDock 摆了几次窗口
+func countDockPlace(t *testing.T) *int {
+	placed := new(int)
+	old := dockPlace
+	dockPlace = func(h uintptr, x, y, w, ht int32) { *placed++; old(h, x, y, w, ht) }
+	t.Cleanup(func() { dockPlace = old })
+	return placed
+}
+
+// 换分辨率、改缩放时，系统或 MyGo（收到 WM_DPICHANGED）会把小条挪到别处、改大小：
+// 下一下就得放回边上，悬停、拖动也得按真实位置判断。原来 d.rect 还记着旧位置，小条就停在屏幕中间点不动
+func TestDockComesBackWhenMovedBySomeoneElse(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if dockFullscreen() {
+		t.Skip("a fullscreen window hides the dock")
+	}
+	hwnd := dockTestWindow(t, 0x80000000) // WS_POPUP，不显示
+	a := &App{cfg: dockTestConfig()}
+	d := &a.dock
+	d.hwnd, d.shown = hwnd, true
+	d.position = dockPosition{Edge: "left", Fraction: 0.5}
+	placed := countDockPlace(t)
+	dockSettle(t, a)
+	want := windowRect(hwnd)
+	if want != d.rect || want.w() != scale(dockThick, d.dpi) || want.h() != scale(dockLong, d.dpi) {
+		t.Fatalf("dock not placed: window=%+v rect=%+v dpi=%d", want, d.rect, d.dpi)
+	}
+	if dockContains(want, cursorPos()) {
+		t.Skip("the pointer is on the dock")
+	}
+	// 别人把它挪到屏幕中间、还改了大小（WM_DPICHANGED 建议的矩形）
+	placeAt(hwnd, want.Left+300, want.Top+120, want.w()*3/2, want.h()*3/2)
+	if windowRect(hwnd) == want {
+		t.Fatal("could not move the test window")
+	}
+	before := *placed
+	a.tickDock()
+	if got := windowRect(hwnd); got != want {
+		t.Fatalf("dock stayed where it was moved: %+v, want %+v", got, want)
+	}
+	if d.rect != want || *placed != before+1 {
+		t.Fatalf("rect=%+v placed %d time(s)", d.rect, *placed-before)
+	}
+	for i := 0; i < 5; i++ {
+		a.tickDock()
+	}
+	if *placed != before+1 {
+		t.Fatalf("dock kept being placed: %d", *placed-before)
+	}
+}
+
+// 系统不让窗口小到小条那么小（带标题栏的窗口有最小尺寸）：读回来的和要的不一样，也不能每一下都当成被挪过再摆一遍
+func TestDockSettlesWhenTheSystemAdjustsIt(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	if dockFullscreen() {
+		t.Skip("a fullscreen window hides the dock")
+	}
+	hwnd := dockTestWindow(t, 0x80000000|0x00C00000|0x00040000) // WS_POPUP|WS_CAPTION|WS_THICKFRAME
+	a := &App{cfg: dockTestConfig()}
+	d := &a.dock
+	d.hwnd, d.shown = hwnd, true
+	d.position = dockPosition{Edge: "left", Fraction: 0.5}
+	placed := countDockPlace(t)
+	dockSettle(t, a)
+	if windowRect(hwnd) == d.rect {
+		t.Skip("the system took the exact size; nothing to check")
+	}
+	if dockContains(d.rect, cursorPos()) || dockContains(windowRect(hwnd), cursorPos()) {
+		t.Skip("the pointer is on the dock")
+	}
+	before := *placed
+	for i := 0; i < 5; i++ {
+		a.tickDock()
+	}
+	if *placed != before {
+		t.Fatalf("dock placed %d more time(s) while nothing moved it", *placed-before)
 	}
 }
