@@ -78,6 +78,7 @@ On a Mac:
 - The default trigger is Right <kbd>⌥</kbd>, translation is <kbd>⌥</kbd>+<kbd>T</kbd> / <kbd>⌥</kbd>+<kbd>⇧</kbd>+<kbd>T</kbd>, and copy and paste use <kbd>⌘</kbd>.
 - The tour asks you to turn on two permissions in System Settings: **Accessibility** (to hear the trigger, read the selection and paste) and **Microphone**.
 - Mami lives in the menu bar. Click its face for the panel the edge dock opens into (start talking, translate after speaking, target language, polish style); right-click for the menu. A red dot sits on the face while it records. It shows up in the Dock only while Settings is open. The edge dock is off by default and can be turned on in Settings.
+- While you talk, whatever is playing pauses and picks up again when you're done (Dictation › General › Pause playback while recording). Mami sends an explicit pause and play, so nothing that wasn't playing gets started, and if something still makes sound 4 s after the pause (a call, a game), it leaves it alone.
 - A Mac mini or Mac Studio has no microphone of its own: plug in headphones, AirPods or a USB microphone, or the trigger says no microphone was found.
 
 On first launch a short hands-on tour lets you try both: press the voice key and read a sentence aloud (the pill follows your voice and the words light up as you speak, then the fillers drop out), and select a sentence to get the 文A button, the card and Replace. The microphone is only used for the volume; the results are scripted, so nothing is sent anywhere. Skip it at any point, or reopen it later from **Tutorial…** in the tray menu. The tour needs no keys; when it ends Mami goes to the tray, and the first time you press the voice key it takes you to the place to add a speech key.
@@ -121,7 +122,8 @@ Recordings are never written to disk and go only to the recognition endpoint you
 - Auto-learning reads the input box through UI Automation, so apps that don't expose their text can't be learned from.
 - Places without `Ctrl+C` / `Ctrl+V` (games, remote desktop) can't be read or pasted into. For apps running as administrator, Mami must run as administrator too.
 - The Windows build is only tested on Windows 11 at 125% scaling with one monitor. Translations of the UI beyond Chinese and English haven't been reviewed by native speakers yet; corrections welcome.
-- The macOS build is only tested on one Apple silicon Mac mini (macOS 27, Stage Manager on). It has no microphone, so speaking and getting the text pasted hasn't been tried end to end on real hardware; the trigger, the recognition, polish and translation endpoints, and in-place translation with ⌥T each were.
+- The macOS build is only tested on one Apple silicon Mac mini (macOS 27, Stage Manager on, with a USB microphone).
+- Pausing playback while recording needs macOS 14.2 or later (older systems can't tell what's making sound, so nothing is paused) and isn't on Windows yet.
 - On macOS, if Finder is in front with no Finder window open when you open Settings, closing Settings leaves Mami in front; click anywhere to move on.
 
 ## Build
