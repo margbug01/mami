@@ -437,7 +437,7 @@ func parseLearnedWhy(out, pasted, now string) (pairs []learnedWord, drops []stri
 			drops = append(drops, "right not in edit")
 		case foldFind(now, w) != "":
 			drops = append(drops, "wrong still there")
-		case !soundsAlike(w, r):
+		case !heardAlike(w, r):
 			drops = append(drops, "not alike")
 		case slices.ContainsFunc(pairs, func(q learnedWord) bool { return foldKey(q.Wrong) == foldKey(w) && foldKey(q.Right) == foldKey(r) }):
 		default:
@@ -532,6 +532,39 @@ func soundsAlike(a, b string) bool {
 		return false
 	}
 	return editDistance(pa, pb)*4 <= max(len(pa), len(pb))
+}
+
+// heardAlike 学词时认的「听错了」：soundsAlike，或者带英文字母、辅音骨架一样。
+// 识别常常只错英文词后面几个元音字母（Cloud→Claude、K 肉→Kiro），拼写差一大截但念起来一样，用户也只改那几个字母。
+// 纯中文不走第二条：周五/周四、马路/美丽这种不是听错。
+// 只给学词用：防误改（guardPolish）还用严的 soundsAlike，不然词库里有 Claude 时润色把 Cloud 改成 Claude 会被它拦回去
+func heardAlike(a, b string) bool {
+	if soundsAlike(a, b) {
+		return true
+	}
+	if !hasLatin(a) && !hasLatin(b) {
+		return false
+	}
+	ca, cb := consonants(spell(a)), consonants(spell(b))
+	return len(ca) >= 2 && ca == cb
+}
+
+func hasLatin(s string) bool {
+	return strings.IndexFunc(s, isASCIILetter) >= 0
+}
+
+// consonants 念法的辅音骨架：去掉元音和 h、w、y，连着一样的只留一个（cloud、claude → cld；krou、kiro → kr）
+func consonants(s string) string {
+	var sb strings.Builder
+	var last rune
+	for _, r := range s {
+		if strings.ContainsRune("aeiouhwy", r) || r == last {
+			continue
+		}
+		sb.WriteRune(r)
+		last = r
+	}
+	return sb.String()
 }
 
 var pinyinArgs = pinyin.NewArgs()

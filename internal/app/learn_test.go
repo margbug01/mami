@@ -211,6 +211,35 @@ func TestSoundsAlike(t *testing.T) {
 	}
 }
 
+// 学词认的「听错了」：比 soundsAlike 多认带英文字母、辅音骨架一样的（只改了后面几个字母）；纯中文照旧
+func TestHeardAlike(t *testing.T) {
+	for _, c := range []struct {
+		a, b string
+		want bool
+	}{
+		{"张伟", "章炜", true}, {"马米", "Mami", true}, {"阶越", "阶跃", true},
+		{"Cloud", "Claude", true}, {"Clawd", "Claude", true}, {"K肉", "Kiro", true}, {"Cloud Code", "Claude Code", true}, {"get hub", "GitHub", true},
+		{"张伟", "李明", false}, {"周五", "周四", false}, {"马路", "美丽", false}, {"接越", "接口", false},
+		{"Alma", "Mami", false}, {"Java", "Jira", false}, {"Python", "Pylon", false}, {"Claude", "Cursor", false}, {"OpenAI", "Anthropic", false}, {"AI", "UI", false},
+	} {
+		if got := heardAlike(c.a, c.b); got != c.want {
+			t.Errorf("%s/%s: %v (%s/%s)", c.a, c.b, got, consonants(spell(c.a)), consonants(spell(c.b)))
+		}
+	}
+	if soundsAlike("Cloud", "Claude") {
+		t.Error("soundsAlike got loose too; guardPolish uses it")
+	}
+}
+
+// 用户只把 Cloud 后面几个字母改成了 Claude：模型给的这一对要收下
+func TestParseLearnedPartialWord(t *testing.T) {
+	pasted, now := "帮我打开 Cloud Code 看一下", "帮我打开 Claude Code 看一下"
+	got := parseLearned(`[{"wrong":"Cloud","right":"Claude"}]`, pasted, now)
+	if len(got) != 1 || got[0].Wrong != "Cloud" || got[0].Right != "Claude" {
+		t.Fatalf("parseLearned = %+v, want Cloud→Claude", got)
+	}
+}
+
 func TestGuardPolish(t *testing.T) {
 	hot := []learnedWord{{Right: "章炜", Manual: true}, {Right: "Mami", Manual: true}}
 	withPair := append(append([]learnedWord{}, hot...), learnedWord{Wrong: "张伟", Right: "章炜"})
@@ -223,6 +252,8 @@ func TestGuardPolish(t *testing.T) {
 		{"我刚把张伟拉进群", "我刚把章炜拉进群。", withPair, "我刚把章炜拉进群。"},
 		{"小孩一直喊马米马米", "小孩一直喊 Mami Mami。", hot, "小孩一直喊马米马米。"},
 		{"这个是Mami做的", "这个是 Mami 做的。", hot, "这个是 Mami 做的。"},
+		// 防误改用严的 soundsAlike：克肉/Kiro 拼写差得多，不当同音拦（学词用的 heardAlike 会认，别混用）
+		{"用克肉打开", "用 Kiro 打开。", []learnedWord{{Right: "Kiro", Manual: true}}, "用 Kiro 打开。"},
 		{"那个那个我们明天开会", "我们明天开会。", hot, "我们明天开会。"},
 	} {
 		if got := guardPolish(c.src, c.pol, c.learned); got != c.want {
