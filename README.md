@@ -110,7 +110,7 @@ Everything is in `%AppData%\Mami\`: `config.json` (settings; every API key is en
 
 ## Build
 
-Requires Go 1.27.1+ (`GOTOOLCHAIN=auto` downloads it).
+Requires Go 1.27.3+ (`GOTOOLCHAIN=auto` downloads it).
 
 ```bash
 go test ./...

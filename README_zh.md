@@ -110,7 +110,7 @@
 
 ## 构建
 
-需要 Go 1.27.1+（`GOTOOLCHAIN=auto` 会自动下载）。
+需要 Go 1.27.3+（`GOTOOLCHAIN=auto` 会自动下载）。
 
 ```bash
 go test ./...

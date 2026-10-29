@@ -121,7 +121,9 @@ func Run() {
 		if _, err := startWorker(); err != nil {
 			log.Fatal("worker: ", err)
 		}
-		sysLocale = mygo.App.Locale()
+		if languages := mygo.App.PreferredLanguages(); len(languages) > 0 {
+			sysLocale = languages[0]
+		}
 		i18n.Set(i18n.Resolve(cfg.Language, sysLocale))
 		a.createWindows()
 		log.Printf("start: model=%s base=%s hotkey=%s config=%s", cfg.Model, cfg.BaseURL, cfg.Hotkey, a.cfgPath)

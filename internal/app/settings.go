@@ -437,7 +437,6 @@ func providerPicker(c *ui.Context, ps []apiPreset, cur string) (picked string) {
 		return ""
 	}
 	ui.Text(c, T("服务商")).FontSize(14).Padding(14, 0, 8, 0)
-	// 不能拿局部变量当 selected：mygo 在这一帧画完后才写进去，写进局部变量就丢了，所以按每段的 Clicked 认
 	sel := idx
 	parts := ui.SegmentedBase(c, &sel, len(ps))
 	parts.Track.AlignItems(ui.Stretch).Padding(t.Space(0.5)).Gap(t.Space(0.5)).Radius(t.Radius).Background(t.Surface).Border(1, t.Border).Label(T("服务商"))
