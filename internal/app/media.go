@@ -2,7 +2,10 @@ package app
 
 import (
 	"log"
+	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -15,6 +18,7 @@ import (
 var (
 	mediaPlaying = platformMediaPlaying
 	mediaSend    = platformMediaSend
+	mediaName    = func(pid int32) string { return processName(uint32(pid)) }
 	mediaTick    = 250 * time.Millisecond
 	// mediaSettle 暂停后过这么久还在出声，就算没停住。WebKit 里的播放器（MySpotify、Safari）停了以后
 	// 约 2.5 秒才放开扬声器（实测），所以不能一暂停就看
@@ -53,11 +57,13 @@ func (m *mediaHold) hold() {
 		return
 	}
 	m.held, m.owners, m.at = true, owners, time.Now()
-	log.Printf("voice: paused what's playing (%d app(s))", len(owners))
+	log.Printf("voice: paused what's playing (%s)", mediaNames(owners))
 }
 
-// release 录音结束：等暂停时在出声的程序都安静下来再发「播放」。过了 mediaSettle 还在出声，说明暂停没管用
-// （通话、游戏不认），就不发「播放」——不然会把你早先自己暂停的别的播放器放起来。等的时候又开始录，就接着停着
+// release 录音结束：暂停时在出声的程序里有一个安静下来了（暂停管用了）就发「播放」。
+// 不等全部安静：「暂停」只发给系统里正在放的那一个 app，别的出声的——远程桌面（UU 远程一直占着扬声器）、
+// 通话、游戏——本来就不会停，等它们会永远放不回来。过了 mediaSettle 一个都没安静，说明暂停没管用，
+// 就不发「播放」——不然会把你早先自己暂停的别的播放器放起来。等的时候又开始录，就接着停着
 func (m *mediaHold) release() {
 	m.mu.Lock()
 	if !m.held {
@@ -73,15 +79,23 @@ func (m *mediaHold) release() {
 				m.mu.Unlock()
 				return
 			}
-			quiet := !slices.ContainsFunc(mediaPlaying(), func(p int32) bool { return slices.Contains(m.owners, p) })
-			if quiet || time.Since(m.at) >= mediaSettle {
+			playing := mediaPlaying()
+			var stopped, still []int32
+			for _, p := range m.owners {
+				if slices.Contains(playing, p) {
+					still = append(still, p)
+				} else {
+					stopped = append(stopped, p)
+				}
+			}
+			if len(stopped) > 0 || time.Since(m.at) >= mediaSettle {
 				m.held = false
 				m.mu.Unlock()
-				if quiet {
+				if len(stopped) > 0 {
 					mediaSend(mediaPlay)
-					log.Printf("voice: resumed playing")
+					log.Printf("voice: resumed playing (%s had stopped)", mediaNames(stopped))
 				} else {
-					log.Printf("voice: still playing after the pause; not resuming")
+					log.Printf("voice: still playing after the pause (%s); not resuming", mediaNames(still))
 				}
 				return
 			}
@@ -89,4 +103,17 @@ func (m *mediaHold) release() {
 			time.Sleep(mediaTick)
 		}
 	}()
+}
+
+// mediaNames 日志里写程序名（UURemote, MySpotify），读不到名字的写进程号
+func mediaNames(pids []int32) string {
+	names := make([]string, 0, len(pids))
+	for _, p := range pids {
+		n := strings.TrimSuffix(filepath.Base(mediaName(p)), ".app")
+		if n == "" || n == "." {
+			n = strconv.Itoa(int(p))
+		}
+		names = append(names, n)
+	}
+	return strings.Join(names, ", ")
 }

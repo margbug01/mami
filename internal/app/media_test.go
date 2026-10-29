@@ -7,32 +7,36 @@ import (
 	"time"
 )
 
-// fakePlayer 假的「谁在出声」和「暂停/播放」：暂停后 quietAfter 才安静（WebKit 那样）；deaf=暂停不管用（通话、游戏）
+// fakePlayer 假的「谁在出声」和「暂停/播放」：暂停后 quietAfter 才安静（WebKit 那样）；deaf=暂停不管用（通话、游戏）；
+// others 一直在出声、不接暂停的别的程序（UU 远程这种远程桌面一直占着扬声器）
 type fakePlayer struct {
 	mu         sync.Mutex
 	playing    bool
 	pausedAt   time.Time
 	quietAfter time.Duration
 	deaf       bool
+	others     []int32
 	sent       []int
 }
 
 func (f *fakePlayer) install(t *testing.T) {
 	t.Helper()
-	oldP, oldS, oldT, oldW := mediaPlaying, mediaSend, mediaTick, mediaSettle
+	oldP, oldS, oldN, oldT, oldW := mediaPlaying, mediaSend, mediaName, mediaTick, mediaSettle
 	t.Cleanup(func() {
-		mediaPlaying, mediaSend, mediaTick, mediaSettle = oldP, oldS, oldT, oldW
+		mediaPlaying, mediaSend, mediaName, mediaTick, mediaSettle = oldP, oldS, oldN, oldT, oldW
 		media = mediaHold{}
 	})
+	mediaName = func(int32) string { return "" }
 	media = mediaHold{}
 	mediaTick, mediaSettle = 5*time.Millisecond, 300*time.Millisecond
 	mediaPlaying = func() []int32 {
 		f.mu.Lock()
 		defer f.mu.Unlock()
+		out := slices.Clone(f.others)
 		if f.playing && (f.deaf || f.pausedAt.IsZero() || time.Since(f.pausedAt) < f.quietAfter) {
-			return []int32{7}
+			out = append(out, 7)
 		}
-		return nil
+		return out
 	}
 	mediaSend = func(cmd int) bool {
 		f.mu.Lock()
@@ -131,5 +135,56 @@ func TestMediaLeftAloneWhenResumedByHand(t *testing.T) {
 	settle()
 	if got := f.commands(); !slices.Equal(got, []int{mediaPause}) {
 		t.Fatalf("sent %v, want only [pause]", got)
+	}
+}
+
+// 旁边有个一直出声、不接暂停的程序（UU 远程）：音乐停了就该放回来，不能等它也安静（它永远不会）
+func TestMediaResumesBesideAnAlwaysOnApp(t *testing.T) {
+	f := &fakePlayer{playing: true, quietAfter: 60 * time.Millisecond, others: []int32{9}}
+	f.install(t)
+	media.hold()
+	media.release()
+	settle()
+	if got := f.commands(); !slices.Equal(got, []int{mediaPause, mediaPlay}) {
+		t.Fatalf("sent %v, want [pause play]", got)
+	}
+}
+
+// 只有那个一直出声的程序、音乐本来没在放：暂停（不碍事）之后什么都没安静，不发播放
+func TestMediaNotResumedWhenOnlyAnAlwaysOnAppPlays(t *testing.T) {
+	f := &fakePlayer{others: []int32{9}}
+	f.install(t)
+	media.hold()
+	media.release()
+	settle()
+	if got := f.commands(); !slices.Equal(got, []int{mediaPause}) {
+		t.Fatalf("sent %v, want only [pause]", got)
+	}
+}
+
+// 录的时候自己又点了播放、旁边还有一直出声的：说完谁都没安静，不再发播放
+func TestMediaLeftAloneWhenResumedByHandBesideAnAlwaysOnApp(t *testing.T) {
+	f := &fakePlayer{playing: true, quietAfter: 10 * time.Millisecond, others: []int32{9}}
+	f.install(t)
+	media.hold()
+	time.Sleep(mediaSettle + 20*time.Millisecond)
+	f.mu.Lock()
+	f.pausedAt = time.Time{}
+	f.mu.Unlock()
+	media.release()
+	settle()
+	if got := f.commands(); !slices.Equal(got, []int{mediaPause}) {
+		t.Fatalf("sent %v, want only [pause]", got)
+	}
+}
+
+func TestMediaNames(t *testing.T) {
+	old := mediaName
+	t.Cleanup(func() { mediaName = old })
+	mediaName = func(p int32) string {
+		return map[int32]string{1: "/Applications/UURemote.app", 2: "/Applications/MySpotify.app"}[p]
+	}
+	if got := mediaNames([]int32{1, 2, 3}); got != "UURemote, MySpotify, 3" {
+		t.Fatalf("got %q", got)
 	}
 }
