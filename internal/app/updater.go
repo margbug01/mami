@@ -78,6 +78,7 @@ func updateDir() string { return filepath.Join(os.TempDir(), "Mami-update") }
 func (a *App) updateClient(timeout time.Duration) *http.Client {
 	cfg, _ := a.config()
 	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.Proxy = systemProxy // 设置里没填代理：走系统代理，直连 GitHub 下载常常慢得像卡住
 	if p := strings.TrimSpace(cfg.Proxy); p != "" {
 		if u, err := url.Parse(p); err == nil {
 			tr.Proxy = http.ProxyURL(u)
