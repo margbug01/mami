@@ -58,7 +58,11 @@ func voiceHookKey(key *kbdLLHook, down bool) bool {
 	if key.VkCode == trigger {
 		voiceTriggerAt = key.Time
 	}
-	if healed := voiceKeyboard.heal(func(vk uint32) bool { return (swallowTrigger && vk == trigger) || keyDown(uintptr(vk)) }); len(healed) > 0 {
+	releasing := uint32(0)
+	if !down {
+		releasing = key.VkCode
+	}
+	if healed := voiceKeyboard.heal(releasing, func(vk uint32) bool { return (swallowTrigger && vk == trigger) || keyDown(uintptr(vk)) }); len(healed) > 0 {
 		log.Printf("voice: cleared stuck keys %x", healed)
 	}
 	held := voiceKeyboard.held

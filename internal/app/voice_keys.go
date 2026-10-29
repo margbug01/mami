@@ -45,10 +45,12 @@ type voiceKeys struct {
 
 // heal 把记成「按着」、实际早已松开的键纠正回来。低级钩子收不到锁屏、安全桌面、管理员窗口里的按键，
 // 漏掉一次松开，之后每次按触发键都会被当成组合键（或当成触发键的连发）而不启动。
-// isDown 在钩子里是这次事件之前的真实状态（GetAsyncKeyState 在钩子返回后才更新）。
-func (s *voiceKeys) heal(isDown func(vk uint32) bool) (healed []uint32) {
+// isDown 在 Windows 钩子里是这次事件之前的真实状态（GetAsyncKeyState 在钩子返回后才更新）；
+// macOS 的 HID 状态在事件送到 tap 时已经是之后的了，正在松开的键会读成「已松开」。
+// releasing 是这次松开的键：它不查，step 自己会把它记成松开（查了就会把触发键的 held 清掉，单按松开不算数）
+func (s *voiceKeys) heal(releasing uint32, isDown func(vk uint32) bool) (healed []uint32) {
 	for vk, pressed := range s.pressed {
-		if pressed && !isDown(uint32(vk)) {
+		if pressed && uint32(vk) != releasing && !isDown(uint32(vk)) {
 			s.pressed[vk] = false
 			healed = append(healed, uint32(vk))
 			if uint32(vk) == s.held { // 触发键自己的松开丢了：当作这一下按成组合键作废，不动正在进行的录音

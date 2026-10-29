@@ -65,21 +65,21 @@ func TestVoiceKeysHeal(t *testing.T) {
 		t.Fatal("stuck keys should block, as before the fix")
 	}
 	s.step(trigger, false, trigger, false)
-	if healed := s.heal(func(vk uint32) bool { return false }); len(healed) != 2 {
+	if healed := s.heal(0, func(vk uint32) bool { return false }); len(healed) != 2 {
 		t.Fatalf("healed %v", healed)
 	}
 	if action, _ := s.step(trigger, true, trigger, false); action != voiceStart {
 		t.Fatal("trigger should start after healing")
 	}
 	// 触发键自己的松开丢了：held 清掉，下一下重新算
-	s.heal(func(vk uint32) bool { return false })
+	s.heal(0, func(vk uint32) bool { return false })
 	if s.held != 0 || s.pressed[trigger] {
 		t.Fatal("held trigger not cleared")
 	}
 	// 真按着的键不动
 	s = voiceKeys{}
 	s.step('A', true, trigger, false)
-	if healed := s.heal(func(vk uint32) bool { return vk == 'A' }); len(healed) != 0 || !s.pressed['A'] {
+	if healed := s.heal(0, func(vk uint32) bool { return vk == 'A' }); len(healed) != 0 || !s.pressed['A'] {
 		t.Fatal("real key cleared")
 	}
 }
@@ -142,6 +142,50 @@ func TestVoiceSkins(t *testing.T) {
 		}
 		if cfg.VoiceStyle != want {
 			t.Errorf("%q → %q", style, cfg.VoiceStyle)
+		}
+	}
+}
+
+// TestVoiceKeysAsyncState 钩子里问到的按键状态，Windows 是这次事件之前的，macOS 是之后的（松开事件送到时 HID 已经记成松开）。
+// 两种都得是：单按一下开始录、再单按一下结束，打字时没有键被当成卡住
+func TestVoiceKeysAsyncState(t *testing.T) {
+	const trigger = 0xA5 // 右 Alt / 右 ⌥
+	type ev struct {
+		vk   uint32
+		down bool
+	}
+	for _, after := range []bool{false, true} {
+		var s voiceKeys
+		physical := map[uint32]bool{}
+		var actions []int
+		var healed []uint32
+		feed := func(events ...ev) {
+			for _, e := range events {
+				before := physical[e.vk]
+				physical[e.vk] = e.down
+				releasing := uint32(0)
+				if !e.down {
+					releasing = e.vk
+				}
+				healed = append(healed, s.heal(releasing, func(vk uint32) bool {
+					if vk == e.vk && !after {
+						return before
+					}
+					return physical[vk]
+				})...)
+				if a, _ := s.step(e.vk, e.down, trigger, s.recording); a != voiceNone {
+					actions = append(actions, a)
+				}
+			}
+		}
+		feed(ev{'H', true}, ev{'I', true}, ev{'H', false}, ev{'I', false}) // 打字，两个键交叠
+		feed(ev{trigger, true}, ev{trigger, false})                        // 单按：开始
+		feed(ev{trigger, true}, ev{trigger, false})                        // 再单按：结束
+		if len(healed) != 0 {
+			t.Errorf("after=%v: healed %x while typing and tapping", after, healed)
+		}
+		if len(actions) != 2 || actions[0] != voiceStart || actions[1] != voiceStop {
+			t.Errorf("after=%v: actions %v, want [start stop]", after, actions)
 		}
 	}
 }
