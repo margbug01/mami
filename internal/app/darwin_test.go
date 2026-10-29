@@ -80,3 +80,27 @@ func TestKeyCipherRoundTrip(t *testing.T) {
 		t.Fatal("foreign blob decrypted")
 	}
 }
+
+// 按着右 ⌥ 时系统报的样子（实测）：CGEventSourceKeyState 说左 ⌥ 按着、右 ⌥ 没按，flags 里是右 ⌥ 那一位 0x40。
+// keyDown 得分清左右，不然触发键右 ⌥ 每次都被当成和左 ⌥ 一起按的组合键，语音起不来
+func TestKeyDownTellsModifierSidesApart(t *testing.T) {
+	defer func(f func() uint64, k func(uint16) bool) { hidFlags, hidKey = f, k }(hidFlags, hidKey)
+	hidFlags = func() uint64 { return 0x20080140 }
+	hidKey = func(code uint16) bool { return code == 0x3A }
+	if !keyDown(0xA5) {
+		t.Error("right option held, keyDown(VK_RMENU) = false")
+	}
+	if !keyDown(VK_MENU) {
+		t.Error("keyDown(VK_MENU) = false")
+	}
+	for _, vk := range []uintptr{0xA0, 0xA1, 0xA2, 0xA3, 0xA4, VK_LWIN, VK_RWIN} {
+		if keyDown(vk) {
+			t.Errorf("only right option held, keyDown(%#x) = true", vk)
+		}
+	}
+	hidFlags = func() uint64 { return 0x20000100 }
+	hidKey = func(code uint16) bool { return code == 0x04 } // H
+	if !keyDown('H') || keyDown('J') {
+		t.Error("letters should come from the key state")
+	}
+}

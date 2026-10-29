@@ -323,19 +323,30 @@ func keyDown(vk uintptr) bool {
 	case VK_RBUTTON:
 		return cgEventSourceButton(hidState, 1)
 	case VK_SHIFT:
-		return cgEventSourceFlagsState(hidState)&flagShift != 0
+		return hidFlags()&flagShift != 0
 	case VK_CONTROL:
-		return cgEventSourceFlagsState(hidState)&flagCtrl != 0
+		return hidFlags()&flagCtrl != 0
 	case VK_MENU:
-		return cgEventSourceFlagsState(hidState)&flagAlt != 0
+		return hidFlags()&flagAlt != 0
 	case vkFn:
-		return cgEventSourceFlagsState(hidState)&flagFn != 0
+		return hidFlags()&flagFn != 0
 	}
 	if code, ok := vkToMac[uint32(vk)]; ok {
-		return cgEventSourceKeyState(hidState, code)
+		if bit, ok := modifierBits[code]; ok {
+			// 左右修饰键看 flags 里各自那一位（tap 判断按下松开用的同一张表）：CGEventSourceKeyState 分不清左右，
+			// 按着右 ⌥ 时它说左 ⌥ 按着、右 ⌥ 没按（实测），触发键右 ⌥ 就总被当成和左 ⌥ 一起按的组合键
+			return hidFlags()&bit != 0
+		}
+		return hidKey(code)
 	}
 	return false
 }
+
+// hidFlags / hidKey 系统此刻的修饰键和按键状态；测试里换成假的
+var (
+	hidFlags = func() uint64 { return cgEventSourceFlagsState(hidState) }
+	hidKey   = func(code uint16) bool { return cgEventSourceKeyState(hidState, code) }
+)
 
 // rightAltTaken macOS 上右 Option 单按没有别的用处（输入法切换走 CapsLock / ⌃空格 / 🌐），默认触发键照用
 func rightAltTaken() bool { return false }
