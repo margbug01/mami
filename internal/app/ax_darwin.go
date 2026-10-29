@@ -9,7 +9,6 @@ import (
 	"unicode/utf16"
 	"unsafe"
 
-	"github.com/ebitengine/purego"
 	"github.com/ebitengine/purego/objc"
 )
 
@@ -30,10 +29,6 @@ var (
 	axLastAppPID  int32
 	axLastAppLock sync.Mutex
 )
-
-func init() {
-	purego.RegisterLibFunc(&axIsSettable, libAX, "AXUIElementIsAttributeSettable")
-}
 
 // axName 属性名的 CFString，建一次常驻
 func axName(name string) uintptr {

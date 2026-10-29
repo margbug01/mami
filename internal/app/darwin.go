@@ -75,6 +75,8 @@ var (
 	axValueCreate                 func(typ uint32, in unsafe.Pointer) uintptr
 )
 
+// 系统库都在这里打开、函数都在这里注册。包里的 init 按文件名先后跑，ax_darwin.go 这种排在
+// darwin.go 前面的文件要是自己在 init 里注册，那时 libAX 还是 0，一启动就 panic
 func init() {
 	open := func(path string) uintptr {
 		h, err := purego.Dlopen(path, purego.RTLD_GLOBAL|purego.RTLD_NOW)
@@ -141,6 +143,7 @@ func init() {
 	reg(&axCreateApplication, libAX, "AXUIElementCreateApplication")
 	reg(&axCopyAttribute, libAX, "AXUIElementCopyAttributeValue")
 	reg(&axCopyParamAttribute, libAX, "AXUIElementCopyParameterizedAttributeValue")
+	reg(&axIsSettable, libAX, "AXUIElementIsAttributeSettable")
 	reg(&axSetAttribute, libAX, "AXUIElementSetAttributeValue")
 	reg(&axSetMessagingTimeout, libAX, "AXUIElementSetMessagingTimeout")
 	reg(&axValueGetValue, libAX, "AXValueGetValue")
