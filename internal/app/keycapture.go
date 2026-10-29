@@ -30,7 +30,7 @@ func (k *keyCapture) step(vk uint32, down bool) (state int, acc, hint string) {
 		k.mods[m] = down
 		k.hint = ""
 		if mods := k.modText(); mods != "" {
-			k.hint = mods + "+…"
+			k.hint = keysLabel(mods + "+…")
 		}
 		return captureGoing, "", k.hint
 	}
@@ -50,6 +50,9 @@ func (k *keyCapture) step(vk uint32, down bool) (state int, acc, hint string) {
 		k.hint = T("不支持这个键")
 	case none && (vk < 0x70 || vk > 0x87):
 		k.hint = T("要带上 Ctrl、Alt 或 Shift")
+		if onMac {
+			k.hint = T("要带上 ⌘、⌃、⌥ 或 ⇧")
+		}
 	case none:
 		return captureDone, name, ""
 	default:
@@ -95,6 +98,9 @@ func (k *keyCapture) stepVoice(vk uint32, down bool) (int, string, string) {
 		return captureDone, name, ""
 	}
 	k.hint = T("单按只能用 Alt/Ctrl/Shift、F 键或 CapsLock")
+	if onMac {
+		k.hint = T("单按只能用 ⌥/⌃/⇧/⌘、fn 或 F 键")
+	}
 	return captureGoing, "", k.hint
 }
 
@@ -120,6 +126,37 @@ func modIndex(vk uint32) int {
 		return 3
 	}
 	return -1
+}
+
+// keyLabel 给人看的键名。macOS 上换成 ⌘⌥⌃⇧ 和左右；配置里存的还是 Ctrl/Alt/Shift/Win（mygo 认 Win=⌘）
+func keyLabel(part string) string {
+	if !onMac {
+		return part
+	}
+	side := map[byte]string{'L': T("左"), 'R': T("右")}
+	sym := map[string]string{"Ctrl": "⌃", "Alt": "⌥", "Shift": "⇧", "Win": "⌘", "Fn": "fn",
+		"Enter": "↩", "Backspace": "⌫", "Delete": "⌦", "Tab": "⇥", "Up": "↑", "Down": "↓", "Left": "←", "Right": "→"}
+	if s, ok := sym[part]; ok {
+		return s
+	}
+	if len(part) > 1 && side[part[0]] != "" { // LCtrl / RAlt / RWin 这种分左右的单键
+		if s, ok := sym[part[1:]]; ok {
+			return side[part[0]] + " " + s
+		}
+	}
+	return part
+}
+
+// keysLabel 一整串组合键给人看：Windows 上原样，macOS 上连成「⌃⌥V」
+func keysLabel(acc string) string {
+	if !onMac {
+		return acc
+	}
+	parts := strings.Split(acc, "+")
+	for i, p := range parts {
+		parts[i] = keyLabel(p)
+	}
+	return strings.Join(parts, "")
 }
 
 func voiceKeyName(vk uint32) string {

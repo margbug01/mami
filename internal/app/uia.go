@@ -87,15 +87,10 @@ type editableReq struct {
 	reply chan focusInfo
 }
 
-// focusInfo：焦点是不是有选中文字的输入框；sel 是选区最后一行在屏幕上的框（物理像素）
-type focusInfo struct {
-	ok     bool
-	sel    RECT
-	hasSel bool
-	blind  bool // 有输入光标但位置是假的、选区也问不出（微信 4.x 这类 Qt 程序）：分不清输入框和聊天记录
-}
-
-var uiaReqs = make(chan editableReq, 8)
+var (
+	uiaReqs    = make(chan editableReq, 8)
+	uiaStarted bool // startUIA 成功后才置位，之后只读
+)
 
 // uiaTextReqs 问焦点元素里选中的完整文字（终端用：不发 Ctrl+C）
 var uiaTextReqs = make(chan chan string, 4)
@@ -115,12 +110,6 @@ func selectedTextUIA() string {
 		log.Println("uia: selection text query timed out")
 		return ""
 	}
-}
-
-// inputState Alt+T 没选中时用：焦点是不是能打字的输入框、里面是不是明确什么都没选
-type inputState struct {
-	input bool // 可写的 ValuePattern，或者不是整页 Document 的 TextPattern
-	empty bool // 输入框里选区明确是空的：Ctrl+C 不会改剪贴板，不用白等 600ms
 }
 
 var uiaInputReqs = make(chan chan inputState, 4)
@@ -296,6 +285,7 @@ func startUIA() error {
 			ready <- errors.New("CoCreateInstance(CUIAutomation) failed")
 			return
 		}
+		uiaStarted = true
 		ready <- nil
 		for {
 			select {
@@ -407,10 +397,6 @@ func uiaFocus(auto uintptr, pt POINT) (fi focusInfo, known bool) {
 }
 
 const (
-	selUnknown = iota // 问不出来就放行，宁可多弹也别在能用的地方不弹
-	selEmpty
-	selText
-
 	uiaTextPatternId = 10014
 	emGetSel         = 0x00B0
 )
@@ -530,8 +516,12 @@ func systemCaret(fg uintptr) bool {
 	return ok && gti.HwndCaret != 0
 }
 
-// focusEditable 查询超时（对方进程卡住、第一次建无障碍树）就当不是输入框
+// focusEditable 查询超时（对方进程卡住、第一次建无障碍树）就当不是输入框；
+// UIA 没起来就只靠系统光标判断
 func focusEditable(fg uintptr, pt POINT) focusInfo {
+	if !uiaStarted {
+		return focusIsEditable(0, fg, pt)
+	}
 	reply := make(chan focusInfo, 1)
 	select {
 	case uiaReqs <- editableReq{fg, pt, reply}:

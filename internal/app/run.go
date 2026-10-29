@@ -1,9 +1,8 @@
-//go:build windows
-
 package app
 
 import (
 	_ "embed"
+	"errors"
 	"flag"
 	"io"
 	"log"
@@ -101,8 +100,7 @@ func Run() {
 		log.Println(err)
 		a.setConfig(defaultConfig())
 	}
-	d, _, _ := pGetDoubleClickTime.Call()
-	a.dblTime = uint32(d)
+	a.dblTime = doubleClickTime()
 	a.avatar = loadAvatar()
 
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { a.quitting = true })
@@ -143,10 +141,12 @@ func Run() {
 		}
 		if err := startUIA(); err != nil {
 			log.Println("uia:", err, "— 只能靠系统光标判断输入框")
-		} else {
-			a.uiaOK = true
 		}
-		if err := startHook(a.isOurs, a.onCardKey); err != nil {
+		switch err := startHook(a.isOurs, a.onCardKey); {
+		case errors.Is(err, errNeedAccessibility): // macOS：给了权限钩子会自己挂上，不用重启
+			log.Println("hook: waiting for accessibility permission")
+			probs = append(probs, T("要在「系统设置 → 隐私与安全性 → 辅助功能」里打开 Mami，打开后马上生效"))
+		case err != nil:
 			log.Println(err)
 			probs = append(probs, T("鼠标钩子挂载失败，只能用快捷键"))
 		}

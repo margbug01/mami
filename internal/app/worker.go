@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
-	"time"
 	"unsafe"
 )
 
@@ -99,30 +98,4 @@ func (w *worker) do(job func(owner uintptr)) {
 	w.jobs = append(w.jobs, job)
 	w.mu.Unlock()
 	pPostMessageW.Call(w.hwnd, wmWorkerJob, 0, 0)
-}
-
-// paste 用剪贴板 + 粘贴键（一般是 Ctrl+V，见 sendPaste）把文字贴进当前焦点，0.7 秒后把原来的剪贴板还回去
-// （期间要是别人又往剪贴板里写了东西，就不还原，免得覆盖掉）。
-func (w *worker) paste(text string, allow ...func(owner uintptr) bool) {
-	w.do(func(owner uintptr) {
-		snap, ok := snapshotClipboard(owner)
-		if len(allow) > 0 && !allow[0](owner) {
-			return
-		}
-		if !setClipboardText(owner, toCRLF(text), true) {
-			return
-		}
-		sendPaste()
-		if !ok {
-			return
-		}
-		seq := clipSeq()
-		time.AfterFunc(700*time.Millisecond, func() {
-			w.do(func(owner uintptr) {
-				if clipSeq() == seq {
-					restoreClipboard(owner, snap)
-				}
-			})
-		})
-	})
 }

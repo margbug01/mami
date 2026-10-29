@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -63,6 +61,7 @@ type settingsState struct {
 	copiedAt              time.Time
 	polishTestMsg         string
 	polishTestErr         bool
+	permTick              bool // macOS 权限还没给全：一秒后重画一次看打开了没有
 	guide                 bool // 新手引导占着内容区（guide.go）
 	guideStep             int
 	voice                 guideVoiceState
@@ -85,7 +84,7 @@ func (a *App) openSettings() {
 	if a.setWin == nil || a.setGone {
 		reset()
 		a.setGone = false
-		a.setWin = mygo.NewWindow(mygo.WindowOptions{
+		opts := mygo.WindowOptions{
 			Title:           "Mami · Settings",
 			Width:           settingsW,
 			Height:          settingsH,
@@ -95,7 +94,11 @@ func (a *App) openSettings() {
 			Frameless:       true,
 			StateKey:        "settings", // 记住上次的大小和位置（mygo 存在 window-state.json，退出时写盘），下次打开还是那么大
 			Content:         ui.View(a.settingsView),
-		})
+		}
+		if onMac { // 用系统左上角的红黄绿按钮：标题栏藏起来，内容铺满整个窗口
+			opts.Frameless, opts.TitleBarStyle = false, mygo.TitleBarHidden
+		}
+		a.setWin = mygo.NewWindow(opts)
 		a.setWin.SetIcon(iconPNG)
 		a.setHwnd.Store(a.setWin.NativeHandle())
 		// 关掉就真关：窗口连同画面、预览用的脚本和纹理都放掉（藏起来的话这些一直占着）。
@@ -221,7 +224,11 @@ func (a *App) settingsView(c *ui.Context) {
 // brandMark 侧边栏顶上：头像 + Mami + 版本号，安安静静的一行。整块能拖窗口
 func (a *App) brandMark(c *ui.Context) {
 	t := c.Theme()
-	ui.Row(c).Padding(18, 18, 8, 18).Gap(10).AlignItems(ui.Center).Children(func() {
+	top := float32(18)
+	if onMac { // 让开左上角的红黄绿按钮
+		top = 40
+	}
+	ui.Row(c).Padding(top, 18, 8, 18).Gap(10).AlignItems(ui.Center).Children(func() {
 		if a.avatar != nil {
 			ui.Image(c, a.avatar).Size(28, 28).Radius(14).Clip().Border(1, t.Border).
 				Shadow(0, 2, 6, 0, ui.RGBA(10, 20, 35, 0.08)).Shrink(0)
@@ -532,7 +539,11 @@ func (a *App) pageVoice(c *ui.Context, d *Config) {
 	}
 	settingGroup(c, "", func() {
 		switchRow(c, T("启用语音输入"), T("按一下开始说话，再按一下贴入；Esc 取消"), &d.VoiceEnabled)
-		settingRowW(c, T("触发键"), T("点一下再按键，Backspace 关闭"), selectW, func() { a.hotkeyBox(c, "voice", &d.VoiceHotkey, true) })
+		keyDesc := T("点一下再按键，Backspace 关闭")
+		if onMac && d.VoiceHotkey == "Fn" { // 🌐 键默认会切输入法或弹表情，和触发键抢
+			keyDesc = T("fn 要先在「系统设置 → 键盘」里把「按下 🌐 键时」改成「不执行任何操作」")
+		}
+		settingRowW(c, T("触发键"), keyDesc, selectW, func() { a.hotkeyBox(c, "voice", &d.VoiceHotkey, true) })
 		switchRow(c, T("提示音"), T("开始、结束、取消时轻响一声"), &d.VoiceSound)
 		switchRow(c, T("边说边出字"), T("说话时胶囊里实时显示识别的字，说完照常润色后贴入；需要千问 3.1 这类流式模型"), &d.VoiceLiveText)
 	})
@@ -1101,7 +1112,11 @@ func (a *App) pageHotkeys(c *ui.Context, d *Config) {
 		}
 		settingRowW(c, T("原地替换"), T("点一下再按组合键，Backspace 清空"), selectW, func() { a.hotkeyBox(c, "hotkey", &d.Hotkey, false) })
 		settingRowW(c, T("只弹卡片"), T("点一下再按组合键，Backspace 清空"), selectW, func() { a.hotkeyBox(c, "popup", &d.PopupHotkey, false) })
-		switchRow(c, T("快捷键没选中就全选"), T("按 Alt+T 时没选中文字，先全选整个输入框再翻译"), &d.SelectAllIfEmpty)
+		if onMac {
+			switchRow(c, T("快捷键没选中就全选"), T("按 ⌥T 时没选中文字，先全选整个输入框再翻译"), &d.SelectAllIfEmpty)
+		} else {
+			switchRow(c, T("快捷键没选中就全选"), T("按 Alt+T 时没选中文字，先全选整个输入框再翻译"), &d.SelectAllIfEmpty)
+		}
 	})
 }
 
@@ -1113,7 +1128,7 @@ func (a *App) pageButton(c *ui.Context, d *Config) {
 		switchRow(c, T("只在输入框里弹"), T("网页正文、文档里划词不弹"), &d.OnlyInInputs)
 		settingRow(c, T("点翻译按钮后"), T("直接替换出错时仍会弹卡片说明原因"), func() { actionSelect(c, &d.ButtonAction) })
 		settingRow(c, T("不弹按钮的程序"), T("进程名，逗号分隔"), func() {
-			ui.TextInput(c, &s.exclude).Placeholder("game.exe, WindowsTerminal.exe")
+			ui.TextInput(c, &s.exclude).Placeholder(excludeExample)
 		})
 	})
 	settingGroup(c, T("兼容性"), func() {
@@ -1309,6 +1324,10 @@ func (a *App) saveDraft() {
 // titleBar 自绘标题栏：没有字，整条可拖动，右上角最小化和关闭。名字和头像在侧边栏的品牌卡上
 func (a *App) titleBar(c *ui.Context) {
 	t := c.Theme()
+	if onMac { // 最小化和关闭用系统的按钮，这里只剩能拖的一条
+		ui.Row(c).Height(36).AlignSelf(ui.Stretch).Shrink(0).DragWindow()
+		return
+	}
 	ui.Row(c).Height(36).AlignItems(ui.Center).AlignSelf(ui.Stretch).Shrink(0).Children(func() {
 		ui.Row(c).Grow(1).Height(36).DragWindow()
 		for _, b := range []struct {
@@ -1387,9 +1406,18 @@ func (a *App) pageGeneral(c *ui.Context, d *Config) {
 			langs[i].label = T("跟随系统")
 		}
 	}
+	if needPermissions {
+		settingGroup(c, T("权限"), func() {
+			ui.Column(c).FillWidth().Gap(10).Padding(4, 0, 12, 0).Children(func() { a.permissionRows(c) })
+		})
+	}
+	langDesc, themeDesc := T("设置窗口、卡片和托盘菜单用哪种语言"), T("浅色、深色，或跟随 Windows")
+	if onMac {
+		langDesc, themeDesc = T("设置窗口、卡片和菜单栏菜单用哪种语言"), T("浅色、深色，或跟随系统外观")
+	}
 	settingGroup(c, T("界面"), func() {
-		settingRowW(c, T("界面语言"), T("设置窗口、卡片和托盘菜单用哪种语言"), selectW, func() { optionSelect(c, &d.Language, langs) })
-		settingRowW(c, T("外观"), T("浅色、深色，或跟随 Windows"), selectW, func() {
+		settingRowW(c, T("界面语言"), langDesc, selectW, func() { optionSelect(c, &d.Language, langs) })
+		settingRowW(c, T("外观"), themeDesc, selectW, func() {
 			optionSelect(c, &d.Theme, []option{{"auto", T("跟随系统")}, {"light", T("浅色")}, {"dark", T("深色")}})
 		})
 	})
@@ -1411,9 +1439,48 @@ func (a *App) pageGeneral(c *ui.Context, d *Config) {
 		})
 	})
 	settingGroup(c, T("启动和更新"), func() {
-		switchRow(c, T("开机自启"), T("登录 Windows 后在托盘里自动运行"), &a.set.openAtLogin)
+		if onMac {
+			switchRow(c, T("开机自启"), T("登录 Mac 后在菜单栏里自动运行"), &a.set.openAtLogin)
+		} else {
+			switchRow(c, T("开机自启"), T("登录 Windows 后在托盘里自动运行"), &a.set.openAtLogin)
+		}
 		a.updateRow(c)
 	})
+}
+
+// permissionRows macOS 的两个权限：打开了打勾，没打开给按钮。引导和「通用」页共用
+func (a *App) permissionRows(c *ui.Context) {
+	t := c.Theme()
+	for _, p := range []struct {
+		title, desc string
+		ok          bool
+		ask         func()
+	}{
+		{T("辅助功能"), T("听触发键、读选中的字、帮你粘贴"), accessibilityOK(), askAccessibility},
+		{T("麦克风"), T("只在你说话的时候开"), micOK(), askMicrophone},
+	} {
+		ui.Row(c).FillWidth().Padding(12, 16).Gap(12).Radius(12).Background(paneColor(t)).Border(1, paneBorder(t)).AlignItems(ui.Center).Children(func() {
+			ui.Column(c).Grow(1).Shrink(1).Gap(3).Children(func() {
+				ui.Text(c, p.title).FontSize(14).FontWeight(600)
+				ui.Text(c, p.desc).FontSize(12).TextColor(t.TextMuted)
+			})
+			if p.ok {
+				ui.Text(c, "✓ "+T("已打开")).FontSize(13).TextColor(t.Accent).SingleLine().Shrink(0)
+			} else if accentButton(c, T("去打开")).Clicked() {
+				p.ask()
+			}
+		})
+	}
+	a.refreshPermissions()
+}
+
+// refreshPermissions 权限还没给全时每秒重画一次设置窗口：在系统设置里一打开，这边马上打勾
+func (a *App) refreshPermissions() {
+	if !needPermissions || a.set.permTick || accessibilityOK() && micOK() || a.setWin == nil {
+		return
+	}
+	a.set.permTick = true
+	time.AfterFunc(time.Second, func() { a.setWin.Update(func() { a.set.permTick = false }) })
 }
 
 // updateRow 「更新」一行：说明里是当前版本/检查结果/下载进度，右边按钮查更新或装新版
@@ -1545,6 +1612,7 @@ func keycaps(c *ui.Context, acc string) {
 		return
 	}
 	for _, part := range strings.Split(v, "+") {
+		part = keyLabel(part)
 		w, _ := c.MeasureText(200, ui.Span{Text: part, Size: 13})
 		ui.Box(c).Shrink(0).Padding(2, 8).Radius(4).Background(t.Background).Border(1, t.Border).Children(func() {
 			ui.Text(c, part).FontSize(13).SingleLine().MinWidth(w + 2) // 量出来的宽度偏紧，RAlt 会被省略成 R…

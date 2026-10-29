@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -91,7 +89,7 @@ func historyDetails(c *ui.Context, st *historyStats) {
 	if top := st.topApps(3); len(top) > 0 {
 		parts := make([]string, len(top))
 		for i, p := range top {
-			parts[i] = fmt.Sprintf("%s %d", strings.TrimSuffix(p.key, ".exe"), p.n)
+			parts[i] = fmt.Sprintf("%s %d", strings.TrimSuffix(strings.TrimSuffix(p.key, ".exe"), ".app"), p.n)
 		}
 		statRow(c, T("常用程序"), strings.Join(parts, " · "))
 	}

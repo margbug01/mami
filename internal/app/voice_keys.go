@@ -29,7 +29,9 @@ func init() {
 func voiceKey(name string) uint32 { return voiceKeyNames[name] }
 
 // voiceKeyIsModifier 修饰键当触发键时不吞（吞了 Shift/Ctrl 的状态会乱），其余单键吞掉，免得 CapsLock 跟着切大小写
-func voiceKeyIsModifier(vk uint32) bool { return vk >= 0xA0 && vk <= 0xA5 }
+func voiceKeyIsModifier(vk uint32) bool {
+	return vk >= 0xA0 && vk <= 0xA5 || vk == VK_LWIN || vk == VK_RWIN || vk == vkFn
+}
 
 // 只由钩子线程驱动。单击触发键开始录音，再单击结束；按着触发键时按了别的键算组合键：
 // 第一下的组合键取消这次录音，结束那下的组合键忽略（继续录）。

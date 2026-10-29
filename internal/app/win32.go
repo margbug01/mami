@@ -90,12 +90,6 @@ const (
 	GMEM_MOVEABLE   = 0x0002
 	INPUT_KEYBOARD  = 1
 	KEYEVENTF_KEYUP = 0x0002
-	VK_LBUTTON      = 0x01
-	VK_SHIFT        = 0x10
-	VK_CONTROL      = 0x11
-	VK_MENU         = 0x12
-	VK_LWIN         = 0x5B
-	VK_RWIN         = 0x5C
 	VK_MASK         = 0xE8 // 未分配的虚拟键：松开 Alt 时不让菜单栏被激活
 
 	GWL_EXSTYLE              = ^uintptr(19)                                                   // -20
@@ -112,9 +106,6 @@ const (
 	DWMWA_CORNER_PREF        = 33
 	DWMWA_NCRENDERING_POLICY = 2
 )
-
-type POINT struct{ X, Y int32 }
-type RECT struct{ Left, Top, Right, Bottom int32 }
 
 type MSG struct {
 	Hwnd     uintptr
@@ -193,9 +184,6 @@ func u16(s string) *uint16 {
 	return p
 }
 
-// POINT 按值传参时在 amd64 上就是一个 8 字节整数
-func packPt(p POINT) uintptr { return uintptr(uint32(p.X)) | uintptr(uint32(p.Y))<<32 }
-
 func cursorPos() POINT {
 	var p POINT
 	pGetCursorPos.Call(uintptr(unsafe.Pointer(&p)))
@@ -223,8 +211,6 @@ func workArea(p POINT) RECT {
 	return mi.RcWork
 }
 
-func scale(v int32, dpi uint32) int32 { return int32((int64(v)*int64(dpi) + 48) / 96) }
-
 func windowRect(h uintptr) RECT {
 	var r RECT
 	pGetWindowRect.Call(h, uintptr(unsafe.Pointer(&r)))
@@ -248,6 +234,23 @@ func makeFloating(h uintptr) {
 	pDwmSetWindowAttribute.Call(h, DWMWA_NCRENDERING_POLICY, uintptr(unsafe.Pointer(&nc)), 4)
 }
 
+// makeAnchor 浮窗的父窗口：Windows 上藏着就行，什么都不用做
+func makeAnchor(uintptr) {}
+
+const onMac = false
+
+const excludeExample = "game.exe, WindowsTerminal.exe" // 设置里「不弹的程序」框的示例
+
+// 下面这几个是 macOS 才有的隐私权限，Windows 上恒为「已就绪」
+const needPermissions = false
+
+func accessibilityOK() bool { return true }
+func micOK() bool           { return true }
+func askAccessibility()     {}
+func askMicrophone()        {}
+
+func trayIcon() (png []byte, template bool) { return trayPNG, false }
+
 // moveTo 按物理像素摆窗口（钩子和 GetCursorPos 给的都是物理像素）
 func moveTo(h uintptr, x, y int32) {
 	defer roundCorners(h)
@@ -260,25 +263,21 @@ func placeAt(h uintptr, x, y, w, ht int32) {
 	pSetWindowPos.Call(h, HWND_TOPMOST, uintptr(x), uintptr(y), uintptr(w), uintptr(ht), SWP_NOACTIVATE)
 }
 
-func (r RECT) w() int32 { return r.Right - r.Left }
-func (r RECT) h() int32 { return r.Bottom - r.Top }
+// rootWindowAt 屏幕上这一点最上层的顶层窗口
+func rootWindowAt(p POINT) uintptr {
+	h, _, _ := pWindowFromPoint.Call(packPt(p))
+	root, _, _ := pGetAncestor.Call(h, GA_ROOT)
+	return root
+}
 
-// clampInto 让 w×h 的窗口落在 (x,y)，放不下就挪回工作区内；
-// 下方放不下时翻到 flipY 之上。
-func clampInto(x, y, w, h, flipY int32, wa RECT) (int32, int32) {
-	if x+w > wa.Right {
-		x = wa.Right - w
-	}
-	if x < wa.Left {
-		x = wa.Left
-	}
-	if y+h > wa.Bottom {
-		y = flipY - h
-	}
-	if y < wa.Top {
-		y = wa.Top
-	}
-	return x, y
+func doubleClickTime() uint32 {
+	d, _, _ := pGetDoubleClickTime.Call()
+	return uint32(d)
+}
+
+// muteAltMenu 单按 Alt 松开会激活前台程序的菜单栏：先补一下未分配的键，让系统当成组合键
+func muteAltMenu() {
+	sendKeys(KEYBDINPUT{WVk: VK_MASK}, KEYBDINPUT{WVk: VK_MASK, DwFlags: KEYEVENTF_KEYUP})
 }
 
 func windowPID(h uintptr) uint32 {

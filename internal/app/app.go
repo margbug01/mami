@@ -1,5 +1,3 @@
-//go:build windows
-
 package app
 
 import (
@@ -138,7 +136,6 @@ type App struct {
 	learn   *learner
 	samples *sampleLog // 长文口述改前改后的样本，以后学说话习惯用
 	learnW  learnWatch
-	uiaOK   bool
 	set     settingsState // 主线程
 	avatar  *ui.Bitmap
 }
@@ -177,6 +174,7 @@ func (a *App) floatingWindow(title string, w, h, minW, minH int, view func(c *ui
 			Title: "mami-anchor", Width: 1, Height: 1, Hidden: true, Frameless: true,
 			SkipTaskbar: true, Content: ui.View(func(c *ui.Context) {}),
 		})
+		makeAnchor(a.anchorWin.NativeHandle())
 	}
 	win := mygo.NewFlyout(mygo.FlyoutOptions{
 		Parent:  a.anchorWin,
@@ -209,8 +207,7 @@ func (a *App) createWindows() {
 }
 
 func (a *App) isOurs(p POINT) bool {
-	h, _, _ := pWindowFromPoint.Call(packPt(p))
-	root, _, _ := pGetAncestor.Call(h, GA_ROOT)
+	root := rootWindowAt(p)
 	return root != 0 && (root == a.btnHwnd.Load() || root == a.popHwnd.Load() || root == a.voiceHwnd.Load() || root == a.dockHwnd.Load() || root == a.capHwnd.Load())
 }
 
@@ -311,9 +308,6 @@ func (a *App) onMouse(ev mouseEvent) {
 func (a *App) inInput(fg uintptr, pt POINT) focusInfo {
 	if fg == 0 {
 		return focusInfo{}
-	}
-	if !a.uiaOK {
-		return focusIsEditable(0, fg, pt)
 	}
 	return focusEditable(fg, pt)
 }
@@ -427,7 +421,7 @@ func (a *App) onHotkey(replace bool) {
 	}
 	theWorker.do(func(owner uintptr) {
 		if keyDown(VK_MENU) {
-			sendKeys(KEYBDINPUT{WVk: VK_MASK}, KEYBDINPUT{WVk: VK_MASK, DwFlags: KEYEVENTF_KEYUP})
+			muteAltMenu()
 		}
 		waitModifiersUp(time.Second) // 不然模拟的 Ctrl+C 会变成 Ctrl+Alt+C
 		a.btnGen.Add(1)
@@ -469,6 +463,9 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 
 	if term && strings.TrimSpace(text) == "" {
 		st.toast, st.status, st.header, st.text = false, statusError, "Mami", T("终端里要先用鼠标选中文字。为了不误发 Ctrl+C 中断正在跑的程序，终端里不会自动全选。")
+		if onMac {
+			st.text = T("终端里要先用鼠标选中文字，终端里不会自动全选。")
+		}
 		a.endBusy()
 		a.showPopup(st)
 		return
@@ -482,6 +479,9 @@ func (a *App) grabAndTranslate(owner uintptr, replace, fromHotkey, quiet bool, a
 	if strings.TrimSpace(text) == "" {
 		log.Printf("grab selection: nothing copied (fg=%#x hotkey=%v)", fg, fromHotkey)
 		st.toast, st.status, st.header, st.text = false, statusError, "Mami", T("没取到选中的文字。这个窗口可能不支持 Ctrl+C。")
+		if onMac {
+			st.text = T("没取到选中的文字。这个窗口可能不支持 ⌘C。")
+		}
 		a.endBusy()
 		a.showPopup(st)
 		return
@@ -746,11 +746,6 @@ func (p *popupState) animatedHeight(now time.Time) float32 {
 	return p.heightFrom + (float32(p.h)-p.heightFrom)*amount
 }
 
-func toCRLF(s string) string {
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	return strings.ReplaceAll(s, "\n", "\r\n")
-}
-
 // ---------- 快捷键 / 托盘 ----------
 
 func (a *App) registerHotkeys(cfg Config) []string {
@@ -782,41 +777,49 @@ func (a *App) registerHotkeys(cfg Config) []string {
 
 func (a *App) createTray() {
 	var err error
-	a.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: trayPNG, ToolTip: "Mami"})
+	icon, template := trayIcon()
+	a.tray, err = mygo.NewTray(mygo.TrayOptions{Icon: icon, IconIsTemplate: template, ToolTip: "Mami"})
 	if err != nil {
 		log.Println("tray:", err)
 		return
 	}
 	a.updateTrayTip()
-	a.tray.OnClick(a.openSettings)
-	a.tray.OnRightClick(func() {
-		cfg, _ := a.config()
-		var items []*mygo.MenuItem
-		if _, _, latest, _, busy, _ := a.upd.snapshot(); latest != nil {
-			items = append(items, &mygo.MenuItem{Label: fmt.Sprintf(T("更新到 %s"), latest.version), Disabled: busy,
-				Click: func(*mygo.MenuItem, *mygo.Window) { a.startUpdate() }}, mygo.Separator())
-		}
-		menu := mygo.NewMenu(append(items, []*mygo.MenuItem{
-			{Label: T("设置…"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
-			{Label: T("新手引导…"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openGuide() }},
-			{Label: T("划词后显示翻译按钮"), Type: mygo.MenuItemCheckbox, Checked: cfg.ShowButton, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
-				a.toggleButton(item.Checked)
-			}},
-			{Label: T("贴边小条"), Type: mygo.MenuItemCheckbox, Checked: cfg.VoiceDock, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
-				a.changeDockConfig(func(cfg *Config) { cfg.VoiceDock = item.Checked })
-			}},
-			{Label: T("语音直接翻译"), Type: mygo.MenuItemCheckbox, Checked: cfg.VoiceTranslate, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
-				a.changeDockConfig(func(cfg *Config) { cfg.VoiceTranslate = item.Checked })
-			}},
-			{Label: T("打开日志"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.Shell.OpenPath(a.logPath) }},
-			{Label: T("打开翻译记录"), Disabled: !cfg.History, Click: func(*mygo.MenuItem, *mygo.Window) { a.openHistory() }},
-			mygo.Separator(),
-			{Label: T("退出"), Click: func(*mygo.MenuItem, *mygo.Window) { a.quit() }},
-		}...))
-		a.tray.SetMenu(menu)
-		defer a.tray.SetMenu(nil)
-		a.tray.PopUpMenu()
-	})
+	if onMac {
+		a.tray.OnClick(a.popTrayMenu) // 菜单栏图标的习惯：点一下就出菜单，「设置…」在里面
+	} else {
+		a.tray.OnClick(a.openSettings)
+	}
+	a.tray.OnRightClick(a.popTrayMenu)
+}
+
+// popTrayMenu 托盘（菜单栏）菜单，每次弹出时按当前配置现建
+func (a *App) popTrayMenu() {
+	cfg, _ := a.config()
+	var items []*mygo.MenuItem
+	if _, _, latest, _, busy, _ := a.upd.snapshot(); latest != nil {
+		items = append(items, &mygo.MenuItem{Label: fmt.Sprintf(T("更新到 %s"), latest.version), Disabled: busy,
+			Click: func(*mygo.MenuItem, *mygo.Window) { a.startUpdate() }}, mygo.Separator())
+	}
+	menu := mygo.NewMenu(append(items, []*mygo.MenuItem{
+		{Label: T("设置…"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openSettings() }},
+		{Label: T("新手引导…"), Click: func(*mygo.MenuItem, *mygo.Window) { a.openGuide() }},
+		{Label: T("划词后显示翻译按钮"), Type: mygo.MenuItemCheckbox, Checked: cfg.ShowButton, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
+			a.toggleButton(item.Checked)
+		}},
+		{Label: T("贴边小条"), Type: mygo.MenuItemCheckbox, Checked: cfg.VoiceDock, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
+			a.changeDockConfig(func(cfg *Config) { cfg.VoiceDock = item.Checked })
+		}},
+		{Label: T("语音直接翻译"), Type: mygo.MenuItemCheckbox, Checked: cfg.VoiceTranslate, Click: func(item *mygo.MenuItem, _ *mygo.Window) {
+			a.changeDockConfig(func(cfg *Config) { cfg.VoiceTranslate = item.Checked })
+		}},
+		{Label: T("打开日志"), Click: func(*mygo.MenuItem, *mygo.Window) { mygo.Shell.OpenPath(a.logPath) }},
+		{Label: T("打开翻译记录"), Disabled: !cfg.History, Click: func(*mygo.MenuItem, *mygo.Window) { a.openHistory() }},
+		mygo.Separator(),
+		{Label: T("退出"), Click: func(*mygo.MenuItem, *mygo.Window) { a.quit() }},
+	}...))
+	a.tray.SetMenu(menu)
+	defer a.tray.SetMenu(nil)
+	a.tray.PopUpMenu()
 }
 
 func (a *App) updateTrayTip() {

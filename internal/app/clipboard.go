@@ -3,7 +3,6 @@
 package app
 
 import (
-	"log"
 	"strings"
 	"time"
 	"unicode/utf16"
@@ -128,20 +127,25 @@ func restoreClipboard(owner uintptr, items []clipItem) {
 	}
 }
 
-// setClipboardText 写入文本；temp=true 时不进 Win+V 剪贴板历史
+// setClipboardText 写入文本（换行转成 CRLF）；temp=true 时不进 Win+V 剪贴板历史
 func setClipboardText(owner uintptr, s string, temp bool) bool {
 	if !openClipboard(owner) {
 		return false
 	}
 	defer pCloseClipboard.Call()
 	pEmptyClipboard.Call()
-	s = strings.ReplaceAll(s, "\x00", "")
+	s = strings.ReplaceAll(toCRLF(s), "\x00", "")
 	u := append(utf16.Encode([]rune(s)), 0)
 	setGlobal(CF_UNICODETEXT, unsafe.Slice((*byte)(unsafe.Pointer(&u[0])), len(u)*2))
 	if temp && cfExcludeHistory != 0 {
 		setGlobal(cfExcludeHistory, nil)
 	}
 	return true
+}
+
+func toCRLF(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	return strings.ReplaceAll(s, "\n", "\r\n")
 }
 
 func getClipboardText(owner uintptr) string {
@@ -169,23 +173,6 @@ func getClipboardText(owner uintptr) string {
 	return string(utf16.Decode(u))
 }
 
-func waitClipChange(seq uint32, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if clipSeq() != seq {
-			pumpSleep(20 * time.Millisecond) // 有的程序分几次写入多种格式
-			return true
-		}
-		pumpSleep(10 * time.Millisecond)
-	}
-	// 卡顿时一次循环就能睡过 deadline：出门前再看一眼，晚到的复制也算
-	if clipSeq() != seq {
-		pumpSleep(20 * time.Millisecond)
-		return true
-	}
-	return false
-}
-
 func sendKeys(keys ...KEYBDINPUT) {
 	in := make([]INPUT, len(keys))
 	for i, k := range keys {
@@ -202,69 +189,6 @@ func sendCtrl(key uint16) {
 		KEYBDINPUT{WVk: key, DwFlags: KEYEVENTF_KEYUP},
 		KEYBDINPUT{WVk: VK_CONTROL, DwFlags: KEYEVENTF_KEYUP},
 	)
-}
-
-// waitModifiersUp 等用户松开快捷键里的修饰键，不然模拟的 Ctrl+C 会变成 Ctrl+Alt+C
-func waitModifiersUp(timeout time.Duration) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if !keyDown(VK_SHIFT) && !keyDown(VK_CONTROL) && !keyDown(VK_MENU) && !keyDown(VK_LWIN) && !keyDown(VK_RWIN) {
-			return
-		}
-		pumpSleep(10 * time.Millisecond)
-	}
-}
-
-// grabSelection 用模拟 Ctrl+C 取当前选中的文字，取完把剪贴板原样还回去。
-// 没选中时只在确实是输入框里才全选：焦点在聊天记录、网页正文上按 Ctrl+A 会把整页几千字都选上。
-// noInput：想全选但焦点不是输入框，所以没全选
-func grabSelection(owner uintptr, selectAllIfEmpty bool) (text string, selectedAll, noInput bool) {
-	snap, _ := snapshotClipboard(owner)
-	snapSeq := clipSeq()
-	changed := false
-
-	seq := clipSeq()
-	start := time.Now()
-	var in inputState
-	if selectAllIfEmpty {
-		in = focusedInput()
-		// UIA 说不清的老式程序/Qt（微信这类）：有系统输入光标也算输入框
-		in.input = in.input || systemCaret(foreground())
-	}
-	if selectAllIfEmpty && in.input && in.empty {
-		// 输入框明确没选中：Ctrl+C 不会改剪贴板，等它就是白等 600ms，直接走下面的全选
-		log.Printf("grab: nothing selected (uia, %v), select all", time.Since(start).Round(time.Millisecond))
-	} else {
-		sendCtrl('C')
-		sent := time.Since(start)
-		if waitClipChange(seq, 600*time.Millisecond) {
-			changed = true
-			text = getClipboardText(owner)
-		}
-		log.Printf("grab: ctrl+c changed=%v after %v (sendinput %v), %d chars, seq %d→%d", changed, time.Since(start).Round(time.Millisecond), sent.Round(time.Millisecond), len([]rune(text)), seq, clipSeq())
-	}
-	if strings.TrimSpace(text) == "" && selectAllIfEmpty {
-		if !in.input {
-			log.Printf("grab: nothing selected and focus is not an input box, not selecting all")
-			noInput = true
-		} else {
-			sendCtrl('A')
-			selectedAll = true
-			pumpSleep(40 * time.Millisecond)
-			seq = clipSeq()
-			sendCtrl('C')
-			if waitClipChange(seq, 600*time.Millisecond) {
-				changed = true
-				text = getClipboardText(owner)
-			}
-			log.Printf("grab: select all → %d chars", len([]rune(text)))
-		}
-	}
-	// 超时之后剪贴板才被写（程序卡了一下）也得还原，不然用户原来的剪贴板就被顶掉了
-	if changed || clipSeq() != snapSeq {
-		restoreClipboard(owner, snap)
-	}
-	return text, selectedAll, noInput
 }
 
 // collapseSelection 按一下右方向键：全选留下的选区收到末尾，光标回到文字最后
