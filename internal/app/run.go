@@ -114,6 +114,9 @@ func Run() {
 		}
 		a.openSettings()
 	})
+	// 点程序坞里的图标、在访达里再双击 Mami（macOS 的「重新打开」）：打开设置。
+	// 不看 hasVisibleWindows——锚点窗口一直「看得见」（1×1 透明），系统总说有窗口开着
+	mygo.App.OnActivate(func(bool) { a.reopened() })
 
 	mygo.App.WhenReady(func() {
 		if _, err := startWorker(); err != nil {
@@ -171,4 +174,11 @@ func Run() {
 		log.Fatal(err)
 	}
 	log.Println("exit")
+}
+
+// reopened 点了程序坞图标（只有 macOS 会来）：打开设置；已经开着就拿到前面
+func (a *App) reopened() {
+	if onMac && !a.quitting {
+		a.openSettings()
+	}
 }
