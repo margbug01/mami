@@ -224,6 +224,7 @@ var Dict = map[string][2]string{
 	"已复制":            {"Copied", "コピーしました"},
 	"替换":             {"Replace", "置換"},
 	"关闭":             {"Close", "閉じる"},
+	"调整大小":           {"Resize", "サイズ変更"},
 	"中文 → ":          {"Chinese → ", "中国語 → "},
 	"自动检测 → ":        {"Auto-detect → ", "自動判別 → "},
 	"中文 → English":   {"Chinese → English", "中国語 → English"},

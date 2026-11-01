@@ -52,10 +52,27 @@ type popupState struct {
 	// selectedAll 是 Mami 自己全选的（快捷键时没选中）：关掉卡片要把选区收回去，
 	// 不然整段字一直选着，下一个按键就全没了
 	selectedAll bool
-	w, h        int // 当前窗口内容尺寸，view 量出新高度时会改
+	w, h        int   // 当前窗口内容尺寸，view 量出新高度时会改
+	pos         POINT // 窗口现在的左上角（屏幕坐标）
+	moved       bool  // 拖过（或改过大小）：不再跟着选区摆，留在 pos
+	sized       bool  // 改过大小：高度不再按内容自动算
+	drag        int   // 正按着的：dragMove 标题栏 / dragResize 右下角
+	dragCur     POINT
+	dragPos     POINT
+	dragW       int
+	dragH       int
 }
 
+const (
+	dragMove = 1 + iota
+	dragResize
+	cardMinW, cardMinH = 300, 160
+)
+
 type App struct {
+	// 卡片拖成的大小，之后的卡片照这个宽、最高这么高（只在这次运行里记着）
+	cardW, cardH int
+
 	cfgPath, logPath string
 	hist             *history
 	logPaths         []string // 「记录」页从这些日志里补开记录之前的次数
@@ -639,6 +656,9 @@ func (a *App) showPopup(st popupState) {
 	}
 	st.h = estimateHeight(st)
 	a.popWin.Update(func() {
+		if !st.toast && a.cardW > 0 { // cardW 只在卡片的界面线程上读写
+			st.w = a.cardW
+		}
 		a.popWin.Hide()
 		st.shownAt = time.Now()
 		st.heightFrom, st.placedH = float32(st.h), st.h
@@ -741,12 +761,55 @@ func (a *App) resizePopup(w, h int, anchor POINT) {
 	width, height := scale(int32(w), dpi), scale(int32(h), dpi)
 	area := workArea(anchor)
 	x, y := anchor.X, anchor.Y
-	if a.pop.above {
+	if a.pop.moved {
+		x, y = a.pop.pos.X, a.pop.pos.Y
+	} else if a.pop.above {
 		y -= scale(36, dpi) + height
 	}
 	x = max(area.Left, min(x, area.Right-width))
 	y = max(area.Top, min(y, area.Bottom-height))
+	a.pop.pos = POINT{x, y}
 	placeAt(a.popHwnd.Load(), x, y, width, height)
+}
+
+// cardDrag 按住标题栏拖卡片、按住右下角改大小（view 里调，held = 还按着）。
+// 用屏幕上的鼠标位置算：窗口跟着鼠标走，元素里的相对位移（Dragged 的增量）是对不上的
+func (a *App) cardDrag(c *ui.Context, kind int, held bool) {
+	p := &a.pop
+	if !held {
+		if p.drag == kind {
+			p.drag = 0
+		}
+		return
+	}
+	cur := cursorPos()
+	if p.drag != kind {
+		p.drag, p.dragCur, p.dragPos, p.dragW, p.dragH = kind, cur, p.pos, p.w, p.h
+	}
+	c.After(16 * time.Millisecond)
+	dx, dy := cur.X-p.dragCur.X, cur.Y-p.dragCur.Y
+	p.moved = true // 改大小也钉住左上角：卡片在选区上方时，不然它会往上长
+	if kind == dragMove {
+		p.pos = POINT{p.dragPos.X + dx, p.dragPos.Y + dy}
+	} else {
+		w, h := cardSize(p.dragW, p.dragH, dx, dy, dpiAt(cur), workArea(p.pos))
+		if w == p.w && h == p.h {
+			return
+		}
+		p.w, p.h, p.sized = w, h, true
+		a.cardW, a.cardH = w, h
+	}
+	p.heightFrom, p.heightAt = float32(p.h), time.Time{} // 跟手，不做高度动画
+	a.resizePopup(p.w, p.h, p.anchor)
+	p.placedH = p.h
+}
+
+// cardSize 从 w×h（DIP）拖了 dx,dy（屏幕像素）之后的大小：不小于 cardMin、不超过工作区
+func cardSize(w, h int, dx, dy int32, dpi uint32, area RECT) (int, int) {
+	dip := func(v int32) int { return int(int64(v) * 96 / int64(dpi)) }
+	w = max(cardMinW, min(w+dip(dx), dip(area.Right-area.Left)))
+	h = max(cardMinH, min(h+dip(dy), dip(area.Bottom-area.Top)))
+	return w, h
 }
 
 func (p *popupState) animatedHeight(now time.Time) float32 {

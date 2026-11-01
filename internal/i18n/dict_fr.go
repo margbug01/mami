@@ -45,7 +45,7 @@ var dictFR = map[string]string{
 
 	"已保存": "Enregistré", "保存失败：": "Échec de l'enregistrement : ", "已保存，但快捷键有问题：": "Enregistré, mais des raccourcis posent problème : ", "：": " : ", "；": " ; ",
 
-	"翻译中": "Traduction", "翻译中…": "Traduction…", "复制": "Copier", "已复制": "Copié", "替换": "Remplacer", "关闭": "Fermer",
+	"翻译中": "Traduction", "翻译中…": "Traduction…", "复制": "Copier", "已复制": "Copié", "替换": "Remplacer", "关闭": "Fermer", "调整大小": "Redimensionner",
 	"中文 → ": "Chinois → ", "自动检测 → ": "Détection auto → ", "中文 → English": "Chinois → English",
 	" · 窗口已切换，没有替换":              " · La fenêtre a changé ; rien n'a été remplacé",
 	" · 期间点了别处，没有替换":             " · Vous avez cliqué ailleurs ; rien n'a été remplacé",

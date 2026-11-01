@@ -198,15 +198,22 @@ func (a *App) popupView(c *ui.Context) {
 			_, h := c.MeasureText(textW, ui.Span{Text: s, Size: 14})
 			mh += h
 		}
-		bodyH = min(mh+2, bodyMaxH)
+		bodyH = min(mh+2, float32(bodyMaxH))
 	}
-	want := pad + headH + gap + int(bodyH+0.5) + pad
+	chrome := pad + headH + gap + pad
 	if p.status == statusDone {
-		want += gap + footH
+		chrome += gap + footH
 	}
+	switch {
+	case p.sized: // 拖过大小：正文填满剩下的地方
+		bodyH = float32(max(p.h-chrome, 20))
+	case a.cardH > 0 && !p.toast: // 上一张拖成的高度当这张的上限
+		bodyH = min(bodyH, float32(max(a.cardH-chrome, 20)))
+	}
+	want := chrome + int(bodyH+0.5)
 	// 边收边显示时高度只增不减：换行位置一变就缩回去再撑开，卡片会上下跳
 	now := time.Now()
-	if a.popVisible.Load() && (want > p.h || (want < p.h && !streaming)) {
+	if a.popVisible.Load() && !p.sized && (want > p.h || (want < p.h && !streaming)) {
 		p.heightFrom = p.animatedHeight(now)
 		p.h, p.heightAt = want, now
 	}
@@ -246,7 +253,7 @@ func (a *App) popupView(c *ui.Context) {
 	ui.Column(c).Fill().Clip().Background(t.Background).Border(1, t.Border).Radius(cornerR).
 		Opacity(fade).Scale(size, size).Children(func() {
 		ui.Column(c).FillWidth().Height(float32(p.h)).Shrink(0).Padding(pad, 14).Gap(gap).Children(func() {
-			ui.Row(c).Height(headH).Gap(6).Children(func() {
+			head := ui.Row(c).Height(headH).Gap(6).Children(func() {
 				if a.avatar != nil {
 					ui.Image(c, a.avatar).Size(18, 18).Radius(9).Clip()
 				}
@@ -268,6 +275,10 @@ func (a *App) popupView(c *ui.Context) {
 					}
 				}
 			})
+			if !p.toast { // 按住标题栏拖走
+				_, _, held := head.Dragged()
+				a.cardDrag(c, dragMove, held)
+			}
 			switch {
 			case p.status == statusLoading && !streaming:
 				ui.Row(c).Height(20).Gap(8).Children(func() {
@@ -306,8 +317,18 @@ func (a *App) popupView(c *ui.Context) {
 				})
 			}
 		})
+		if !p.toast { // 右下角按住拖：改大小
+			grip := ui.Box(c).Absolute().Right(2).Bottom(2).Size(12, 12).Cursor(ui.CursorResizeNWSE).Label(T("调整大小")).Children(func() {
+				ui.Icon(c, iconGrip).FontSize(12).TextColor(t.TextMuted).Opacity(0.6)
+			})
+			_, _, held := grip.Dragged()
+			a.cardDrag(c, dragResize, held)
+		}
 	})
 }
+
+// iconGrip 右下角两道斜线
+var iconGrip = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 9 9 21"/><path d="M21 16l-5 5"/></svg>`))
 
 // paragraphs 译文按行拆成段、去掉空行。网页里复制的原文，列表项之间单换行、段落之间空一行，
 // 译文照搬就一会儿有空行一会儿没有；显示时每行一段、段间距统一（复制/替换仍用原文）

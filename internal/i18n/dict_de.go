@@ -45,7 +45,7 @@ var dictDE = map[string]string{
 
 	"已保存": "Gespeichert", "保存失败：": "Speichern fehlgeschlagen: ", "已保存，但快捷键有问题：": "Gespeichert, aber Probleme mit Tastenkürzeln: ", "：": ": ", "；": "; ",
 
-	"翻译中": "Wird übersetzt", "翻译中…": "Wird übersetzt …", "复制": "Kopieren", "已复制": "Kopiert", "替换": "Ersetzen", "关闭": "Schließen",
+	"翻译中": "Wird übersetzt", "翻译中…": "Wird übersetzt …", "复制": "Kopieren", "已复制": "Kopiert", "替换": "Ersetzen", "关闭": "Schließen", "调整大小": "Größe ändern",
 	"中文 → ": "Chinesisch → ", "自动检测 → ": "Automatisch erkannt → ", "中文 → English": "Chinesisch → English",
 	" · 窗口已切换，没有替换":              " · Fenster gewechselt, nicht ersetzt",
 	" · 期间点了别处，没有替换":             " · Zwischenzeitlich woanders geklickt, nicht ersetzt",

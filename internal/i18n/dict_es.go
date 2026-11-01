@@ -45,7 +45,7 @@ var dictES = map[string]string{
 
 	"已保存": "Guardado", "保存失败：": "Error al guardar: ", "已保存，但快捷键有问题：": "Guardado, pero hay problemas con los atajos: ", "：": ": ", "；": "; ",
 
-	"翻译中": "Traduciendo", "翻译中…": "Traduciendo…", "复制": "Copiar", "已复制": "Copiado", "替换": "Reemplazar", "关闭": "Cerrar",
+	"翻译中": "Traduciendo", "翻译中…": "Traduciendo…", "复制": "Copiar", "已复制": "Copiado", "替换": "Reemplazar", "关闭": "Cerrar", "调整大小": "Cambiar tamaño",
 	"中文 → ": "Chino → ", "自动检测 → ": "Detección automática → ", "中文 → English": "Chino → English",
 	" · 窗口已切换，没有替换":              " · La ventana cambió; no se reemplazó",
 	" · 期间点了别处，没有替换":             " · Hiciste clic en otro lugar; no se reemplazó",

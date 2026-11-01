@@ -333,3 +333,22 @@ func TestParagraphs(t *testing.T) {
 		t.Fatalf("empty: %q", got)
 	}
 }
+
+func TestCardSize(t *testing.T) {
+	area := RECT{0, 0, 1440, 900}
+	for _, c := range []struct {
+		w, h   int
+		dx, dy int32
+		dpi    uint32
+		ww, wh int
+	}{
+		{380, 300, 100, 50, 96, 480, 350},              // 拖大
+		{380, 300, -500, -500, 96, cardMinW, cardMinH}, // 不小于最小
+		{380, 300, 5000, 5000, 96, 1440, 900},          // 不超过工作区
+		{380, 300, 200, 100, 192, 480, 350},            // 200% 缩放：屏幕像素折半成 DIP
+	} {
+		if w, h := cardSize(c.w, c.h, c.dx, c.dy, c.dpi, area); w != c.ww || h != c.wh {
+			t.Errorf("%+v: got %d×%d", c, w, h)
+		}
+	}
+}
