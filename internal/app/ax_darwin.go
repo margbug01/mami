@@ -234,6 +234,19 @@ func systemCaret(uintptr) bool {
 	return ok
 }
 
+// axBlind 有授权，但前台程序问不出焦点元素（原版 Alma 这类不开无障碍树的 Electron）：认不出，当它「可能能贴」。
+// 只给语音贴字用，不进全选判断：误按 ⌘A 会选上整页
+func axBlind() bool {
+	if !axIsProcessTrusted() {
+		return false
+	}
+	el := axFocused()
+	if el != 0 {
+		cfRelease(el)
+	}
+	return el == 0
+}
+
 // caretText 光标（选区）前 before 个字、后 after 个字。AX 的位置按 UTF-16 算
 func caretText(before, after int) (pre, post string, ok bool) {
 	el := axFocused()

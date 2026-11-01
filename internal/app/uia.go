@@ -511,6 +511,9 @@ func guiThreadInfo(fg uintptr) (GUITHREADINFO, bool) {
 	return gti, r != 0
 }
 
+// axBlind 只有 macOS 用得上（见 ax_darwin.go）；这边没光标的已经靠 systemCaret/pasteBlind
+func axBlind() bool { return false }
+
 func systemCaret(fg uintptr) bool {
 	gti, ok := guiThreadInfo(fg)
 	return ok && gti.HwndCaret != 0
