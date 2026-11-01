@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -319,5 +320,16 @@ func TestButtonActionNormalize(t *testing.T) {
 		if c.ButtonAction != want {
 			t.Errorf("%q → %q", in, c.ButtonAction)
 		}
+	}
+}
+
+func TestParagraphs(t *testing.T) {
+	got := paragraphs("一段。\n\n二段。\r\n三段。  \n\n\n  \n四段。")
+	want := []string{"一段。", "二段。", "三段。", "四段。"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
+	}
+	if got := paragraphs(""); len(got) != 1 || got[0] != "" {
+		t.Fatalf("empty: %q", got)
 	}
 }

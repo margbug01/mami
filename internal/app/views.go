@@ -4,6 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 	"image/png"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -176,7 +177,8 @@ func (a *App) popupView(c *ui.Context) {
 	t := a.themed(c)
 	p := &a.pop
 	const pad, headH, gap, footH = 12, 22, 8, 32
-	textW := float32(p.w - 2*pad - 10) // 给滚动条留一点
+	const paraGap = 8
+	textW := float32(p.w - 2*14 - 18) // 右边让出滚动条（6 宽、离边 3）再空一点，不然滚动条压着字
 
 	// streaming：流式翻译已经收到一部分，卡片先显示出来，标题栏转圈表示还没完
 	streaming := p.status == statusLoading && p.text != ""
@@ -188,9 +190,14 @@ func (a *App) popupView(c *ui.Context) {
 	if p.status == statusLoading && !streaming {
 		body = ""
 	}
+	paras := paragraphs(body)
 	bodyH := float32(20)
 	if p.status != statusLoading || streaming {
-		_, mh := c.MeasureText(textW, ui.Span{Text: body, Size: 14})
+		mh := float32(paraGap * (len(paras) - 1))
+		for _, s := range paras {
+			_, h := c.MeasureText(textW, ui.Span{Text: s, Size: 14})
+			mh += h
+		}
 		bodyH = min(mh+2, bodyMaxH)
 	}
 	want := pad + headH + gap + int(bodyH+0.5) + pad
@@ -273,7 +280,11 @@ func (a *App) popupView(c *ui.Context) {
 					color = t.Danger
 				}
 				ui.Scroll(c).Height(bodyH).Children(func() {
-					ui.Text(c, body).FontSize(14).TextColor(color).Width(textW)
+					ui.Column(c).Gap(paraGap).Children(func() {
+						for _, s := range paras {
+							ui.Text(c, s).FontSize(14).TextColor(color).Width(textW)
+						}
+					})
 				})
 			}
 			if p.status == statusDone {
@@ -296,6 +307,21 @@ func (a *App) popupView(c *ui.Context) {
 			}
 		})
 	})
+}
+
+// paragraphs 译文按行拆成段、去掉空行。网页里复制的原文，列表项之间单换行、段落之间空一行，
+// 译文照搬就一会儿有空行一会儿没有；显示时每行一段、段间距统一（复制/替换仍用原文）
+func paragraphs(s string) []string {
+	var out []string
+	for _, l := range strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
+		if strings.TrimSpace(l) != "" {
+			out = append(out, strings.TrimRight(l, " \t"))
+		}
+	}
+	if len(out) == 0 {
+		return []string{s}
+	}
+	return out
 }
 
 // ---------- 演示模式：画出按钮和一张示例卡片，用来检查渲染 ----------
