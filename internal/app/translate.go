@@ -342,20 +342,32 @@ func contentText(raw json.RawMessage) string {
 	return ""
 }
 
-// pickTarget 决定翻译方向：含汉字且没有假名/谚文 → 中文原文。
+// pickTarget 每个汉字按两个外文单词加权，保留中文短句夹英文的习惯，避免按钮名带反长英文。
 func pickTarget(text string, cfg Config) (target, header string) {
-	han, kana, hangul := 0, 0, 0
+	han, kana, hangul, words := 0, 0, 0, 0
+	inWord := false
 	for _, r := range text {
 		switch {
 		case unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r):
 			kana++
+			inWord = false
 		case unicode.Is(unicode.Hangul, r):
 			hangul++
+			inWord = false
 		case unicode.Is(unicode.Han, r):
 			han++
+			inWord = false
+		case unicode.IsLetter(r):
+			if !inWord {
+				words++
+			}
+			inWord = true
+		case unicode.IsMark(r):
+		default:
+			inWord = false
 		}
 	}
-	if han > 0 && kana == 0 && hangul == 0 {
+	if han > 0 && han*2 >= words && kana == 0 && hangul == 0 {
 		return cfg.TargetForChinese, T("中文 → ") + cfg.TargetForChinese
 	}
 	return cfg.TargetForOther, T("自动检测 → ") + cfg.TargetForOther

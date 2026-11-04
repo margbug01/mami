@@ -1108,8 +1108,8 @@ func (a *App) pageTranslate(c *ui.Context, d *Config) {
 		return
 	}
 	settingGroup(c, T("语言"), func() {
-		settingRow(c, T("中文翻成"), T("选中的文字里有汉字时"), func() { langSelect(c, &d.TargetForChinese) })
-		settingRow(c, T("其他翻成"), T("不含汉字的文字（英文、日文等）"), func() { langSelect(c, &d.TargetForOther) })
+		settingRow(c, T("中文翻成"), T("选中文字以中文为主时"), func() { langSelect(c, &d.TargetForChinese) })
+		settingRow(c, T("其他翻成"), T("英文、日文等，允许夹杂中文"), func() { langSelect(c, &d.TargetForOther) })
 	})
 	settingGroup(c, T("额外要求"), func() {
 		ui.Column(c).Gap(8).Padding(12, 0).Children(func() {

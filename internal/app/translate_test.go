@@ -30,11 +30,22 @@ func TestEndpoint(t *testing.T) {
 func TestPickTarget(t *testing.T) {
 	cfg := defaultConfig()
 	for text, want := range map[string]string{
-		"帮我看一下这个插件":       "English",
-		"帮我 fix this bug": "English",
-		"Hello world":     "Simplified Chinese",
-		"日本語のテキスト":        "Simplified Chinese",
-		"한국어 텍스트":         "Simplified Chinese",
+		"帮我看一下这个插件":         "English",
+		"帮我 fix this bug":   "English",
+		"Hello world":       "Simplified Chinese",
+		"日本語のテキスト":          "Simplified Chinese",
+		"한국어 텍스트":           "Simplified Chinese",
+		"":                  "Simplified Chinese",
+		"123 / @":           "Simplified Chinese",
+		"中文":                "English",
+		"帮我修一下 HTTP 请求":     "English",
+		"请用 SwiftUI 实现这个功能": "English",
+		"Open Settings and click 整理现有记忆 once, then use it for a week before reviewing the numbers again.": "Simplified Chinese",
+		"This English paragraph mentions 中文 but should still be translated into Chinese.":                 "Simplified Chinese",
+		"你好Hello world this is an English paragraph":                                                      "Simplified Chinese",
+		"日本語のテキスト，中文按钮":                                                                                   "Simplified Chinese",
+		"한국어 텍스트，中文按钮":                                                                                    "Simplified Chinese",
+		"The cafe\u0301 has a 中文 menu and several good dishes.":                                           "Simplified Chinese",
 	} {
 		if got, _ := pickTarget(text, cfg); got != want {
 			t.Errorf("pickTarget(%q)=%q want %q", text, got, want)
