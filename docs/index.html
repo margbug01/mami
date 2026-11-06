@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mami · Dictate and translate where you type</title>
-<meta name="description" content="Mami is a Windows tray app for voice input and selection translation. Tap Right Alt and talk, and tidy text lands in the box you are typing in. Select text to translate it in place.">
-<meta property="og:title" content="Mami · Dictate and translate where you type">
-<meta property="og:description" content="Talk instead of typing, translate without leaving the box. Windows tray app, bring your own model.">
+<title>Mami — Voice Input &amp; Selection Translation for Windows/macOS</title>
+<meta name="description" content="Open-source voice input and selection translation for Windows and macOS. Use your own speech recognition and language model providers, text polishing and vocabulary.">
+<meta property="og:title" content="Mami — Voice Input &amp; Selection Translation for Windows/macOS">
+<meta property="og:description" content="Open-source voice input and selection translation for Windows and macOS. Use your own speech recognition and language model providers, text polishing and vocabulary.">
 <meta property="og:image" content="https://margbug01.github.io/mami/voice.png">
 <link rel="icon" href="icon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -128,6 +128,14 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
   .bars i, .vdots i, .caret { animation: none; }
 }
 </style>
+<link rel="canonical" href="https://margbug01.github.io/mami/">
+<link rel="alternate" hreflang="en" href="https://margbug01.github.io/mami/">
+<link rel="alternate" hreflang="zh-CN" href="https://margbug01.github.io/mami/zh.html">
+<link rel="alternate" hreflang="x-default" href="https://margbug01.github.io/mami/">
+<meta property="og:url" content="https://margbug01.github.io/mami/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Mami","url":"https://margbug01.github.io/mami/","description":"Open-source voice input and selection translation for Windows and macOS. Use your own speech recognition and language model providers, text polishing and vocabulary.","operatingSystem":"Windows 10/11, macOS 12+","applicationCategory":"UtilitiesApplication","downloadUrl":"https://github.com/margbug01/mami/releases/latest","license":"https://github.com/margbug01/mami/blob/main/LICENSE"}</script>
 </head>
 <body>
 <div class="wrap">
@@ -135,23 +143,20 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     <a class="brand" href="#top" id="top"><img src="icon.png" alt="">Mami</a>
     <nav>
       <a href="https://github.com/margbug01/mami">GitHub</a>
-      <div class="lang" role="group" aria-label="Language">
-        <button type="button" data-lang="en" aria-pressed="true">EN</button>
-        <button type="button" data-lang="zh" aria-pressed="false">中文</button>
-      </div>
+      <div class="lang"><a href="./" lang="en" hreflang="en">English</a> · <a href="zh.html" lang="zh-CN" hreflang="zh-CN">中文</a></div>
     </nav>
   </header>
 
   <main>
     <div class="hero split">
       <div>
-        <h1 data-i18n="h1">Talk or translate, right where you type.</h1>
-        <p class="lead" data-i18n="lead"></p>
+        <h1 data-i18n="h1">Voice input and selection translation.</h1>
+        <p class="lead" data-i18n="lead">Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and one click translates it. A small Windows and macOS app that uses your own speech and language model providers.</p>
         <div class="cta">
-          <a class="btn" href="https://github.com/margbug01/mami/releases/latest" data-i18n="download">Download for Windows</a>
+          <a class="btn" href="https://github.com/margbug01/mami/releases/latest" data-i18n="download">Download for Windows / macOS</a>
           <a class="link" href="https://github.com/margbug01/mami" data-i18n="source">View the source</a>
         </div>
-        <p class="meta" data-i18n="meta">Windows 10 and 11, x64. Free and open source under the MIT license.</p>
+        <p class="meta" data-i18n="meta">Windows 10/11 and macOS 12+. Free and open source under the MIT license.</p>
       </div>
       <div>
         <div class="win" aria-label="Voice input demo">
@@ -174,19 +179,19 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       <p class="kicker" data-i18n="k1">VOICE INPUT</p>
       <h2 data-i18n="h2v">Speak instead of typing</h2>
       <dl class="points two">
-        <div><dt data-i18n="v1t"></dt><dd data-i18n="v1d"></dd></div>
-        <div><dt data-i18n="v2t"></dt><dd data-i18n="v2d"></dd></div>
-        <div><dt data-i18n="v3t"></dt><dd data-i18n="v3d"></dd></div>
-        <div><dt data-i18n="v4t"></dt><dd data-i18n="v4d"></dd></div>
+        <div><dt data-i18n="v1t">Tap, talk, tap</dt><dd data-i18n="v1d">Right Alt by default, or any key, shortcut or media button. Esc cancels. Text is ready about half a second after you stop.</dd></div>
+        <div><dt data-i18n="v2t">Cleaned up, not rewritten</dt><dd data-i18n="v2d">Fillers and "no wait, I mean" are dropped. Questions are not answered and nothing is translated behind your back.</dd></div>
+        <div><dt data-i18n="v3t">Learns your words</dt><dd data-i18n="v3d">Add names and product names to the vocabulary. Fix a misheard word twice and Mami gets it right from then on.</dd></div>
+        <div><dt data-i18n="v4t">Never lost</dt><dd data-i18n="v4d">No input box under the cursor? The text waits in the pill with a copy button.</dd></div>
       </dl>
       <div class="shots">
         <figure class="shot">
           <picture><source media="(prefers-color-scheme: dark)" srcset="voice.png"><img src="voice-light.png" width="1464" height="960" alt="Dictation settings with pill previews" loading="lazy"></picture>
-          <figcaption data-i18n="capv"></figcaption>
+          <figcaption data-i18n="capv">Seven pill styles, dark or light.</figcaption>
         </figure>
         <figure class="shot">
           <picture><source media="(prefers-color-scheme: dark)" srcset="words.png"><img src="words-light.png" width="1464" height="960" alt="Vocabulary page" loading="lazy"></picture>
-          <figcaption data-i18n="capw"></figcaption>
+          <figcaption data-i18n="capw">The vocabulary. Words you fixed show up on their own.</figcaption>
         </figure>
       </div>
     </section>
@@ -197,9 +202,9 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
           <p class="kicker" data-i18n="k2">TRANSLATION</p>
           <h2 data-i18n="h2t">Select it, translate it</h2>
           <dl class="points">
-            <div><dt data-i18n="t1t"></dt><dd data-i18n="t1d"></dd></div>
-            <div><dt data-i18n="t2t"></dt><dd data-i18n="t2d"></dd></div>
-            <div><dt data-i18n="t3t"></dt><dd data-i18n="t3d"></dd></div>
+            <div><dt data-i18n="t1t">One click, or Alt+T</dt><dd data-i18n="t1d">Select text in an input box and a small button appears. Click it for a card, or press Alt+T to replace in place.</dd></div>
+            <div><dt data-i18n="t2t">Only in input boxes</dt><dd data-i18n="t2d">Reading a web page never sprinkles buttons around. Your selection and clipboard stay as they were.</dd></div>
+            <div><dt data-i18n="t3t">Prompts stay prompts</dt><dd data-i18n="t3d">Multi-line prompts get translated, not carried out. Twenty target languages, with your own glossary.</dd></div>
           </dl>
         </div>
         <div>
@@ -225,9 +230,9 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     <section>
       <h2 data-i18n="h2s">Up and running in a minute</h2>
       <ol class="steps">
-        <li><b data-i18n="s1t"></b><span data-i18n="s1"></span></li>
-        <li><b data-i18n="s2t"></b><span data-i18n="s2"></span></li>
-        <li><b data-i18n="s3t"></b><span data-i18n="s3"></span></li>
+        <li><b data-i18n="s1t">1 · Install</b><span data-i18n="s1">Download the installer from Releases and run it. Settings open the first time.</span></li>
+        <li><b data-i18n="s2t">2 · Pick a provider</b><span data-i18n="s2">Choose one in settings and paste its key; the endpoint and model fill themselves in. Translation works out of the box on a free endpoint.</span></li>
+        <li><b data-i18n="s3t">3 · Use it anywhere</b><span data-i18n="s3">Tap <kbd>Right Alt</kbd> to talk. Select text and press <kbd>Alt</kbd> <kbd>T</kbd> to translate.</span></li>
       </ol>
     </section>
   </main>
@@ -237,6 +242,7 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     <a href="https://github.com/margbug01/mami">GitHub</a>
     <a href="https://github.com/margbug01/mami/releases/latest">Releases</a>
     <a href="https://github.com/margbug01/mami/blob/main/README_zh.md">中文 README</a>
+  <a href="https://margbug01.github.io/MySpotify/">MySpotify</a> <a href="https://margbug01.github.io/ShoesGUI/">MyShoes</a> <a href="https://margbug01.github.io/Candle/">Candle</a>
   </footer>
 </div>
 
@@ -261,10 +267,10 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
 
   var T = {
     en: {
-      h1: "Talk or translate, right where you type.",
-      lead: "Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and one click translates it. A small Windows tray app that uses the models and keys you already have.",
-      download: "Download for Windows", source: "View the source",
-      meta: "Windows 10 and 11, x64. Free and open source under the MIT license.",
+      h1: "Voice input and selection translation.",
+      lead: "Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and one click translates it. A small Windows and macOS app that uses your own speech and language model providers.",
+      download: "Download for Windows / macOS", source: "View the source",
+      meta: "Windows 10/11 and macOS 12+. Free and open source under the MIT license.",
       winTitle: "Chat", copy: "Copy", replace: "Replace", replay: "Replay", copied: "Copied", busy: "Translating…",
       saidLabel: "You said:",
       k1: "VOICE INPUT", h2v: "Speak instead of typing",
@@ -286,10 +292,10 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       foot: "MIT licensed. Built with Go and MyGo. Set in MiSans."
     },
     zh: {
-      h1: "在哪打字，就在哪说、在哪翻译。",
-      lead: "按一下 <kbd>右 Alt</kbd> 开口说，整理好的文字直接落进你正在打字的框；选中文字，点一下就翻译。一个 Windows 托盘小工具，用你自己已有的模型和 Key。",
-      download: "下载 Windows 版", source: "查看源码",
-      meta: "Windows 10 / 11，x64。免费开源，MIT 许可。",
+      h1: "语音输入与划词翻译，在哪打字就在哪用。",
+      lead: "按一下 <kbd>右 Alt</kbd> 开口说，整理好的文字直接落进你正在打字的框；选中文字，点一下就翻译。一个 Windows / macOS 小工具，用你自己已有的模型和 Key。",
+      download: "下载 Windows / macOS 版", source: "查看源码",
+      meta: "Windows 10 / 11 和 macOS 12+。免费开源，MIT 许可。",
       winTitle: "聊天", copy: "复制", replace: "替换", replay: "重放", copied: "已复制", busy: "翻译中…",
       saidLabel: "你说的：",
       k1: "语音输入", h2v: "能说就别打字",
@@ -311,8 +317,7 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
       foot: "MIT 许可。用 Go 和 MyGo 写成，字体 MiSans。"
     }
   };
-  var lang = (navigator.language || "en").toLowerCase().indexOf("zh") === 0 ? "zh" : "en";
-  try { lang = localStorage.getItem("mami-lang") || lang; } catch (e) {}
+  var lang = document.documentElement.lang === "zh-CN" ? "zh" : "en";
   var $ = function (id) { return document.getElementById(id); };
   var forced = /[?&]demo=1/.test(location.search);
   var still = !forced && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -393,9 +398,6 @@ footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92
     if (state === "busy") body.textContent = T[lang].busy;
     vShow();
   }
-  document.querySelectorAll(".lang button").forEach(function (b) {
-    b.addEventListener("click", function () { lang = b.dataset.lang; try { localStorage.setItem("mami-lang", lang); } catch (e) {} apply(); });
-  });
 
   reset(); apply();
   if (still) { vDone = true; vShow(); return; }

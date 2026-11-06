@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mami — Windows/macOS 语音输入与划词翻译</title>
+<meta name="description" content="Mami 是开源的 Windows/macOS 语音输入与划词翻译工具，支持自定义语音识别和语言模型服务、文本润色与词汇管理。">
+<meta property="og:title" content="Mami — Windows/macOS 语音输入与划词翻译">
+<meta property="og:description" content="Mami 是开源的 Windows/macOS 语音输入与划词翻译工具，支持自定义语音识别和语言模型服务、文本润色与词汇管理。">
+<meta property="og:image" content="https://margbug01.github.io/mami/voice.png">
+<link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Regular.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Medium.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Semibold.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/misans@5.0.0/lib/Normal/MiSans-Bold.min.css">
+<style>
+:root {
+  --bg: #f4f5f7; --fg: #101114; --muted: #5b616d; --line: #dcdee3;
+  --panel: #ffffff; --accent: #2f6fed; --accent-fg: #ffffff; --sel: #cddffd;
+  --font: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0f11; --fg: #ececee; --muted: #8f95a1; --line: #25272c;
+    --panel: #16181b; --accent: #4c8dff; --accent-fg: #07101f; --sel: #27406e;
+  }
+}
+* { box-sizing: border-box; }
+html { color-scheme: light dark; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 1.0625rem/1.65 var(--font); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 clamp(1.25rem, 4vw, 2.5rem); }
+
+header { display: flex; align-items: center; gap: 1.25rem; padding: 1.5rem 0; }
+.brand { display: flex; align-items: center; gap: .65rem; font: 700 1.25rem var(--font); text-decoration: none; }
+.brand img { width: 34px; height: 34px; border-radius: 8px; }
+header nav { margin-left: auto; display: flex; align-items: center; gap: 1.5rem; font-size: .95rem; }
+header nav a { text-decoration: none; color: var(--muted); }
+header nav a:hover { color: var(--fg); }
+.lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+.lang button { font: 500 .85rem var(--font); color: var(--muted); background: none; border: 0; padding: .2rem .75rem; border-radius: 999px; cursor: pointer; }
+.lang button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+
+.split { display: grid; gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+@media (min-width: 920px) { .split { grid-template-columns: 1fr 460px; } }
+.hero { padding: clamp(2rem, 6vw, 4.5rem) 0 clamp(3rem, 8vw, 5.5rem); }
+h1 { font: 700 clamp(2.6rem, 6.4vw, 4.4rem)/1.06 var(--font); letter-spacing: -.025em; margin: 0 0 1.4rem; text-wrap: balance; }
+:lang(zh-CN) h1, :lang(zh-CN) h2 { letter-spacing: 0; }
+.lead { font-size: 1.15rem; max-width: 33rem; color: var(--muted); margin: 0 0 2rem; }
+kbd { font: 600 .82em var(--font); padding: .08em .45em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; background: var(--panel); color: var(--fg); white-space: nowrap; }
+.cta { display: flex; flex-wrap: wrap; gap: .75rem 1rem; align-items: center; }
+.btn { display: inline-block; text-decoration: none; font-weight: 600; padding: .8rem 1.4rem; border-radius: 10px; background: var(--accent); color: var(--accent-fg); }
+.btn:hover { filter: brightness(1.08); }
+.link { color: var(--fg); font-weight: 500; }
+.meta { margin: 1.1rem 0 0; font-size: .9rem; color: var(--muted); }
+
+/* demo window */
+.win { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 24px 60px -30px rgba(0,0,0,.35); }
+.win-bar { display: flex; align-items: center; gap: .5rem; padding: .7rem 1rem; border-bottom: 1px solid var(--line); font-size: .85rem; color: var(--muted); }
+.win-bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.composer { padding: 1.4rem 1.25rem 1.5rem; min-height: 8rem; font-size: 1.05rem; line-height: 1.9; cursor: text; }
+.composer p { margin: 0; }
+.demo-note { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin: .8rem .25rem 0; font-size: .9rem; color: var(--muted); min-height: 3em; }
+.demo-note b { font-weight: 600; color: var(--fg); }
+.demo-note button { white-space: nowrap; flex-shrink: 0; font: inherit; color: var(--fg); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* voice pill */
+.caret { display: inline-block; width: 2px; height: 1.15em; background: var(--fg); vertical-align: -.2em; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.pillbar { display: flex; justify-content: center; padding: 0 0 1.3rem; min-height: 3.6rem; }
+.pill { display: none; align-items: center; gap: 8px; height: 40px; padding: 0 6px; border-radius: 20px; background: #1e2026; border: 1px solid rgba(255,255,255,.08); box-shadow: 0 10px 30px -12px rgba(0,0,0,.5); }
+.pill.show { display: flex; animation: pop .25s ease-out; }
+.pill .pb { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.12); color: #fff; font-size: 13px; line-height: 1; }
+.pill .pb.ok { background: #f2f2f4; color: #15161a; }
+.bars { display: flex; align-items: center; gap: 3px; height: 22px; width: 54px; justify-content: center; }
+.bars i { width: 3px; height: 30%; border-radius: 2px; background: linear-gradient(#afa9ec, #5dcaa5); animation: lv .7s ease-in-out infinite alternate; }
+.bars i:nth-child(2n) { animation-duration: .55s; } .bars i:nth-child(3n) { animation-duration: .9s; animation-delay: -.3s; }
+.bars i:nth-child(4n) { animation-delay: -.5s; } .bars i:nth-child(5n) { animation-duration: .45s; }
+@keyframes lv { to { height: 100%; } }
+.vdots { display: none; gap: 5px; width: 54px; justify-content: center; }
+.vdots i { width: 5px; height: 5px; border-radius: 50%; background: #c9cbd2; animation: dot 1s ease-in-out infinite; }
+.vdots i:nth-child(2) { animation-delay: .15s; } .vdots i:nth-child(3) { animation-delay: .3s; }
+@keyframes dot { 50% { opacity: .25; transform: translateY(-2px); } }
+.pill.busy .bars, .pill.busy .ok { display: none; }
+.pill.busy .vdots { display: flex; }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } }
+
+/* translation demo */
+.sel { background: linear-gradient(var(--sel), var(--sel)) no-repeat left / 0% 100%; border-radius: 3px; }
+.sel.on { background-size: 100% 100%; transition: background-size .9s steps(24, end); }
+.dotbtn { display: none; vertical-align: middle; margin-left: .35rem; width: 36px; height: 30px; border: 1px solid var(--line); border-radius: 8px; background: var(--fg); color: var(--bg); cursor: pointer; padding: 0; place-items: center; transform: translateY(-2px); }
+.dotbtn svg { width: 22px; height: 18px; }
+.dotbtn.show { display: inline-grid; animation: pop .22s ease-out; }
+.card { margin: 0 1.25rem 1.25rem; border: 1px solid var(--line); border-radius: 12px; padding: .9rem 1rem 1rem; background: var(--bg); display: none; }
+.card.show { display: block; }
+.card-head { font-size: .8rem; color: var(--muted); margin-bottom: .45rem; }
+.card-body { font-size: 1rem; line-height: 1.6; min-height: 3.2rem; }
+.card-body.busy { color: var(--muted); }
+.card-foot { display: flex; gap: .5rem; justify-content: flex-end; margin-top: .8rem; }
+.card-foot button { font: 500 .9rem var(--font); padding: .4rem .95rem; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--fg); }
+.card-foot button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.card-foot[hidden] { display: none; }
+
+/* sections */
+section { padding: clamp(2.5rem, 6vw, 4.5rem) 0; border-top: 1px solid var(--line); }
+.kicker { font-size: .85rem; font-weight: 600; color: var(--accent); margin: 0 0 .6rem; letter-spacing: .04em; }
+h2 { font: 700 clamp(1.8rem, 3.6vw, 2.6rem)/1.12 var(--font); letter-spacing: -.015em; margin: 0 0 1.8rem; text-wrap: balance; }
+.points { display: grid; gap: 1.6rem; margin: 0; }
+.points dt { font: 700 1.12rem var(--font); margin-bottom: .3rem; }
+@media (min-width: 760px) { .points.two { grid-template-columns: 1fr 1fr; gap: 1.6rem 3rem; } }
+.points dd { margin: 0; color: var(--muted); max-width: 30rem; }
+.shots { display: grid; gap: 1.5rem; margin-top: 2.8rem; }
+@media (min-width: 900px) { .shots { grid-template-columns: 1fr 1fr; } }
+.shot { margin: 0; }
+.shot img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--line); }
+.shot figcaption { margin-top: .7rem; font-size: .9rem; color: var(--muted); }
+ol.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 1.2rem; }
+@media (min-width: 820px) { ol.steps { grid-template-columns: repeat(3, 1fr); } }
+ol.steps li { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 1.2rem 1.25rem; color: var(--muted); }
+ol.steps li b { display: block; color: var(--fg); font-size: 1.05rem; margin-bottom: .35rem; }
+footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; font-size: .92rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sel.on { transition: none; }
+  .dotbtn.show, .pill.show { animation: none; }
+  .bars i, .vdots i, .caret { animation: none; }
+}
+</style>
+<link rel="canonical" href="https://margbug01.github.io/mami/zh.html">
+<link rel="alternate" hreflang="en" href="https://margbug01.github.io/mami/">
+<link rel="alternate" hreflang="zh-CN" href="https://margbug01.github.io/mami/zh.html">
+<link rel="alternate" hreflang="x-default" href="https://margbug01.github.io/mami/">
+<meta property="og:url" content="https://margbug01.github.io/mami/zh.html">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Mami","url":"https://margbug01.github.io/mami/zh.html","description":"Mami 是开源的 Windows/macOS 语音输入与划词翻译工具，支持自定义语音识别和语言模型服务、文本润色与词汇管理。","operatingSystem":"Windows 10/11, macOS 12+","applicationCategory":"UtilitiesApplication","downloadUrl":"https://github.com/margbug01/mami/releases/latest","license":"https://github.com/margbug01/mami/blob/main/LICENSE"}</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="#top" id="top"><img src="icon.png" alt="">Mami</a>
+    <nav>
+      <a href="https://github.com/margbug01/mami">GitHub</a>
+      <div class="lang"><a href="./" lang="en" hreflang="en">English</a> · <a href="zh.html" lang="zh-CN" hreflang="zh-CN">中文</a></div>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero split">
+      <div>
+        <h1 data-i18n="h1">语音输入与划词翻译，在哪打字就在哪用。</h1>
+        <p class="lead" data-i18n="lead">按一下 <kbd>右 Alt</kbd> 开口说，整理好的文字直接落进你正在打字的框；选中文字，点一下就翻译。一个 Windows / macOS 小工具，用你自己已有的模型和 Key。</p>
+        <div class="cta">
+          <a class="btn" href="https://github.com/margbug01/mami/releases/latest" data-i18n="download">下载 Windows / macOS 版</a>
+          <a class="link" href="https://github.com/margbug01/mami" data-i18n="source">查看源码</a>
+        </div>
+        <p class="meta" data-i18n="meta">Windows 10 / 11 和 macOS 12+。免费开源，MIT 许可。</p>
+      </div>
+      <div>
+        <div class="win" aria-label="Voice input demo">
+          <div class="win-bar"><i></i><i></i><i></i><span data-i18n="winTitle">聊天</span></div>
+          <div class="composer"><p id="vText"></p></div>
+          <div class="pillbar">
+            <div class="pill" id="pill" aria-hidden="true">
+              <span class="pb">✕</span>
+              <span class="bars"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+              <span class="vdots"><i></i><i></i><i></i></span>
+              <span class="pb ok">✓</span>
+            </div>
+          </div>
+        </div>
+        <div class="demo-note"><span id="vSaid"></span><button type="button" id="vReplay" data-i18n="replay">重放</button></div>
+      </div>
+    </div>
+
+    <section id="voice">
+      <p class="kicker" data-i18n="k1">语音输入</p>
+      <h2 data-i18n="h2v">能说就别打字</h2>
+      <dl class="points two">
+        <div><dt data-i18n="v1t">按一下，说，再按一下</dt><dd data-i18n="v1d">默认右 Alt，也能换成任意键、组合键或媒体键，Esc 取消。停下大约半秒就出字。</dd></div>
+        <div><dt data-i18n="v2t">帮你整理，不帮你改写</dt><dd data-i18n="v2d">口头禅和「不对，我是说」会去掉；问句不会被当成问题回答，也不会偷偷翻译。</dd></div>
+        <div><dt data-i18n="v3t">认得你的词</dt><dd data-i18n="v3d">人名、产品名加进词库就照着写。听错的词你改过两次，以后就自动改对。</dd></div>
+        <div><dt data-i18n="v4t">说了就不会丢</dt><dd data-i18n="v4d">光标下面没有输入框？这句话会留在胶囊里，点一下就能复制。</dd></div>
+      </dl>
+      <div class="shots">
+        <figure class="shot">
+          <picture><source media="(prefers-color-scheme: dark)" srcset="voice.png"><img src="voice-light.png" width="1464" height="960" alt="Dictation settings with pill previews" loading="lazy"></picture>
+          <figcaption data-i18n="capv">七种胶囊样式，深浅都有。</figcaption>
+        </figure>
+        <figure class="shot">
+          <picture><source media="(prefers-color-scheme: dark)" srcset="words.png"><img src="words-light.png" width="1464" height="960" alt="Vocabulary page" loading="lazy"></picture>
+          <figcaption data-i18n="capw">词库。你改过的词会自己出现在这里。</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="translate">
+      <div class="split">
+        <div>
+          <p class="kicker" data-i18n="k2">划词翻译</p>
+          <h2 data-i18n="h2t">选中就翻译</h2>
+          <dl class="points">
+            <div><dt data-i18n="t1t">点一下，或者 Alt+T</dt><dd data-i18n="t1d">在输入框里选中文字，旁边冒出一个小按钮。点它看译文卡片，按 Alt+T 直接原地替换。</dd></div>
+            <div><dt data-i18n="t2t">只在输入框里出现</dt><dd data-i18n="t2d">看网页时不会到处冒按钮；你的选区和剪贴板都原样还给你。</dd></div>
+            <div><dt data-i18n="t3t">提示词照样是提示词</dt><dd data-i18n="t3d">多行的 AI 提示词会被翻译，而不是被执行。20 种目标语言，可以带自己的术语表。</dd></div>
+          </dl>
+        </div>
+        <div>
+          <div class="win" aria-label="Translation demo">
+            <div class="win-bar"><i></i><i></i><i></i><span data-i18n="winTitle">聊天</span></div>
+            <div class="composer" id="composer" tabindex="0">
+              <p><span class="sel" id="sel"></span><button class="dotbtn" id="dot" type="button" aria-label="Translate"></button></p>
+            </div>
+            <div class="card" id="card">
+              <div class="card-head">中文 → English</div>
+              <div class="card-body" id="cardBody"></div>
+              <div class="card-foot" id="cardFoot" hidden>
+                <button type="button" id="copyBtn" data-i18n="copy">复制</button>
+                <button type="button" id="replaceBtn" class="primary" data-i18n="replace">替换</button>
+              </div>
+            </div>
+          </div>
+          <div class="demo-note"><span id="demoHint"></span><button type="button" id="replay" data-i18n="replay">重放</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="h2s">一分钟用起来</h2>
+      <ol class="steps">
+        <li><b data-i18n="s1t">1 · 安装</b><span data-i18n="s1">到 Releases 下载安装包运行，第一次启动会自动打开设置。</span></li>
+        <li><b data-i18n="s2t">2 · 选一家服务商</b><span data-i18n="s2">在设置里选一家、填上 Key，地址和模型自动填好。翻译自带免费接口，不填也能用。</span></li>
+        <li><b data-i18n="s3t">3 · 哪里都能用</b><span data-i18n="s3">按一下 <kbd>右 Alt</kbd> 说话；选中文字按 <kbd>Alt</kbd> <kbd>T</kbd> 翻译。</span></li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    <span data-i18n="foot">MIT 许可。用 Go 和 MyGo 写成，字体 MiSans。</span>
+    <a href="https://github.com/margbug01/mami">GitHub</a>
+    <a href="https://github.com/margbug01/mami/releases/latest">Releases</a>
+    <a href="https://github.com/margbug01/mami/blob/main/README_zh.md">中文 README</a>
+  <a href="https://margbug01.github.io/MySpotify/">MySpotify</a> <a href="https://margbug01.github.io/ShoesGUI/">MyShoes</a> <a href="https://margbug01.github.io/Candle/">Candle</a>
+  </footer>
+</div>
+
+<script>
+(function () {
+  // the app's own 「文A」 button, drawn as a dot matrix
+  var WEN = ["..#..", "#####", ".#.#.", "..#..", "##.##"];
+  var A = ["..#..", ".#.#.", "#...#", "#####", "#...#"];
+  function glyph() {
+    var cells = [];
+    function put(rows, ox, oy) {
+      rows.forEach(function (row, y) {
+        row.split("").forEach(function (ch, x) {
+          if (ch === "#") cells.push('<circle cx="' + (ox + x + .5) + '" cy="' + (oy + y + .5) + '" r=".36"/>');
+        });
+      });
+    }
+    put(WEN, 0, 0); put(A, 5, 3);
+    return '<svg viewBox="0 0 10 8" fill="currentColor" aria-hidden="true">' + cells.join("") + "</svg>";
+  }
+  document.getElementById("dot").innerHTML = glyph();
+
+  var T = {
+    en: {
+      h1: "Voice input and selection translation.",
+      lead: "Tap <kbd>Right Alt</kbd> and say it: tidy text lands in the box you are typing in. Select text and one click translates it. A small Windows and macOS app that uses your own speech and language model providers.",
+      download: "Download for Windows / macOS", source: "View the source",
+      meta: "Windows 10/11 and macOS 12+. Free and open source under the MIT license.",
+      winTitle: "Chat", copy: "Copy", replace: "Replace", replay: "Replay", copied: "Copied", busy: "Translating…",
+      saidLabel: "You said:",
+      k1: "VOICE INPUT", h2v: "Speak instead of typing",
+      v1t: "Tap, talk, tap", v1d: "Right Alt by default, or any key, shortcut or media button. Esc cancels. Text is ready about half a second after you stop.",
+      v2t: "Cleaned up, not rewritten", v2d: "Fillers and \"no wait, I mean\" are dropped. Questions are not answered and nothing is translated behind your back.",
+      v3t: "Learns your words", v3d: "Add names and product names to the vocabulary. Fix a misheard word twice and Mami gets it right from then on.",
+      v4t: "Never lost", v4d: "No input box under the cursor? The text waits in the pill with a copy button.",
+      capv: "Seven pill styles, dark or light.", capw: "The vocabulary. Words you fixed show up on their own.",
+      k2: "TRANSLATION", h2t: "Select it, translate it",
+      t1t: "One click, or Alt+T", t1d: "Select text in an input box and a small button appears. Click it for a card, or press Alt+T to replace in place.",
+      t2t: "Only in input boxes", t2d: "Reading a web page never sprinkles buttons around. Your selection and clipboard stay as they were.",
+      t3t: "Prompts stay prompts", t3d: "Multi-line prompts get translated, not carried out. Twenty target languages, with your own glossary.",
+      hintIdle: "Select the text above, or click it.", hintBtn: "Click the button.",
+      hintCard: "Replace puts the translation back in the box.", hintDone: "Replaced in place. Alt+T does this without the card.",
+      h2s: "Up and running in a minute",
+      s1t: "1 · Install", s1: "Download the installer from Releases and run it. Settings open the first time.",
+      s2t: "2 · Pick a provider", s2: "Choose one in settings and paste its key; the endpoint and model fill themselves in. Translation works out of the box on a free endpoint.",
+      s3t: "3 · Use it anywhere", s3: "Tap <kbd>Right Alt</kbd> to talk. Select text and press <kbd>Alt</kbd> <kbd>T</kbd> to translate.",
+      foot: "MIT licensed. Built with Go and MyGo. Set in MiSans."
+    },
+    zh: {
+      h1: "语音输入与划词翻译，在哪打字就在哪用。",
+      lead: "按一下 <kbd>右 Alt</kbd> 开口说，整理好的文字直接落进你正在打字的框；选中文字，点一下就翻译。一个 Windows / macOS 小工具，用你自己已有的模型和 Key。",
+      download: "下载 Windows / macOS 版", source: "查看源码",
+      meta: "Windows 10 / 11 和 macOS 12+。免费开源，MIT 许可。",
+      winTitle: "聊天", copy: "复制", replace: "替换", replay: "重放", copied: "已复制", busy: "翻译中…",
+      saidLabel: "你说的：",
+      k1: "语音输入", h2v: "能说就别打字",
+      v1t: "按一下，说，再按一下", v1d: "默认右 Alt，也能换成任意键、组合键或媒体键，Esc 取消。停下大约半秒就出字。",
+      v2t: "帮你整理，不帮你改写", v2d: "口头禅和「不对，我是说」会去掉；问句不会被当成问题回答，也不会偷偷翻译。",
+      v3t: "认得你的词", v3d: "人名、产品名加进词库就照着写。听错的词你改过两次，以后就自动改对。",
+      v4t: "说了就不会丢", v4d: "光标下面没有输入框？这句话会留在胶囊里，点一下就能复制。",
+      capv: "七种胶囊样式，深浅都有。", capw: "词库。你改过的词会自己出现在这里。",
+      k2: "划词翻译", h2t: "选中就翻译",
+      t1t: "点一下，或者 Alt+T", t1d: "在输入框里选中文字，旁边冒出一个小按钮。点它看译文卡片，按 Alt+T 直接原地替换。",
+      t2t: "只在输入框里出现", t2d: "看网页时不会到处冒按钮；你的选区和剪贴板都原样还给你。",
+      t3t: "提示词照样是提示词", t3d: "多行的 AI 提示词会被翻译，而不是被执行。20 种目标语言，可以带自己的术语表。",
+      hintIdle: "选中上面的文字，或者点一下它。", hintBtn: "点一下那个按钮。",
+      hintCard: "点「替换」会把译文放回输入框。", hintDone: "已经原地替换。按 Alt+T 可以不弹卡片直接这样做。",
+      h2s: "一分钟用起来",
+      s1t: "1 · 安装", s1: "到 Releases 下载安装包运行，第一次启动会自动打开设置。",
+      s2t: "2 · 选一家服务商", s2: "在设置里选一家、填上 Key，地址和模型自动填好。翻译自带免费接口，不填也能用。",
+      s3t: "3 · 哪里都能用", s3: "按一下 <kbd>右 Alt</kbd> 说话；选中文字按 <kbd>Alt</kbd> <kbd>T</kbd> 翻译。",
+      foot: "MIT 许可。用 Go 和 MyGo 写成，字体 MiSans。"
+    }
+  };
+  var lang = document.documentElement.lang === "zh-CN" ? "zh" : "en";
+  var $ = function (id) { return document.getElementById(id); };
+  var forced = /[?&]demo=1/.test(location.search);
+  var still = !forced && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ---- voice demo: pill records, thinks, then the polished line lands in the box
+  var V = {
+    en: { said: "Um, so, can you rewrite this endpoint in Go, and the meeting's at three, no wait, at four.", out: "Can you rewrite this endpoint in Go? The meeting is at four." },
+    zh: { said: "嗯，那个，帮我把这个接口改成用 Go 写，然后三点开会，不对，是四点开会。", out: "帮我把这个接口改成用 Go 写。四点开会。" }
+  };
+  var pill = $("pill"), vText = $("vText"), vSaid = $("vSaid"), vTimers = [], vDone = false;
+  function vShow() {
+    vText.innerHTML = (vDone ? V[lang].out : "") + '<span class="caret"></span>';
+    vSaid.innerHTML = vDone ? "<b>" + T[lang].saidLabel + "</b> " + V[lang].said : "";
+  }
+  function vPlay() {
+    vTimers.forEach(clearTimeout); vTimers = []; vDone = false; vShow();
+    pill.className = "pill";
+    vTimers.push(setTimeout(function () { pill.className = "pill show"; }, 500));
+    vTimers.push(setTimeout(function () { pill.className = "pill show busy"; }, 3300));
+    vTimers.push(setTimeout(function () { pill.className = "pill"; vDone = true; vShow(); }, 4000));
+  }
+  $("vReplay").addEventListener("click", vPlay);
+
+  // ---- translation demo
+  var ORIGINAL = "这是写给 AI 的提示词：请逐条检查日志，不要直接改代码。";
+  var TRANSLATION = "This is a prompt for an AI: check the logs one by one, and don't change the code directly.";
+  var sel = $("sel"), dot = $("dot"), card = $("card"), body = $("cardBody"), foot = $("cardFoot"), hint = $("demoHint");
+  var state = "idle", timers = [], typing = null;
+  function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+  function stop() { timers.forEach(clearTimeout); timers = []; if (typing) { clearInterval(typing); typing = null; } }
+  function say(key) { hint.setAttribute("data-i18n", key); hint.textContent = T[lang][key]; }
+  function reset() {
+    stop(); state = "idle"; sel.textContent = ORIGINAL; sel.className = "sel";
+    dot.className = "dotbtn"; card.className = "card"; foot.hidden = true; body.textContent = ""; say("hintIdle");
+  }
+  function select() {
+    if (state !== "idle") return;
+    state = "selected"; sel.className = "sel on"; say("hintBtn");
+    later(function () { dot.className = "dotbtn show"; }, 950);
+  }
+  function translate() {
+    if (state !== "selected") return;
+    stop(); state = "busy"; card.className = "card show"; foot.hidden = true;
+    body.className = "card-body busy"; body.textContent = T[lang].busy;
+    later(function () {
+      body.className = "card-body"; body.textContent = "";
+      var words = TRANSLATION.split(" "), i = 0;
+      typing = setInterval(function () {
+        body.textContent += (i ? " " : "") + words[i++];
+        if (i >= words.length) { clearInterval(typing); typing = null; foot.hidden = false; state = "card"; say("hintCard"); }
+      }, 55);
+    }, 650);
+  }
+  function replace() {
+    if (state !== "card") return;
+    state = "done"; card.className = "card"; dot.className = "dotbtn";
+    sel.className = "sel"; sel.textContent = TRANSLATION; say("hintDone");
+  }
+  function tPlay() { reset(); later(select, 500); later(translate, 2700); }
+  sel.addEventListener("click", select);
+  $("composer").addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(); } });
+  dot.addEventListener("click", translate);
+  $("replaceBtn").addEventListener("click", replace);
+  $("copyBtn").addEventListener("click", function () {
+    var b = $("copyBtn"); b.textContent = T[lang].copied;
+    try { navigator.clipboard.writeText(TRANSLATION); } catch (e) {}
+    setTimeout(function () { b.textContent = T[lang].copy; }, 1200);
+  });
+  $("replay").addEventListener("click", tPlay);
+
+  function apply() {
+    document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      var v = T[lang][el.getAttribute("data-i18n")];
+      if (v !== undefined) el.innerHTML = v;
+    });
+    document.querySelectorAll(".lang button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.lang === lang)); });
+    if (state === "busy") body.textContent = T[lang].busy;
+    vShow();
+  }
+
+  reset(); apply();
+  if (still) { vDone = true; vShow(); return; }
+  vPlay();
+  var tStarted = false;
+  function tMaybe() { if (!tStarted) { tStarted = true; tPlay(); } }
+  if ("IntersectionObserver" in window && !forced) {
+    new IntersectionObserver(function (es, o) { if (es[0].isIntersecting) { o.disconnect(); tMaybe(); } }, { threshold: .4 }).observe($("translate"));
+  } else { tMaybe(); }
+})();
+</script>
+</body>
+</html>

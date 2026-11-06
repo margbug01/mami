@@ -174,3 +174,13 @@ Windows, tray, global shortcuts, single instance and autostart come from MyGo. T
 ## License
 
 [MIT](LICENSE). Provider logos from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT).
+
+## Website / 官网维护
+
+The GitHub Pages site is published from `docs/` on `main`. Keep both language pages and `docs/sitemap.xml` in sync when changing product details. No build step is required.
+
+官网从 `main` 分支的 `docs/` 发布。更新功能说明时同步修改中英文页面和 `docs/sitemap.xml`，不需要构建。
+
+## More MyGo apps / 其他作品
+
+[Mami](https://github.com/margbug01/mami) · [MySpotify](https://github.com/margbug01/MySpotify) · [MyShoes](https://github.com/margbug01/ShoesGUI) · [Candle](https://github.com/margbug01/Candle)
